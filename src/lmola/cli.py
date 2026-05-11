@@ -8,6 +8,7 @@ import typer
 from rich import print
 
 from lmola.agent.planner import plan_request
+from lmola.agent.prompts import SYSTEM_PROMPT
 from lmola.config import load_app_config, load_request_yaml, redacted_llm_config
 from lmola.io.converters import dump_json
 from lmola.io.files import create_run_dir
@@ -84,24 +85,34 @@ def generate(input_yaml: str) -> None:
 @app.command("run-agent")
 def run_agent(request: str) -> None:
     rec, llm_result, parsed_request = plan_request(request)
-    if rec.status != "ok":
-        print(rec.message)
-        raise typer.Exit(code=1)
-
     run_dir = create_run_dir()
     (run_dir / "natural_language_request.txt").write_text(request, encoding="utf-8")
+    (run_dir / "llm_prompt.txt").write_text(f"{SYSTEM_PROMPT}\n\nUser request:\n{request}\n", encoding="utf-8")
     dump_json(run_dir / "llm_config_redacted.json", redacted_llm_config(load_app_config().llm))
+    dump_json(run_dir / "environment.json", collect_environment())
+
     if llm_result:
-        (run_dir / "llm_response.txt").write_text(llm_result.raw_response or llm_result.error_message or "", encoding="utf-8")
+        if llm_result.parsed_json is not None:
+            dump_json(run_dir / "llm_response.json", llm_result.parsed_json)
+        else:
+            (run_dir / "llm_response.txt").write_text(llm_result.raw_response or llm_result.error_message or "", encoding="utf-8")
+    if rec.status != "ok":
+        write_log(run_dir / "run.log", rec.message)
+        (run_dir / "README_run.md").write_text("\n".join(["# LMolA run summary", "", "status: error", f"message: {rec.message}"]), encoding="utf-8")
+        print(rec.message)
+        print(f"Created run directory: {run_dir}")
+        raise typer.Exit(code=1)
+
     if parsed_request:
+        dump_json(run_dir / "request.yaml", parsed_request.model_dump())
         dump_json(run_dir / "parsed_request.json", parsed_request.model_dump())
         dump_json(run_dir / "normalized_request.json", parsed_request.model_dump())
         dump_json(run_dir / "effective_config.json", parsed_request.model_dump())
-        dump_json(run_dir / "environment.json", collect_environment())
         tool_result = run_generation(parsed_request, run_dir)
         write_tool_calls(run_dir / "tool_calls.jsonl", tool_result.tool_calls)
         dump_json(run_dir / "tool_result.json", tool_result.model_dump())
         write_log(run_dir / "run.log", tool_result.message)
+        (run_dir / "README_run.md").write_text("\n".join(["# LMolA run summary", "", f"status: {tool_result.status}", f"message: {tool_result.message}"]), encoding="utf-8")
     print(f"Created run directory: {run_dir}")
 
 
