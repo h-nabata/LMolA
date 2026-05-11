@@ -1,5 +1,10 @@
-from lmola.agent.planner import plan_request
+from lmola.agent.planner import NOT_CONFIGURED_MSG, plan_request
 
-def test_planner_placeholder() -> None:
-    rec = plan_request("build complex")
-    assert rec.status == "not_implemented"
+
+def test_planner_not_configured(monkeypatch) -> None:
+    monkeypatch.delenv("LMOLA_LLM_ENABLED", raising=False)
+    rec, llm, req = plan_request("build complex")
+    assert rec.status == "error"
+    assert rec.message == NOT_CONFIGURED_MSG
+    assert llm is None
+    assert req is None

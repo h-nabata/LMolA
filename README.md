@@ -72,3 +72,30 @@ See [CITATION.cff](CITATION.cff).
 
 ## License
 MIT (see [LICENSE](LICENSE)).
+
+## Phase 4.0 local LLM mode (experimental)
+LMolA supports optional local-first natural language request translation only. Deterministic YAML/JSON generate remains primary.
+
+Supported backends in Phase 4.0:
+- `ollama` (local Ollama endpoint, default base URL commonly `http://localhost:11434`)
+- `openai_compatible_local` (local OpenAI-compatible servers such as LM Studio, vLLM, llama.cpp server)
+- `mock` (tests only)
+
+Not supported in Phase 4.0:
+- OpenAI cloud API
+- Anthropic cloud API
+- automatic model downloads
+- arbitrary tool execution from LLM output
+
+Create `.lmola/config.yaml`:
+```yaml
+llm:
+  enabled: true
+  backend: ollama
+  base_url: http://localhost:11434
+  model: qwen2.5:7b-instruct
+  timeout_seconds: 60
+```
+
+If not configured, `lmola run-agent` fails safely with a clear message and does not call cloud APIs.
+GPU is optional; CPU-only workflows remain supported for doctor/validate/generate/tests.

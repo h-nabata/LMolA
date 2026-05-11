@@ -5,3 +5,14 @@
 - Generic octahedral metal complex: `examples/generic_octahedral.yaml`
 - LLM-free YAML workflow: `lmola generate <file.yaml>`
 - Future natural-language mode: `lmola run-agent "..."` (placeholder)
+
+## Local LLM examples (Phase 4.0)
+`run-agent` converts natural language to structured JSON validated by LMolA schemas before deterministic generation.
+
+Without config:
+```bash
+lmola run-agent "Generate an octahedral Fe(II) complex with six water ligands."
+```
+returns a safe configuration error.
+
+With local config enabled (`ollama` or `openai_compatible_local`), LMolA requests strict JSON only and rejects invalid JSON.
