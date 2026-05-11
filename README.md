@@ -1,16 +1,16 @@
-# LMola (Pre-alpha)
+# LMolA (Pre-alpha)
 
 Local molecular structure agents.
 
 ## Overview
-LMola is a local-first, offline-capable Python toolkit scaffold for orchestrating molecular structure generation requests, structure validation, and optional relaxation workflows for computational chemistry research.
+LMolA is a local-first, offline-capable Python toolkit scaffold for orchestrating molecular structure generation requests, structure validation, and optional relaxation workflows for computational chemistry research.
 
-## What LMola does
+## What LMolA does
 - Validates deterministic YAML/JSON molecular build requests.
 - Provides a safe CLI scaffold for generation, validation, and run inspection.
 - Probes optional external tool availability (molSimplify, RDKit, Open Babel, xTB, local LLM endpoint).
 
-## What LMola does not do
+## What LMolA does not do
 - It does not have production structure generation yet.
 - It does not let LLMs directly generate 3D structures.
 - It does not perform synthesis planning or hazardous procedure generation.
@@ -65,7 +65,7 @@ Natural-language mode is intentionally unimplemented unless local endpoint confi
 This is a safe scaffold and not chemically complete automation.
 
 ## Safety and responsible use
-LMola is for computational model construction and validation only, not experimental synthesis guidance.
+LMolA is for computational model construction and validation only, not experimental synthesis guidance.
 
 ## Citation
 See [CITATION.cff](CITATION.cff).
