@@ -38,6 +38,7 @@ class ToolResult(BaseModel):
     returncode: int | None = None
     command: list[str] = Field(default_factory=list)
     cwd: str = ""
+    generated_files: list[str] = Field(default_factory=list)
 
 
 class ValidationReport(BaseModel):

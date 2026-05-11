@@ -15,7 +15,7 @@ from lmola.io.logging import write_log
 from lmola.tools.molsimplify_tool import (
     detect_molsimplify_cli,
     detect_molsimplify_import,
-    run_generation_stub,
+    run_generation,
 )
 from lmola.validation.geometry_checks import validate_xyz
 
@@ -56,10 +56,25 @@ def generate(input_yaml: str) -> None:
     request_dst = run_dir / "request.yaml"
     request_dst.write_text(request_src.read_text(encoding="utf-8"), encoding="utf-8")
     dump_json(run_dir / "normalized_request.json", req.model_dump())
-    tool_result = run_generation_stub()
+    tool_result = run_generation(req, run_dir)
     dump_json(run_dir / "tool_result.json", tool_result.model_dump())
     write_log(run_dir / "run.log", tool_result.message)
-    (run_dir / "README_run.md").write_text("Pre-alpha run scaffold.", encoding="utf-8")
+    validation_note = "Validation not attempted: no XYZ structure generated."
+    xyz_candidates = sorted(run_dir.rglob("*.xyz"))
+    if xyz_candidates:
+        validation = validate_xyz(str(xyz_candidates[0]))
+        dump_json(run_dir / "validation_report.json", validation.model_dump())
+        validation_note = f"Validated: {xyz_candidates[0].name}"
+    (run_dir / "README_run.md").write_text(
+        "\n".join([
+            "# LMolA run summary",
+            "",
+            f"status: {tool_result.status}",
+            f"message: {tool_result.message}",
+            validation_note,
+        ]),
+        encoding="utf-8",
+    )
     print(f"Created run directory: {run_dir}")
 
 
