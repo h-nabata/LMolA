@@ -3,7 +3,7 @@ from __future__ import annotations
 from pydantic import ValidationError
 
 from lmola.agent.prompts import SYSTEM_PROMPT
-from lmola.config import load_app_config
+from lmola.config import is_local_llm_url_allowed, load_app_config
 from lmola.schemas import AgentRunRecord, MoleculeBuildRequest
 from lmola.tools.llm_client import LLMResult, make_llm_client
 
@@ -18,6 +18,9 @@ def plan_request(request_text: str) -> tuple[AgentRunRecord, LLMResult | None, M
     cfg = load_app_config()
     if not cfg.llm.enabled:
         return AgentRunRecord(status="error", message=NOT_CONFIGURED_MSG, request_text=request_text), None, None
+    allowed, reason = is_local_llm_url_allowed(cfg.llm)
+    if not allowed:
+        return AgentRunRecord(status="error", message=f"Unsafe LLM endpoint: {reason}", request_text=request_text), None, None
 
     client = make_llm_client(cfg.llm)
     result = client.complete_json(SYSTEM_PROMPT, request_text)
