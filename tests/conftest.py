@@ -14,5 +14,7 @@ def clean_lmola_config(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
         "LMOLA_LLM_BACKEND",
         "LMOLA_LLM_BASE_URL",
         "LMOLA_LLM_MODEL",
+        "LMOLA_LLM_ALLOW_REMOTE",
+        "LMOLA_LLM_UNSAFE_ALLOW_REMOTE",
     ):
         monkeypatch.delenv(env_name, raising=False)
