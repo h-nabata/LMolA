@@ -7,6 +7,9 @@ import subprocess
 import sys
 from pathlib import Path
 
+import yaml
+from pydantic import BaseModel
+
 from lmola import __version__
 from lmola.schemas import ToolCallRecord
 from lmola.tools.molsimplify_tool import detect_molsimplify_cli, detect_molsimplify_import
@@ -61,3 +64,7 @@ def collect_environment() -> dict:
 def write_tool_calls(path: Path, records: list[ToolCallRecord]) -> None:
     lines = [json.dumps(record.model_dump()) for record in records]
     path.write_text("\n".join(lines) + ("\n" if lines else ""), encoding="utf-8")
+
+
+def write_request_yaml(path: Path, request: BaseModel) -> None:
+    path.write_text(yaml.safe_dump(request.model_dump(), sort_keys=False), encoding="utf-8")

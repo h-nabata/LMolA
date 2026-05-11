@@ -13,7 +13,7 @@ from lmola.config import load_app_config, load_request_yaml, redacted_llm_config
 from lmola.io.converters import dump_json
 from lmola.io.files import create_run_dir
 from lmola.io.logging import write_log
-from lmola.io.run_artifacts import collect_environment, write_tool_calls
+from lmola.io.run_artifacts import collect_environment, write_request_yaml, write_tool_calls
 from lmola.tools.llm_client import make_llm_client
 from lmola.tools.molsimplify_tool import detect_molsimplify_cli, detect_molsimplify_import, run_generation
 from lmola.validation.geometry_checks import validate_xyz
@@ -60,9 +60,7 @@ def validate(structure: str) -> None:
 def generate(input_yaml: str) -> None:
     req = load_request_yaml(input_yaml)
     run_dir = create_run_dir()
-    request_src = Path(input_yaml)
-    request_dst = run_dir / "request.yaml"
-    request_dst.write_text(request_src.read_text(encoding="utf-8"), encoding="utf-8")
+    write_request_yaml(run_dir / "request.yaml", req)
     dump_json(run_dir / "normalized_request.json", req.model_dump())
     dump_json(run_dir / "effective_config.json", req.model_dump())
     dump_json(run_dir / "environment.json", collect_environment())
@@ -104,7 +102,7 @@ def run_agent(request: str) -> None:
         raise typer.Exit(code=1)
 
     if parsed_request:
-        dump_json(run_dir / "request.yaml", parsed_request.model_dump())
+        write_request_yaml(run_dir / "request.yaml", parsed_request)
         dump_json(run_dir / "parsed_request.json", parsed_request.model_dump())
         dump_json(run_dir / "normalized_request.json", parsed_request.model_dump())
         dump_json(run_dir / "effective_config.json", parsed_request.model_dump())
