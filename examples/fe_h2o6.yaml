@@ -1,0 +1,6 @@
+request_type: metal_complex
+metal: Fe
+oxidation_state: 2
+ligands:
+  - name: H2O
+    count: 6
