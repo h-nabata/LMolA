@@ -19,7 +19,7 @@ from lmola.tools.molsimplify_tool import (
 )
 from lmola.validation.geometry_checks import validate_xyz
 
-app = typer.Typer(help="LMola CLI (pre-alpha)")
+app = typer.Typer(help="LMolA CLI (pre-alpha)")
 
 
 def _is_importable(module_name: str) -> bool:

@@ -9,7 +9,7 @@ description = "Local molecular structure agents"
 readme = "README.md"
 requires-python = ">=3.10"
 license = {text = "MIT"}
-authors = [{name = "LMola contributors"}]
+authors = [{name = "LMolA contributors"}]
 dependencies = [
   "pydantic>=2.0",
   "PyYAML>=6.0",

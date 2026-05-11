@@ -8,7 +8,7 @@ runner = CliRunner()
 def test_help() -> None:
     result = runner.invoke(app, ["--help"])
     assert result.exit_code == 0
-    assert "LMola CLI" in result.stdout
+    assert "LMolA CLI" in result.stdout
 
 
 def test_doctor() -> None:
