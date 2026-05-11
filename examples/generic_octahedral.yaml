@@ -1,0 +1,6 @@
+request_type: metal_complex
+metal: M
+oxidation_state: 2
+ligands:
+  - name: L
+    count: 6

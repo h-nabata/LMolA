@@ -1,0 +1,8 @@
+request_type: metal_complex
+metal: Co
+oxidation_state: 3
+ligands:
+  - name: NH3
+    count: 5
+  - name: Cl
+    count: 1
