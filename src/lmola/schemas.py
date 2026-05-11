@@ -30,6 +30,19 @@ class MoleculeBuildRequest(BaseModel):
     build_options: BuildOptions = Field(default_factory=BuildOptions)
 
 
+class ToolCallRecord(BaseModel):
+    timestamp: str
+    tool: str
+    command: list[str] = Field(default_factory=list)
+    cwd: str = ""
+    returncode: int | None = None
+    stdout_excerpt: str = ""
+    stderr_excerpt: str = ""
+    stdout_path: str = ""
+    stderr_path: str = ""
+    status: Literal["ok", "error", "not_implemented"]
+
+
 class ToolResult(BaseModel):
     status: Literal["ok", "error", "not_implemented"]
     message: str
@@ -39,6 +52,7 @@ class ToolResult(BaseModel):
     command: list[str] = Field(default_factory=list)
     cwd: str = ""
     generated_files: list[str] = Field(default_factory=list)
+    tool_calls: list[ToolCallRecord] = Field(default_factory=list)
 
 
 class ValidationReport(BaseModel):

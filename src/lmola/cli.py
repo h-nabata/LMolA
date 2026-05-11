@@ -12,6 +12,7 @@ from lmola.config import load_request_yaml
 from lmola.io.converters import dump_json
 from lmola.io.files import create_run_dir
 from lmola.io.logging import write_log
+from lmola.io.run_artifacts import collect_environment, write_tool_calls
 from lmola.tools.molsimplify_tool import (
     detect_molsimplify_cli,
     detect_molsimplify_import,
@@ -56,9 +57,14 @@ def generate(input_yaml: str) -> None:
     request_dst = run_dir / "request.yaml"
     request_dst.write_text(request_src.read_text(encoding="utf-8"), encoding="utf-8")
     dump_json(run_dir / "normalized_request.json", req.model_dump())
+    dump_json(run_dir / "effective_config.json", req.model_dump())
+    dump_json(run_dir / "environment.json", collect_environment())
+
     tool_result = run_generation(req, run_dir)
+    write_tool_calls(run_dir / "tool_calls.jsonl", tool_result.tool_calls)
     dump_json(run_dir / "tool_result.json", tool_result.model_dump())
     write_log(run_dir / "run.log", tool_result.message)
+
     validation_note = "Validation not attempted: no XYZ structure generated."
     xyz_candidates = sorted(run_dir.rglob("*.xyz"))
     if xyz_candidates:
