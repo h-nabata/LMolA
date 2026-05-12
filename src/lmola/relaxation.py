@@ -19,7 +19,9 @@ class RelaxationCalculator:
         raise NotImplementedError
 
 
-def _record(status: str, tool: str, message: str, command: list[str] | None = None, cwd: str = "") -> ToolCallRecord:
+def _record(
+    status: str, tool: str, message: str, command: list[str] | None = None, cwd: str = ""
+) -> ToolCallRecord:
     return ToolCallRecord(
         timestamp=datetime.now(timezone.utc).isoformat(),
         tool=tool,
@@ -48,14 +50,24 @@ class XtbRelaxationCalculator(RelaxationCalculator):
     def run(self, structure_path: Path, run_dir: Path) -> ToolResult:
         available, message = self.check_available()
         if not available:
-            return ToolResult(status="error", message=message, tool_calls=[_record("error", "xtb", message)])
+            return ToolResult(
+                status="error",
+                message=message,
+                cwd=str(run_dir),
+                tool_calls=[_record("error", "xtb", message, cwd=str(run_dir))],
+            )
 
         cmd = [str(self.executable), str(structure_path.name), "--opt"]
         cp = subprocess.run(cmd, cwd=run_dir, capture_output=True, text=True)
         (run_dir / "xtb.stdout.txt").write_text(cp.stdout or "", encoding="utf-8")
         (run_dir / "xtb.stderr.txt").write_text(cp.stderr or "", encoding="utf-8")
 
-        generated_files = sorted(str(p.relative_to(run_dir)) for p in run_dir.rglob("*") if p.is_file())
+        generated_files = []
+        for candidate in ["xtbopt.xyz", "xtbopt.log", "xtbrestart", "charges", "wbo", "xtb.stdout.txt", "xtb.stderr.txt"]:
+            p = run_dir / candidate
+            if p.exists() and p.is_file():
+                generated_files.append(candidate)
+        generated_files = sorted(set(generated_files))
         status = "ok" if cp.returncode == 0 else "error"
         message = "xTB relaxation completed" if cp.returncode == 0 else "xTB relaxation failed"
         tool_call = ToolCallRecord(
@@ -91,9 +103,14 @@ class UnsupportedRelaxationCalculator(RelaxationCalculator):
         return False, f"Unsupported relaxation method: {self.method}"
 
     def run(self, structure_path: Path, run_dir: Path) -> ToolResult:
-        del structure_path, run_dir
+        del structure_path
         message = f"Unsupported relaxation method: {self.method}"
-        return ToolResult(status="error", message=message, tool_calls=[_record("error", self.method, message)])
+        return ToolResult(
+            status="error",
+            message=message,
+            cwd=str(run_dir),
+            tool_calls=[_record("error", self.method, message, cwd=str(run_dir))],
+        )
 
 
 def get_relaxation_calculator(method: str) -> RelaxationCalculator:

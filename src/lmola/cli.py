@@ -140,6 +140,14 @@ def relax(structure: str, method: str = "xtb") -> None:
     result = calculator.run(copied_input, run_dir)
     write_tool_calls(run_dir / "tool_calls.jsonl", result.tool_calls)
 
+    artifact_files = [
+        "effective_config.json",
+        "environment.json",
+        "input_structure.xyz",
+        "relaxation_request.json",
+        "tool_calls.jsonl",
+    ]
+
     selected_structure = select_relaxed_structure(run_dir)
     validation_report_path = None
     validation_note = "Validation not attempted: no XYZ structure candidate found."
@@ -147,6 +155,7 @@ def relax(structure: str, method: str = "xtb") -> None:
         validation = validate_xyz(str(run_dir / selected_structure))
         validation_report_path = "validation_report.json"
         dump_json(run_dir / validation_report_path, validation.model_dump())
+        artifact_files.append(validation_report_path)
         validation_note = f"Validated: {selected_structure}"
 
     result_payload = {
@@ -156,12 +165,15 @@ def relax(structure: str, method: str = "xtb") -> None:
         "message": result.message,
         "input_structure": "input_structure.xyz",
         "output_structure": selected_structure if selected_structure != "input_structure.xyz" else None,
-        "generated_files": sorted(str(p.relative_to(run_dir)) for p in run_dir.rglob("*") if p.is_file()),
+        "generated_files": result.generated_files,
+        "artifact_files": artifact_files,
         "validation_report_path": validation_report_path,
         "run_dir": str(run_dir),
     }
     dump_json(run_dir / "relaxation_result.json", result_payload)
+    artifact_files.append("relaxation_result.json")
     write_log(run_dir / "run.log", result.message)
+    artifact_files.append("run.log")
 
     (run_dir / "README_run.md").write_text(
         "\n".join(
@@ -178,4 +190,6 @@ def relax(structure: str, method: str = "xtb") -> None:
         ),
         encoding="utf-8",
     )
+    artifact_files.append("README_run.md")
+    dump_json(run_dir / "relaxation_result.json", result_payload | {"artifact_files": sorted(set(artifact_files))})
     print(json.dumps({"status": result.status, "message": result.message, "method": method, "run_dir": str(run_dir)}, indent=2))

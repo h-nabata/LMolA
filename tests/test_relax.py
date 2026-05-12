@@ -55,12 +55,16 @@ def test_relax_xtb_unavailable_safe_failure_and_artifacts(tmp_path: Path, monkey
     assert payload["input_structure"] == "input_structure.xyz"
     assert payload["run_dir"].endswith("run_relax_1")
     assert payload["validation_report_path"] == "validation_report.json"
+    assert payload["cwd"].endswith("run_relax_1")
+    assert payload["generated_files"] == []
+    assert "artifact_files" in payload
     assert "xTB executable is unavailable" in payload["message"]
 
     records = _jsonl(run_dir / "tool_calls.jsonl")
     assert len(records) == 1
     assert records[0]["tool"] == "xtb"
     assert records[0]["status"] == "error"
+    assert records[0]["cwd"].endswith("run_relax_1")
 
 
 def test_relax_unsupported_method_safe_error_and_artifacts(tmp_path: Path, monkeypatch) -> None:
@@ -74,7 +78,11 @@ def test_relax_unsupported_method_safe_error_and_artifacts(tmp_path: Path, monke
     assert payload["status"] == "error"
     assert payload["method"] == "nope"
     assert "Unsupported relaxation method" in payload["message"]
+    assert payload["cwd"].endswith("run_relax_2")
     assert (run_dir / "README_run.md").read_text(encoding="utf-8").find("exit_policy") >= 0
+
+    json.loads((run_dir / "relaxation_result.json").read_text(encoding="utf-8"))
+    _jsonl(run_dir / "tool_calls.jsonl")
 
 
 @pytest.mark.external_tools
