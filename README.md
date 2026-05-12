@@ -124,5 +124,19 @@ Structure selection is heuristic (`xtbopt.xyz` preferred). Rich xTB parsing is f
 ## Test policy for external tools
 Default tests must not require xTB, molSimplify, RDKit, Open Babel, Ollama, GPU, or cloud APIs. Tests requiring real external tools are marked `external_tools` and are skipped by default.
 
+Run default tests (no external tools):
+```bash
+pytest -m "not external_tools" -q
+```
+
+Run real xTB verification only when xTB is installed:
+```bash
+pytest -m external_tools -q
+```
+
+Expected behavior:
+- If xTB is unavailable, relax returns `status: error` with a clear unavailability message and still writes artifacts.
+- If xTB is available, LMolA invokes xTB without `shell=True`, records command/cwd/returncode, and captures stdout/stderr artifacts.
+
 ## Scientific-use reminder
 Relaxed structures are computational models and require researcher review before downstream scientific use.
