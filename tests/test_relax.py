@@ -94,6 +94,15 @@ def test_relax_xtb_external_tool_scaffold(tmp_path: Path, monkeypatch) -> None:
     run_dir = tmp_path / "outputs" / "run_relax_xtb"
     _patch_run_dir(monkeypatch, run_dir)
 
+    real_run = cli.subprocess.run
+    captured: dict[str, object] = {}
+
+    def _spy_run(*args, **kwargs):
+        captured["kwargs"] = dict(kwargs)
+        return real_run(*args, **kwargs)
+
+    monkeypatch.setattr("lmola.relaxation.subprocess.run", _spy_run)
+
     result = runner.invoke(app, ["relax", "examples/example.xyz", "--method", "xtb"])
     assert result.exit_code == 0
 
