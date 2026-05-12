@@ -27,3 +27,9 @@ If `xtb` is not installed, LMolA still creates a run directory and writes a safe
 Real xTB tests are marked `external_tools` and skipped by default.
 
 Reminder: relaxed structures are computational models and should be reviewed by researchers.
+
+
+Manual external xTB verification:
+```bash
+pytest -m external_tools -q
+```
