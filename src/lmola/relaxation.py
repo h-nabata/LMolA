@@ -19,6 +19,21 @@ class RelaxationCalculator:
         raise NotImplementedError
 
 
+def _record(status: str, tool: str, message: str, command: list[str] | None = None, cwd: str = "") -> ToolCallRecord:
+    return ToolCallRecord(
+        timestamp=datetime.now(timezone.utc).isoformat(),
+        tool=tool,
+        command=command or [],
+        cwd=cwd,
+        returncode=None,
+        stdout_excerpt="",
+        stderr_excerpt=message[:500],
+        stdout_path="",
+        stderr_path="",
+        status=status,
+    )
+
+
 class XtbRelaxationCalculator(RelaxationCalculator):
     method = "xtb"
 
@@ -33,17 +48,16 @@ class XtbRelaxationCalculator(RelaxationCalculator):
     def run(self, structure_path: Path, run_dir: Path) -> ToolResult:
         available, message = self.check_available()
         if not available:
-            return ToolResult(status="error", message=message)
+            return ToolResult(status="error", message=message, tool_calls=[_record("error", "xtb", message)])
 
         cmd = [str(self.executable), str(structure_path.name), "--opt"]
         cp = subprocess.run(cmd, cwd=run_dir, capture_output=True, text=True)
-
         (run_dir / "xtb.stdout.txt").write_text(cp.stdout or "", encoding="utf-8")
         (run_dir / "xtb.stderr.txt").write_text(cp.stderr or "", encoding="utf-8")
 
         generated_files = sorted(str(p.relative_to(run_dir)) for p in run_dir.rglob("*") if p.is_file())
         status = "ok" if cp.returncode == 0 else "error"
-        result_message = "xTB relaxation completed" if cp.returncode == 0 else "xTB relaxation failed"
+        message = "xTB relaxation completed" if cp.returncode == 0 else "xTB relaxation failed"
         tool_call = ToolCallRecord(
             timestamp=datetime.now(timezone.utc).isoformat(),
             tool="xtb",
@@ -58,7 +72,7 @@ class XtbRelaxationCalculator(RelaxationCalculator):
         )
         return ToolResult(
             status=status,
-            message=result_message,
+            message=message,
             stdout=cp.stdout or "",
             stderr=cp.stderr or "",
             returncode=cp.returncode,
@@ -78,7 +92,8 @@ class UnsupportedRelaxationCalculator(RelaxationCalculator):
 
     def run(self, structure_path: Path, run_dir: Path) -> ToolResult:
         del structure_path, run_dir
-        return ToolResult(status="error", message=f"Unsupported relaxation method: {self.method}")
+        message = f"Unsupported relaxation method: {self.method}"
+        return ToolResult(status="error", message=message, tool_calls=[_record("error", self.method, message)])
 
 
 def get_relaxation_calculator(method: str) -> RelaxationCalculator:
@@ -88,10 +103,17 @@ def get_relaxation_calculator(method: str) -> RelaxationCalculator:
     return UnsupportedRelaxationCalculator(method)
 
 
+def select_relaxed_structure(run_dir: Path) -> str | None:
+    preferred = run_dir / "xtbopt.xyz"
+    if preferred.exists():
+        return preferred.name
+    fallback = run_dir / "input_structure.xyz"
+    if fallback.exists():
+        return fallback.name
+    other_xyz = sorted(p.name for p in run_dir.glob("*.xyz"))
+    return other_xyz[0] if other_xyz else None
+
+
 def write_relaxation_request(path: Path, structure: str, method: str) -> None:
-    payload = {
-        "operation": "relax",
-        "input_structure": structure,
-        "method": method,
-    }
+    payload = {"operation": "relax", "input_structure": structure, "method": method}
     path.write_text(json.dumps(payload, indent=2), encoding="utf-8")

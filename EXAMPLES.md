@@ -16,3 +16,14 @@ lmola run-agent "Generate an octahedral Fe(II) complex with six water ligands."
 returns a safe configuration error.
 
 With local config enabled (`ollama` or `openai_compatible_local`), LMolA requests strict JSON only and rejects invalid JSON.
+
+
+## Relaxation example (optional xTB)
+```bash
+lmola relax examples/example.xyz --method xtb
+```
+If `xtb` is not installed, LMolA still creates a run directory and writes a safe error result.
+
+Real xTB tests are marked `external_tools` and skipped by default.
+
+Reminder: relaxed structures are computational models and should be reviewed by researchers.

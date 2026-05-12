@@ -14,7 +14,7 @@ from lmola.io.converters import dump_json
 from lmola.io.files import create_run_dir
 from lmola.io.logging import write_log
 from lmola.io.run_artifacts import collect_environment, write_request_yaml, write_tool_calls
-from lmola.relaxation import get_relaxation_calculator, write_relaxation_request
+from lmola.relaxation import get_relaxation_calculator, select_relaxed_structure, write_relaxation_request
 from lmola.tools.llm_client import make_llm_client
 from lmola.tools.molsimplify_tool import detect_molsimplify_cli, detect_molsimplify_import, run_generation
 from lmola.validation.geometry_checks import validate_xyz
@@ -129,23 +129,53 @@ def relax(structure: str, method: str = "xtb") -> None:
     copied_input = run_dir / "input_structure.xyz"
     if input_path.exists():
         copied_input.write_text(input_path.read_text(encoding="utf-8"), encoding="utf-8")
+    else:
+        copied_input.write_text(f"# source path not found: {structure}\n", encoding="utf-8")
+
     write_relaxation_request(run_dir / "relaxation_request.json", structure, method)
-    dump_json(run_dir / "effective_config.json", {"method": method})
+    dump_json(run_dir / "effective_config.json", {"operation": "relax", "method": method})
     dump_json(run_dir / "environment.json", collect_environment())
 
     calculator = get_relaxation_calculator(method)
     result = calculator.run(copied_input, run_dir)
     write_tool_calls(run_dir / "tool_calls.jsonl", result.tool_calls)
-    dump_json(run_dir / "relaxation_result.json", result.model_dump())
+
+    selected_structure = select_relaxed_structure(run_dir)
+    validation_report_path = None
+    validation_note = "Validation not attempted: no XYZ structure candidate found."
+    if selected_structure:
+        validation = validate_xyz(str(run_dir / selected_structure))
+        validation_report_path = "validation_report.json"
+        dump_json(run_dir / validation_report_path, validation.model_dump())
+        validation_note = f"Validated: {selected_structure}"
+
+    result_payload = {
+        **result.model_dump(),
+        "status": result.status,
+        "method": method,
+        "message": result.message,
+        "input_structure": "input_structure.xyz",
+        "output_structure": selected_structure if selected_structure != "input_structure.xyz" else None,
+        "generated_files": sorted(str(p.relative_to(run_dir)) for p in run_dir.rglob("*") if p.is_file()),
+        "validation_report_path": validation_report_path,
+        "run_dir": str(run_dir),
+    }
+    dump_json(run_dir / "relaxation_result.json", result_payload)
     write_log(run_dir / "run.log", result.message)
 
-    validation_note = "Validation not attempted: no relaxed structure found."
-    for candidate in [run_dir / "xtbopt.xyz", run_dir / "xtbopt.coord", run_dir / "input_structure.xyz"]:
-        if candidate.exists() and candidate.suffix == ".xyz":
-            validation = validate_xyz(str(candidate))
-            dump_json(run_dir / "validation_report.json", validation.model_dump())
-            validation_note = f"Validated: {candidate.name}"
-            break
-
-    (run_dir / "README_run.md").write_text("\n".join(["# LMolA run summary", "", f"status: {result.status}", f"message: {result.message}", validation_note]), encoding="utf-8")
-    print(json.dumps({"status": result.status, "message": result.message, "run_dir": str(run_dir)}, indent=2))
+    (run_dir / "README_run.md").write_text(
+        "\n".join(
+            [
+                "# LMolA run summary",
+                "",
+                f"status: {result.status}",
+                f"message: {result.message}",
+                f"method: {method}",
+                "exit_policy: pre-alpha CLI returns JSON and avoids traceback; status is encoded in output payload.",
+                "structure_selection_note: relaxed structure detection is heuristic; richer xTB parsing is future work.",
+                validation_note,
+            ]
+        ),
+        encoding="utf-8",
+    )
+    print(json.dumps({"status": result.status, "message": result.message, "method": method, "run_dir": str(run_dir)}, indent=2))

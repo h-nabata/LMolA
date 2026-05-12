@@ -47,7 +47,7 @@ ligands:
 - `lmola generate INPUT.yaml`
 - `lmola run-agent "prompt"`
 - `lmola inspect-run outputs/run_xxx`
-- `lmola relax STRUCTURE.xyz`
+- `lmola relax STRUCTURE.xyz --method xtb`
 
 ## Offline/local-first policy
 No cloud APIs by default. No automatic model downloads.
@@ -99,3 +99,30 @@ llm:
 
 If not configured, `lmola run-agent` fails safely with a clear message and does not call cloud APIs.
 GPU is optional; CPU-only workflows remain supported for doctor/validate/generate/tests.
+
+
+## Relaxation workflow (Phase 5.1)
+`xTB` is optional and never auto-installed. Run:
+```bash
+lmola relax examples/example.xyz --method xtb
+```
+If xTB is unavailable, LMolA does **not** traceback; it writes artifacts and reports `status: error` in JSON output (pre-alpha exit policy).
+
+Expected relax artifacts:
+- `input_structure.xyz`
+- `relaxation_request.json`
+- `effective_config.json`
+- `environment.json`
+- `tool_calls.jsonl`
+- `relaxation_result.json`
+- `run.log`
+- `README_run.md`
+- `validation_report.json` (when validation runs)
+
+Structure selection is heuristic (`xtbopt.xyz` preferred). Rich xTB parsing is future work.
+
+## Test policy for external tools
+Default tests must not require xTB, molSimplify, RDKit, Open Babel, Ollama, GPU, or cloud APIs. Tests requiring real external tools are marked `external_tools` and are skipped by default.
+
+## Scientific-use reminder
+Relaxed structures are computational models and require researcher review before downstream scientific use.
