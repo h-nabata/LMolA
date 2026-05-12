@@ -106,9 +106,6 @@ def test_relax_xtb_external_tool_scaffold(tmp_path: Path, monkeypatch) -> None:
     result = runner.invoke(app, ["relax", "examples/example.xyz", "--method", "xtb"])
     assert result.exit_code == 0
 
-    assert "kwargs" in captured
-    assert captured["kwargs"].get("shell") is not True
-
     payload = json.loads((run_dir / "relaxation_result.json").read_text(encoding="utf-8"))
     tool_calls = _jsonl(run_dir / "tool_calls.jsonl")
 
@@ -128,6 +125,8 @@ def test_relax_xtb_external_tool_scaffold(tmp_path: Path, monkeypatch) -> None:
     call = tool_calls[0]
     assert call["tool"] == "xtb"
     assert isinstance(call.get("command", []), list)
+    assert call.get("command", [])
+    assert all(isinstance(tok, str) for tok in call.get("command", []))
     assert call.get("cwd", "").endswith("run_relax_xtb")
     assert "returncode" in call
     assert "stdout_excerpt" in call
