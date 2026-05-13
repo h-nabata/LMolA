@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import importlib.util
 import json
 from pathlib import Path
 
@@ -9,6 +8,7 @@ from rich import print
 
 from lmola.agent.planner import plan_request
 from lmola.agent.prompts import SYSTEM_PROMPT
+from lmola.backends.registry import list_backend_statuses
 from lmola.config import load_app_config, load_request_yaml, redacted_llm_config
 from lmola.io.converters import dump_json
 from lmola.io.files import create_run_dir
@@ -22,26 +22,26 @@ from lmola.validation.geometry_checks import validate_xyz
 app = typer.Typer(help="LMolA CLI (pre-alpha)")
 
 
-def _is_importable(module_name: str) -> bool:
-    return importlib.util.find_spec(module_name) is not None
-
-
 @app.command()
 def doctor() -> None:
     cfg = load_app_config()
     molsimplify_cli = detect_molsimplify_cli()
+    backend_statuses = list_backend_statuses()
     report = {
         "molsimplify_importable": detect_molsimplify_import(),
         "molsimplify_cli": bool(molsimplify_cli),
         "molsimplify_executable": molsimplify_cli,
-        "ase_importable": _is_importable("ase"),
-        "rdkit_importable": _is_importable("rdkit"),
-        "openbabel_importable": _is_importable("openbabel"),
-        "xtb_importable": _is_importable("xtb"),
+        "ase_importable": backend_statuses["ase"].importable,
+        "rdkit_importable": backend_statuses["rdkit"].importable,
+        "openbabel_importable": backend_statuses["openbabel"].importable,
+        "xtb_importable": backend_statuses["xtb"].importable,
+        "xtb_cli": bool(backend_statuses["xtb"].executable),
+        "xtb_executable": backend_statuses["xtb"].executable,
         "llm_config_present": cfg.llm.model is not None or cfg.llm.base_url is not None,
         "llm_enabled": cfg.llm.enabled,
         "llm_backend": cfg.llm.backend,
-        "gpu_cuda_detected": _is_importable("torch") and False,
+        "gpu_cuda_detected": False,
+        "backends": {name: status.__dict__ for name, status in backend_statuses.items()},
     }
     if cfg.llm.enabled and cfg.llm.backend in {"ollama", "openai_compatible_local"} and cfg.llm.base_url:
         try:
