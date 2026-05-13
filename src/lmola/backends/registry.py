@@ -4,6 +4,7 @@ from dataclasses import dataclass
 import importlib.util
 from importlib import metadata
 import shutil
+import re
 import subprocess
 
 
@@ -51,6 +52,17 @@ def _version_for_module(module_name: str) -> str | None:
         return None
 
 
+def _parse_xtb_version(output: str) -> str | None:
+    for raw_line in output.splitlines():
+        line = raw_line.strip()
+        if not line or set(line) <= {"-", "=", "_"}:
+            continue
+        match = re.search(r"\b(\d+\.\d+(?:\.\d+)*)\b", line)
+        if match:
+            return match.group(1)
+    return None
+
+
 def _xtb_version(executable: str | None) -> str | None:
     if not executable:
         return None
@@ -58,8 +70,8 @@ def _xtb_version(executable: str | None) -> str | None:
         completed = subprocess.run([executable, "--version"], capture_output=True, text=True, check=False)
     except Exception:
         return None
-    line = (completed.stdout or completed.stderr).strip().splitlines()
-    return line[0].strip() if line else None
+    combined = "\n".join([completed.stdout or "", completed.stderr or ""]).strip()
+    return _parse_xtb_version(combined)
 
 
 def _status(cap: BackendCapability) -> BackendStatus:

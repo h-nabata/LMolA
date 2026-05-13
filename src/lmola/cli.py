@@ -35,6 +35,8 @@ def doctor() -> None:
         "rdkit_importable": backend_statuses["rdkit"].importable,
         "openbabel_importable": backend_statuses["openbabel"].importable,
         "xtb_importable": backend_statuses["xtb"].importable,
+        "xtb_cli": bool(backend_statuses["xtb"].executable),
+        "xtb_executable": backend_statuses["xtb"].executable,
         "llm_config_present": cfg.llm.model is not None or cfg.llm.base_url is not None,
         "llm_enabled": cfg.llm.enabled,
         "llm_backend": cfg.llm.backend,
