@@ -23,6 +23,24 @@ LMolA is a local-first, offline-capable Python toolkit scaffold for orchestratin
 ## Installation
 See [INSTALL.md](INSTALL.md).
 
+## Backend installation profiles
+
+| Backend | Purpose | Extra | Recommended install route | Required for default tests? |
+|---|---|---|---|---|
+| ASE | structure parsing/validation | base dependency | pip via base install | Yes |
+| RDKit | future structure generation | `rdkit`, `chem-light` | Prefer conda/mamba (`conda-forge`) or `pip install -e ".[rdkit]"` | No |
+| Open Babel | future conversion/gen3d | `openbabel` | Prefer conda/mamba first; pip bindings can be environment-sensitive | No |
+| molSimplify | inorganic generation (optional) | `molsimplify`, `chem-inorganic` | `pip install -e ".[molsimplify]"` or conda/mamba/source install | No |
+| xTB | relaxation executable | none (CLI tool) | Install `xtb` via conda-forge/mamba; not a Python dependency | No (`external_tools` only) |
+| local LLM (Ollama/OpenAI-compatible local) | NL request parsing | none | Local endpoint + `.lmola/config.yaml` | No |
+| mock LLM | test/offline fallback | none | Built-in | No |
+
+Optional extras policy:
+- Keep base install lightweight.
+- Install only what you need: `pip install -e ".[dev]"`, then add `.[rdkit]`, `.[openbabel]`, or `.[molsimplify]` as needed.
+- `all` intentionally excludes fragile chemistry stacks.
+
+
 ## Quick start
 ```bash
 pip install -e ".[dev]"
