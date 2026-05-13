@@ -60,6 +60,16 @@ LMolA supports a narrow first external generation case only:
 
 `molSimplify` is optional and never auto-installed. Default tests and CI do not require molSimplify.
 
+Install options:
+- LMolA extra (keeps molSimplify optional): `pip install -e ".[molsimplify]"`
+- quick pip route: `pip install molSimplify`
+- robust chemistry environment: use conda/mamba for base environment management, then install LMolA and molSimplify
+- newest molSimplify behavior: install from the molSimplify GitHub source
+
+Notes:
+- `molSimplify` is kept in a dedicated optional extra and is **not** in base dependencies.
+- `all` does not include `molSimplify`, avoiding heavy chemistry dependencies in general-purpose installs.
+
 Manual run:
 ```bash
 lmola generate examples/fe_h2o6.yaml
