@@ -52,8 +52,31 @@ ligands:
 ## Offline/local-first policy
 No cloud APIs by default. No automatic model downloads.
 
-## molSimplify integration status
-Detection/probing stub only; generation command execution intentionally unimplemented in pre-alpha.
+## molSimplify integration status (optional)
+LMolA supports a narrow first external generation case only:
+- `request_type: metal_complex`
+- `metal: Fe`, `oxidation_state: 2`
+- one ligand entry `H2O`/`h2o` with `count: 6`
+
+`molSimplify` is optional and never auto-installed. Default tests and CI do not require molSimplify.
+
+Manual run:
+```bash
+lmola generate examples/fe_h2o6.yaml
+```
+
+Manual external verification:
+```bash
+pytest -m external_tools -q
+```
+
+Behavior:
+- If molSimplify is unavailable, LMolA safely records `status: error` and run artifacts.
+- If molSimplify is available, LMolA executes the CLI, records command/cwd/returncode and stdout/stderr artifacts, and attempts XYZ validation when a structure is generated.
+
+Optional executable override:
+- Set `LMOLA_MOLSIMPLIFY_EXECUTABLE=/path/to/molsimplify` to force a specific executable.
+- Otherwise LMolA detects from `PATH` (`molsimplify`, then `molSimplify`).
 
 ## Validation workflow
 ASE-backed file parsing and lightweight geometry/chemistry checks with JSON report output.

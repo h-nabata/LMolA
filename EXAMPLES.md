@@ -33,3 +33,23 @@ Manual external xTB verification:
 ```bash
 pytest -m external_tools -q
 ```
+
+## molSimplify external verification (optional)
+LMolA currently supports a deliberately narrow molSimplify generation case:
+- Fe(II) with six water ligands (`examples/fe_h2o6.yaml`).
+
+Run generation:
+```bash
+lmola generate examples/fe_h2o6.yaml
+```
+
+Run external-tool tests:
+```bash
+pytest -m external_tools -q
+```
+
+Notes:
+- molSimplify is optional; default tests do not require it.
+- If molSimplify is unavailable, generation safely records an error result and artifacts.
+- If molSimplify is available, LMolA records tool call metadata and validates generated XYZ when detected.
+- Generated structures are initial computational models and require researcher review.
