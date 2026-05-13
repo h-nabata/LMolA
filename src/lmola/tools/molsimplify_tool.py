@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import importlib.util
+import os
 import shutil
 import subprocess
 from datetime import datetime, timezone
@@ -14,6 +15,12 @@ def detect_molsimplify_import() -> bool:
 
 
 def detect_molsimplify_cli() -> str | None:
+    override = os.environ.get("LMOLA_MOLSIMPLIFY_EXECUTABLE")
+    if override:
+        candidate = Path(override).expanduser()
+        if candidate.exists() and os.access(candidate, os.X_OK):
+            return str(candidate.resolve())
+        return None
     return shutil.which("molsimplify") or shutil.which("molSimplify")
 
 
@@ -93,6 +100,10 @@ def run_generation(req: MoleculeBuildRequest, run_dir: Path) -> ToolResult:
     ]
     before = {p.resolve() for p in run_dir.rglob("*") if p.is_file()}
     cp = subprocess.run(command, cwd=run_dir, capture_output=True, text=True)
+    stdout_name = "molsimplify.stdout.txt"
+    stderr_name = "molsimplify.stderr.txt"
+    (run_dir / stdout_name).write_text(cp.stdout or "", encoding="utf-8")
+    (run_dir / stderr_name).write_text(cp.stderr or "", encoding="utf-8")
     after = [p.resolve() for p in run_dir.rglob("*") if p.is_file()]
     generated = sorted(str(p.relative_to(run_dir)) for p in after if p not in before)
     status = "ok" if cp.returncode == 0 else "error"
@@ -105,5 +116,9 @@ def run_generation(req: MoleculeBuildRequest, run_dir: Path) -> ToolResult:
         command=command,
         cwd=str(run_dir),
         generated_files=generated,
-        tool_calls=[_record("molsimplify", status, run_dir, command, cp.returncode, cp.stdout, cp.stderr)],
+        tool_calls=[
+            _record("molsimplify", status, run_dir, command, cp.returncode, cp.stdout, cp.stderr).model_copy(
+                update={"stdout_path": stdout_name, "stderr_path": stderr_name}
+            )
+        ],
     )

@@ -29,9 +29,11 @@ def _is_importable(module_name: str) -> bool:
 @app.command()
 def doctor() -> None:
     cfg = load_app_config()
+    molsimplify_cli = detect_molsimplify_cli()
     report = {
         "molsimplify_importable": detect_molsimplify_import(),
-        "molsimplify_cli": bool(detect_molsimplify_cli()),
+        "molsimplify_cli": bool(molsimplify_cli),
+        "molsimplify_executable": molsimplify_cli,
         "ase_importable": _is_importable("ase"),
         "rdkit_importable": _is_importable("rdkit"),
         "openbabel_importable": _is_importable("openbabel"),
@@ -68,7 +70,18 @@ def generate(input_yaml: str) -> None:
 
     tool_result = run_generation(req, run_dir)
     write_tool_calls(run_dir / "tool_calls.jsonl", tool_result.tool_calls)
-    dump_json(run_dir / "tool_result.json", tool_result.model_dump())
+    artifact_files = [
+        "request.yaml",
+        "normalized_request.json",
+        "effective_config.json",
+        "environment.json",
+        "tool_calls.jsonl",
+        "tool_result.json",
+        "run.log",
+        "README_run.md",
+    ]
+    payload = tool_result.model_dump() | {"run_dir": str(run_dir), "artifact_files": artifact_files}
+    dump_json(run_dir / "tool_result.json", payload)
     write_log(run_dir / "run.log", tool_result.message)
 
     validation_note = "Validation not attempted: no XYZ structure generated."
@@ -76,8 +89,10 @@ def generate(input_yaml: str) -> None:
     if xyz_candidates:
         validation = validate_xyz(str(xyz_candidates[0]))
         dump_json(run_dir / "validation_report.json", validation.model_dump())
+        artifact_files.append("validation_report.json")
         validation_note = f"Validated: {xyz_candidates[0].name}"
     (run_dir / "README_run.md").write_text("\n".join(["# LMolA run summary", "", f"status: {tool_result.status}", f"message: {tool_result.message}", validation_note]), encoding="utf-8")
+    dump_json(run_dir / "tool_result.json", payload | {"artifact_files": sorted(set(artifact_files))})
     print(f"Created run directory: {run_dir}")
 
 
