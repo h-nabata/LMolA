@@ -191,3 +191,6 @@ Expected behavior:
 
 ## Scientific-use reminder
 Relaxed structures are computational models and require researcher review before downstream scientific use.
+
+
+RDKit small-molecule generation is optional and supports SMILES->3D initial structures via `lmola generate examples/ethanol_smiles.yaml`. Metal-complex generation remains molSimplify-oriented. Conformer ensembles are future work; review generated models scientifically.

@@ -86,3 +86,6 @@ pip install -e ".[chem-inorganic]"  # currently molSimplify-focused
 | xTB | relaxation | none | conda-forge/mamba executable | No (`external_tools`) |
 | local LLM | NL parsing | none | local endpoint config | No |
 | mock LLM | tests/fallback | none | built-in | No |
+
+
+RDKit small-molecule generation is optional and supports SMILES->3D initial structures via `lmola generate examples/ethanol_smiles.yaml`. Metal-complex generation remains molSimplify-oriented. Conformer ensembles are future work; review generated models scientifically.

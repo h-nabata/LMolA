@@ -53,3 +53,6 @@ Notes:
 - If molSimplify is unavailable, generation safely records an error result and artifacts.
 - If molSimplify is available, LMolA records tool call metadata and validates generated XYZ when detected.
 - Generated structures are initial computational models and require researcher review.
+
+
+RDKit small-molecule generation is optional and supports SMILES->3D initial structures via `lmola generate examples/ethanol_smiles.yaml`. Metal-complex generation remains molSimplify-oriented. Conformer ensembles are future work; review generated models scientifically.

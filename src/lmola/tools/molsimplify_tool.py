@@ -8,6 +8,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 from lmola.schemas import MoleculeBuildRequest, ToolCallRecord, ToolResult
+from lmola.tools.rdkit_tool import run_rdkit_generation
 
 
 def detect_molsimplify_import() -> bool:
@@ -62,6 +63,11 @@ def _record(tool: str, status: str, cwd: Path, command: list[str] | None = None,
 
 
 def run_generation(req: MoleculeBuildRequest, run_dir: Path) -> ToolResult:
+    if req.request_type == "small_molecule":
+        if (req.backend or "rdkit").lower() != "rdkit":
+            return ToolResult(status="not_implemented", message="small_molecule currently supports backend=rdkit only.", cwd=str(run_dir), tool_calls=[_record("dispatcher", "not_implemented", run_dir)])
+        return run_rdkit_generation(req, run_dir)
+
     if not _is_supported_first_case(req):
         return ToolResult(
             status="not_implemented",
