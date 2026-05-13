@@ -12,6 +12,12 @@ class LigandSpec(BaseModel):
 
 class BuildOptions(BaseModel):
     expected_elements: list[str] = Field(default_factory=list)
+    add_hydrogens: bool = True
+    embed_method: str = "ETKDG"
+    optimize: str | None = "uff"
+    num_conformers: int = Field(default=1, ge=1)
+    random_seed: int | None = 61453
+    output_formats: list[str] = Field(default_factory=lambda: ["xyz"])
 
 
 class MetalComplexRequest(BaseModel):
@@ -24,9 +30,11 @@ class MetalComplexRequest(BaseModel):
 
 class MoleculeBuildRequest(BaseModel):
     request_type: str
+    backend: str | None = None
     metal: str | None = None
     oxidation_state: int | None = None
     ligands: list[LigandSpec] = Field(default_factory=list)
+    smiles: str | None = None
     build_options: BuildOptions = Field(default_factory=BuildOptions)
 
 
