@@ -55,4 +55,19 @@ Notes:
 - Generated structures are initial computational models and require researcher review.
 
 
-RDKit small-molecule generation is optional and supports SMILES->3D initial structures via `lmola generate examples/ethanol_smiles.yaml`. Metal-complex generation remains molSimplify-oriented. Conformer ensembles are future work; review generated models scientifically.
+## RDKit small-molecule examples (optional)
+
+Single-conformer example:
+```bash
+lmola generate examples/ethanol_smiles.yaml
+```
+
+Minimal conformer-ensemble example:
+```bash
+lmola generate examples/ethanol_conformers.yaml
+```
+
+Notes:
+- RDKit is optional and can be installed with `pip install -e ".[rdkit]"` (or conda/mamba).
+- Conformer energies are force-field estimates only (UFF/MMFF), not quantum-chemical energies.
+- Ensemble generation may fail for some SMILES; generated conformers require researcher review.

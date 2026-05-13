@@ -80,7 +80,7 @@ pip install -e ".[chem-inorganic]"  # currently molSimplify-focused
 | Backend | Purpose | Extra | Recommended install route | Required for default tests? |
 |---|---|---|---|---|
 | ASE | structure parsing/validation | base dependency | pip base install | Yes |
-| RDKit | future structure generation | `rdkit`, `chem-light` | conda/mamba preferred; pip extra available | No |
+| RDKit | SMILES->3D + minimal conformer ensembles | `rdkit`, `chem-light` | conda/mamba preferred; pip extra available | No |
 | Open Babel | future conversion/gen3d | `openbabel` | conda/mamba preferred; pip may be sensitive | No |
 | molSimplify | inorganic generation (optional) | `molsimplify`, `chem-inorganic` | pip extra, conda/mamba, or source | No |
 | xTB | relaxation | none | conda-forge/mamba executable | No (`external_tools`) |
@@ -88,4 +88,4 @@ pip install -e ".[chem-inorganic]"  # currently molSimplify-focused
 | mock LLM | tests/fallback | none | built-in | No |
 
 
-RDKit small-molecule generation is optional and supports SMILES->3D initial structures via `lmola generate examples/ethanol_smiles.yaml`. Metal-complex generation remains molSimplify-oriented. Conformer ensembles are future work; review generated models scientifically.
+RDKit small-molecule generation is optional and supports SMILES->3D initial structures via `lmola generate examples/ethanol_smiles.yaml` and minimal conformer ensembles via `lmola generate examples/ethanol_conformers.yaml`. Conformer energies are force-field estimates only (UFF/MMFF) and are not quantum-chemical energies. Ensemble generation may fail for some SMILES, and generated conformers require researcher review.
