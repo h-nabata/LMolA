@@ -193,4 +193,4 @@ Expected behavior:
 Relaxed structures are computational models and require researcher review before downstream scientific use.
 
 
-RDKit small-molecule generation is optional and supports SMILES->3D initial structures via `lmola generate examples/ethanol_smiles.yaml`. Metal-complex generation remains molSimplify-oriented. Conformer ensembles are future work; review generated models scientifically.
+RDKit small-molecule generation is optional and supports SMILES->3D initial structures via `lmola generate examples/ethanol_smiles.yaml` and minimal conformer ensembles via `lmola generate examples/ethanol_conformers.yaml`. Conformer energies are force-field estimates only (UFF/MMFF) and are not quantum-chemical energies. Ensemble generation may fail for some SMILES, and generated conformers require researcher review.

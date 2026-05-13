@@ -1,0 +1,16 @@
+request_type: small_molecule
+backend: rdkit
+smiles: CCO
+build_options:
+  add_hydrogens: true
+  embed_method: ETKDG
+  optimize: uff
+  num_conformers: 10
+  random_seed: 61453
+  output_formats:
+    - xyz
+    - sdf
+  expected_elements:
+    - C
+    - H
+    - O

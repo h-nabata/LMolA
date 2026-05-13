@@ -18,6 +18,9 @@ class BuildOptions(BaseModel):
     num_conformers: int = Field(default=1, ge=1)
     random_seed: int | None = 61453
     output_formats: list[str] = Field(default_factory=lambda: ["xyz"])
+    prune_rms_thresh: float | None = Field(default=None, ge=0.0)
+    force_field: Literal["uff", "mmff"] | None = None
+    max_embed_attempts: int | None = Field(default=None, ge=1)
 
 
 class MetalComplexRequest(BaseModel):
