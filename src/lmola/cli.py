@@ -37,6 +37,7 @@ def doctor() -> None:
         "openbabel_importable": backend_statuses["openbabel"].importable,
         "openbabel_cli": bool(backend_statuses["openbabel"].executable),
         "openbabel_executable": backend_statuses["openbabel"].executable,
+        "openbabel_version": backend_statuses["openbabel"].version,
         "xtb_importable": backend_statuses["xtb"].importable,
         "xtb_cli": bool(backend_statuses["xtb"].executable),
         "xtb_executable": backend_statuses["xtb"].executable,

@@ -48,6 +48,23 @@ def detect_openbabel_cli() -> str | None:
     return None
 
 
+def _parse_openbabel_version(output: str) -> str | None:
+    for raw_line in output.splitlines():
+        line = raw_line.strip()
+        if not line:
+            continue
+        lower = line.lower()
+        if "open babel" not in lower:
+            continue
+        parts = line.split()
+        if not parts:
+            continue
+        tail = parts[-1].strip()
+        if tail and any(ch.isdigit() for ch in tail):
+            return tail
+    return None
+
+
 def get_openbabel_version(executable: str | None = None) -> str | None:
     exe = executable or detect_openbabel_cli()
     if not exe:
@@ -58,8 +75,11 @@ def get_openbabel_version(executable: str | None = None) -> str | None:
         except OSError:
             continue
         text = "\n".join([cp.stdout or "", cp.stderr or ""]).strip()
-        if cp.returncode == 0 and text:
-            return text.splitlines()[0].strip()
+        if cp.returncode != 0 or not text:
+            continue
+        parsed = _parse_openbabel_version(text)
+        if parsed:
+            return parsed
     return None
 
 
