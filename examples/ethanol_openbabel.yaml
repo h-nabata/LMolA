@@ -1,0 +1,12 @@
+request_type: small_molecule
+backend: openbabel
+smiles: CCO
+build_options:
+  add_hydrogens: true
+  output_formats:
+    - xyz
+    - sdf
+  expected_elements:
+    - C
+    - H
+    - O

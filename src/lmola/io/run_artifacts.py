@@ -13,6 +13,7 @@ from pydantic import BaseModel
 from lmola import __version__
 from lmola.schemas import ToolCallRecord
 from lmola.tools.molsimplify_tool import detect_molsimplify_cli, detect_molsimplify_import
+from lmola.tools.openbabel_tool import detect_openbabel_cli, detect_openbabel_import, get_openbabel_version
 
 
 def _importable(name: str) -> bool:
@@ -36,7 +37,7 @@ def _tool_version_from_command(cmd: list[str]) -> str | None:
 
 def collect_environment() -> dict:
     xtb_exe = shutil.which("xtb")
-    obabel_exe = shutil.which("obabel")
+    obabel_exe = detect_openbabel_cli()
     return {
         "python_version": sys.version,
         "platform": platform.platform(),
@@ -49,9 +50,9 @@ def collect_environment() -> dict:
             "ASE": {"importable": _importable("ase")},
             "RDKit": {"importable": _importable("rdkit")},
             "Open Babel": {
-                "importable": _importable("openbabel"),
+                "importable": detect_openbabel_import(),
                 "cli": obabel_exe,
-                "version": _tool_version_from_command([obabel_exe, "-V"]) if obabel_exe else None,
+                "version": get_openbabel_version(obabel_exe),
             },
             "xTB": {
                 "cli": xtb_exe,

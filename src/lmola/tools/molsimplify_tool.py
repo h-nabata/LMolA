@@ -8,6 +8,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 from lmola.schemas import MoleculeBuildRequest, ToolCallRecord, ToolResult
+from lmola.tools.openbabel_tool import run_openbabel_gen3d
 from lmola.tools.rdkit_tool import run_rdkit_generation
 
 
@@ -64,9 +65,12 @@ def _record(tool: str, status: str, cwd: Path, command: list[str] | None = None,
 
 def run_generation(req: MoleculeBuildRequest, run_dir: Path) -> ToolResult:
     if req.request_type == "small_molecule":
-        if (req.backend or "rdkit").lower() != "rdkit":
-            return ToolResult(status="not_implemented", message="small_molecule currently supports backend=rdkit only.", cwd=str(run_dir), tool_calls=[_record("dispatcher", "not_implemented", run_dir)])
-        return run_rdkit_generation(req, run_dir)
+        backend = (req.backend or "rdkit").lower()
+        if backend == "rdkit":
+            return run_rdkit_generation(req, run_dir)
+        if backend == "openbabel":
+            return run_openbabel_gen3d(req, run_dir)
+        return ToolResult(status="not_implemented", message=f"small_molecule backend={backend} is not supported.", cwd=str(run_dir), tool_calls=[_record("dispatcher", "not_implemented", run_dir)])
 
     if not _is_supported_first_case(req):
         return ToolResult(
