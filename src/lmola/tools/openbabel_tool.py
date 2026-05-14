@@ -7,6 +7,7 @@ import subprocess
 from datetime import datetime, timezone
 from pathlib import Path
 
+from lmola.io.structures import select_primary_structure_output
 from lmola.schemas import MoleculeBuildRequest, ToolCallRecord, ToolResult
 
 UNAVAILABLE_MESSAGE = "Open Babel CLI is unavailable. Install Open Babel to enable conversion or fallback 3D generation."
@@ -130,11 +131,11 @@ def _unavailable_result(run_dir: Path) -> ToolResult:
     )
 
 
-def _run_and_collect(command: list[str], run_dir: Path, generated_before: set[Path], message: str, expected_outputs: list[str] | None = None) -> ToolResult:
+def _run_and_collect(command: list[str], run_dir: Path, generated_before: set[Path], message: str, expected_outputs: list[str] | None = None, log_stem: str = "openbabel") -> ToolResult:
     run_dir_abs = run_dir.resolve()
     cp = subprocess.run(command, cwd=run_dir_abs, shell=False, capture_output=True, text=True, check=False)
-    stdout_name = "openbabel.stdout.txt"
-    stderr_name = "openbabel.stderr.txt"
+    stdout_name = f"{log_stem}.stdout.txt"
+    stderr_name = f"{log_stem}.stderr.txt"
     (run_dir_abs / stdout_name).write_text(cp.stdout or "", encoding="utf-8")
     (run_dir_abs / stderr_name).write_text(cp.stderr or "", encoding="utf-8")
     after = {p.resolve() for p in run_dir_abs.rglob("*") if p.is_file()}
@@ -148,7 +149,7 @@ def _run_and_collect(command: list[str], run_dir: Path, generated_before: set[Pa
                 status = "error"
                 break
     rec = _record(status, run_dir, command, cp.returncode, cp.stdout, cp.stderr).model_copy(update={"stdout_path": stdout_name, "stderr_path": stderr_name})
-    return ToolResult(status=status, message=message, stdout=cp.stdout[:20000], stderr=cp.stderr[:20000], returncode=cp.returncode, command=command, cwd=str(run_dir_abs), generated_files=generated, tool_calls=[rec])
+    return ToolResult(status=status, message=message, backend="openbabel", stdout=cp.stdout[:20000], stderr=cp.stderr[:20000], returncode=cp.returncode, command=command, cwd=str(run_dir_abs), run_dir=str(run_dir_abs), generated_files=generated, primary_structure=select_primary_structure_output(generated), tool_calls=[rec])
 
 
 def run_openbabel_conversion(run_dir: Path, input_path: Path, output_path: Path, gen3d: bool = False) -> ToolResult:
@@ -162,7 +163,7 @@ def run_openbabel_conversion(run_dir: Path, input_path: Path, output_path: Path,
     command = [exe, in_arg, "-O", out_arg]
     if gen3d:
         command.append("--gen3d")
-    return _run_and_collect(command, run_dir_abs, before, "Open Babel conversion command executed", expected_outputs=[out_arg])
+    return _run_and_collect(command, run_dir_abs, before, "Open Babel conversion command executed", expected_outputs=[out_arg], log_stem="openbabel_convert")
 
 
 def run_openbabel_gen3d(req: MoleculeBuildRequest, run_dir: Path) -> ToolResult:
@@ -182,16 +183,17 @@ def run_openbabel_gen3d(req: MoleculeBuildRequest, run_dir: Path) -> ToolResult:
     if req.build_options.add_hydrogens:
         command.append("-h")
     before = {p.resolve() for p in run_dir_abs.rglob("*") if p.is_file()}
-    result = _run_and_collect(command, run_dir_abs, before, "Open Babel fallback 3D generation executed", expected_outputs=[primary_out])
+    result = _run_and_collect(command, run_dir_abs, before, "Open Babel fallback 3D generation executed", expected_outputs=[primary_out], log_stem="openbabel_gen3d")
     if result.status != "ok":
         return result.model_copy(update={"message": "Open Babel generation failed."})
 
     generated = set(result.generated_files)
     tool_calls = list(result.tool_calls)
     for fmt in sorted(formats - {primary}):
-        extra = run_openbabel_conversion(run_dir_abs, run_dir_abs / f"molecule.{primary}", run_dir_abs / f"molecule.{fmt}")
+        extra = _run_and_collect([exe, f"molecule.{primary}", "-O", f"molecule.{fmt}"], run_dir_abs, {p.resolve() for p in run_dir_abs.rglob("*") if p.is_file()}, "Open Babel conversion command executed", expected_outputs=[f"molecule.{fmt}"], log_stem=f"openbabel_{fmt}")
         generated.update(extra.generated_files)
         tool_calls.extend(extra.tool_calls)
         if extra.status != "ok":
             return result.model_copy(update={"status": "ok", "message": "Open Babel generated primary output, but secondary conversion failed.", "generated_files": sorted(generated), "tool_calls": tool_calls})
-    return result.model_copy(update={"generated_files": sorted(generated), "tool_calls": tool_calls})
+    all_generated = sorted(generated | {"input.smi"})
+    return result.model_copy(update={"generated_files": all_generated, "artifact_files": ["input.smi"], "tool_calls": tool_calls, "primary_structure": select_primary_structure_output(all_generated)})

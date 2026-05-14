@@ -80,3 +80,9 @@ Open Babel is optional and CLI-first (`obabel`). RDKit remains the primary small
 - Optional extra: `pip install -e ".[openbabel]"` (bindings may be environment-sensitive).
 - Generate fallback 3D: `lmola generate examples/ethanol_openbabel.yaml`
 - Convert formats: `lmola convert examples/example.xyz --to sdf` and `lmola convert examples/example.sdf --to xyz`.
+
+## Backend policy reminders
+- Ethanol SMILES examples prefer RDKit and can fallback to Open Babel.
+- Transition-metal examples (for example Fe(H2O)6) target molSimplify.
+- Relaxation examples use xTB.
+- Validation output is expected in `validation_report.json` when performed.

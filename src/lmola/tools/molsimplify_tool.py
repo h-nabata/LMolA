@@ -7,6 +7,8 @@ import subprocess
 from datetime import datetime, timezone
 from pathlib import Path
 
+from lmola.backends.selection import choose_structure_generation_backend, explain_backend_choice
+from lmola.io.structures import select_primary_structure_output
 from lmola.schemas import MoleculeBuildRequest, ToolCallRecord, ToolResult
 from lmola.tools.openbabel_tool import run_openbabel_gen3d
 from lmola.tools.rdkit_tool import run_rdkit_generation
@@ -66,12 +68,13 @@ def _record(tool: str, status: str, cwd: Path, command: list[str] | None = None,
 def run_generation(req: MoleculeBuildRequest, run_dir: Path) -> ToolResult:
     run_dir_abs = run_dir.resolve()
     if req.request_type == "small_molecule":
-        backend = (req.backend or "rdkit").lower()
+        available = {"rdkit", "openbabel"}
+        backend = choose_structure_generation_backend(req, available)
         if backend == "rdkit":
             return run_rdkit_generation(req, run_dir)
         if backend == "openbabel":
             return run_openbabel_gen3d(req, run_dir)
-        return ToolResult(status="not_implemented", message=f"small_molecule backend={backend} is not supported.", cwd=str(run_dir_abs), tool_calls=[_record("dispatcher", "not_implemented", run_dir_abs)])
+        return ToolResult(status="not_implemented", message=f"small_molecule backend={backend} is not supported. {explain_backend_choice(req, available)}", backend="dispatcher", cwd=str(run_dir_abs), run_dir=str(run_dir_abs), tool_calls=[_record("dispatcher", "not_implemented", run_dir_abs)])
 
     if not _is_supported_first_case(req):
         return ToolResult(
@@ -80,7 +83,9 @@ def run_generation(req: MoleculeBuildRequest, run_dir: Path) -> ToolResult:
                 "Only the first supported molSimplify case is implemented: "
                 "metal_complex Fe(II) with one ligand entry h2o x6."
             ),
+            backend="molsimplify",
             cwd=str(run_dir_abs),
+            run_dir=str(run_dir_abs),
             tool_calls=[_record("molsimplify", "not_implemented", run_dir_abs)],
         )
 
@@ -89,7 +94,9 @@ def run_generation(req: MoleculeBuildRequest, run_dir: Path) -> ToolResult:
         return ToolResult(
             status="error",
             message="molSimplify CLI is unavailable. Install molSimplify to enable structure generation.",
+            backend="molsimplify",
             cwd=str(run_dir_abs),
+            run_dir=str(run_dir_abs),
             tool_calls=[_record("molsimplify", "error", run_dir_abs)],
         )
 
@@ -122,12 +129,15 @@ def run_generation(req: MoleculeBuildRequest, run_dir: Path) -> ToolResult:
     return ToolResult(
         status=status,
         message="molSimplify generation command executed",
+        backend="molsimplify",
         stdout=cp.stdout[:20000],
         stderr=cp.stderr[:20000],
         returncode=cp.returncode,
         command=command,
         cwd=str(run_dir_abs),
         generated_files=generated,
+        run_dir=str(run_dir_abs),
+        primary_structure=select_primary_structure_output(generated),
         tool_calls=[
             _record("molsimplify", status, run_dir_abs, command, cp.returncode, cp.stdout, cp.stderr).model_copy(
                 update={"stdout_path": stdout_name, "stderr_path": stderr_name}
