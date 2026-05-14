@@ -8,6 +8,8 @@ import shutil
 import re
 import subprocess
 
+from lmola.tools.openbabel_tool import detect_openbabel_cli, get_openbabel_version
+
 
 @dataclass(frozen=True)
 class BackendCapability:
@@ -81,13 +83,15 @@ def _status(cap: BackendCapability) -> BackendStatus:
     if cap.name == "openbabel":
         override = os.environ.get("LMOLA_OBABEL_EXECUTABLE")
         if override:
-            executable = override
-        elif not executable:
-            executable = shutil.which("obabel")
+            executable = detect_openbabel_cli()
+        else:
+            executable = detect_openbabel_cli()
     version = None
 
     if cap.name == "xtb":
         version = _xtb_version(executable)
+    elif cap.name == "openbabel":
+        version = get_openbabel_version(executable)
     elif cap.module_name and importable:
         version = _version_for_module(cap.module_name)
 
