@@ -70,6 +70,10 @@ def test_generate_openbabel_external(tmp_path: Path, monkeypatch) -> None:
     payload = json.loads((run_dir / "tool_result.json").read_text(encoding="utf-8"))
     calls = _jsonl(run_dir / "tool_calls.jsonl")
     assert payload["command"]
+    stderr_text = (payload.get("stderr") or "").lower()
+    assert "cannot open" not in stderr_text
+    assert "cannot write" not in stderr_text
+    assert "0 molecules converted" not in stderr_text
     assert payload["cwd"] == str(run_dir)
     assert isinstance(payload.get("returncode"), int)
     assert calls
@@ -113,3 +117,55 @@ def test_openbabel_run_and_collect_relative_run_dir(tmp_path: Path, monkeypatch)
     assert "openbabel.stdout.txt" in result.generated_files
     assert "openbabel.stderr.txt" in result.generated_files
     assert all(not Path(name).is_absolute() for name in result.generated_files)
+
+
+def test_openbabel_run_and_collect_failure_marker(tmp_path: Path, monkeypatch) -> None:
+    from lmola.tools import openbabel_tool
+
+    class DummyCompleted:
+        returncode = 0
+        stdout = ""
+        stderr = "0 molecules converted"
+
+    run_dir = tmp_path / "run_fail_marker"
+    run_dir.mkdir()
+    monkeypatch.setattr(openbabel_tool.subprocess, "run", lambda *args, **kwargs: DummyCompleted())
+    result = openbabel_tool._run_and_collect(["obabel", "input.smi", "-O", "molecule.xyz"], run_dir, set(), "test", expected_outputs=["molecule.xyz"])
+    assert result.status == "error"
+
+
+def test_openbabel_run_and_collect_missing_output(tmp_path: Path, monkeypatch) -> None:
+    from lmola.tools import openbabel_tool
+
+    class DummyCompleted:
+        returncode = 0
+        stdout = "converted"
+        stderr = ""
+
+    run_dir = tmp_path / "run_missing_output"
+    run_dir.mkdir()
+    monkeypatch.setattr(openbabel_tool.subprocess, "run", lambda *args, **kwargs: DummyCompleted())
+    result = openbabel_tool._run_and_collect(["obabel", "input.smi", "-O", "molecule.xyz"], run_dir, set(), "test", expected_outputs=["molecule.xyz"])
+    assert result.status == "error"
+
+
+def test_openbabel_run_and_collect_success_with_output(tmp_path: Path, monkeypatch) -> None:
+    from lmola.tools import openbabel_tool
+
+    def _fake_run(*args, **kwargs):
+        cwd = Path(kwargs["cwd"])
+        (cwd / "molecule.xyz").write_text("3\n\nH 0 0 0\nH 0 0 1\nO 0 1 0\n", encoding="utf-8")
+
+        class DummyCompleted:
+            returncode = 0
+            stdout = "1 molecule converted"
+            stderr = ""
+
+        return DummyCompleted()
+
+    run_dir = tmp_path / "run_success_output"
+    run_dir.mkdir()
+    monkeypatch.setattr(openbabel_tool.subprocess, "run", _fake_run)
+    result = openbabel_tool._run_and_collect(["obabel", "input.smi", "-O", "molecule.xyz"], run_dir, set(), "test", expected_outputs=["molecule.xyz"])
+    assert result.status == "ok"
+    assert "molecule.xyz" in result.generated_files
