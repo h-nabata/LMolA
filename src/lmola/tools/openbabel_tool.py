@@ -48,6 +48,23 @@ def detect_openbabel_cli() -> str | None:
     return None
 
 
+def _parse_openbabel_version(output: str) -> str | None:
+    for raw_line in output.splitlines():
+        line = raw_line.strip()
+        if not line:
+            continue
+        lower = line.lower()
+        if "open babel" not in lower:
+            continue
+        parts = line.split()
+        if not parts:
+            continue
+        tail = parts[-1].strip()
+        if tail and any(ch.isdigit() for ch in tail):
+            return tail
+    return None
+
+
 def get_openbabel_version(executable: str | None = None) -> str | None:
     exe = executable or detect_openbabel_cli()
     if not exe:
@@ -58,17 +75,21 @@ def get_openbabel_version(executable: str | None = None) -> str | None:
         except OSError:
             continue
         text = "\n".join([cp.stdout or "", cp.stderr or ""]).strip()
-        if cp.returncode == 0 and text:
-            return text.splitlines()[0].strip()
+        if cp.returncode != 0 or not text:
+            continue
+        parsed = _parse_openbabel_version(text)
+        if parsed:
+            return parsed
     return None
 
 
 def _record(status: str, run_dir: Path, command: list[str] | None = None, returncode: int | None = None, stdout: str = "", stderr: str = "") -> ToolCallRecord:
+    run_dir_abs = run_dir.resolve()
     return ToolCallRecord(
         timestamp=datetime.now(timezone.utc).isoformat(),
         tool="openbabel",
         command=command or [],
-        cwd=str(run_dir),
+        cwd=str(run_dir_abs),
         returncode=returncode,
         stdout_excerpt=stdout[:2000],
         stderr_excerpt=stderr[:2000],
@@ -77,34 +98,36 @@ def _record(status: str, run_dir: Path, command: list[str] | None = None, return
 
 
 def _unavailable_result(run_dir: Path) -> ToolResult:
+    run_dir_abs = run_dir.resolve()
     return ToolResult(
         status="error",
         message=UNAVAILABLE_MESSAGE,
         command=[],
-        cwd=str(run_dir),
+        cwd=str(run_dir_abs),
         generated_files=[],
         tool_calls=[_record("error", run_dir)],
     )
 
 
 def _run_and_collect(command: list[str], run_dir: Path, generated_before: set[Path], message: str) -> ToolResult:
-    cp = subprocess.run(command, cwd=run_dir, shell=False, capture_output=True, text=True, check=False)
+    run_dir_abs = run_dir.resolve()
+    cp = subprocess.run(command, cwd=run_dir_abs, shell=False, capture_output=True, text=True, check=False)
     stdout_name = "openbabel.stdout.txt"
     stderr_name = "openbabel.stderr.txt"
-    (run_dir / stdout_name).write_text(cp.stdout or "", encoding="utf-8")
-    (run_dir / stderr_name).write_text(cp.stderr or "", encoding="utf-8")
-    after = {p.resolve() for p in run_dir.rglob("*") if p.is_file()}
-    generated = sorted(str(p.relative_to(run_dir)) for p in after if p not in generated_before)
+    (run_dir_abs / stdout_name).write_text(cp.stdout or "", encoding="utf-8")
+    (run_dir_abs / stderr_name).write_text(cp.stderr or "", encoding="utf-8")
+    after = {p.resolve() for p in run_dir_abs.rglob("*") if p.is_file()}
+    generated = sorted(str(p.relative_to(run_dir_abs)) for p in after if p not in generated_before)
     status = "ok" if cp.returncode == 0 else "error"
     rec = _record(status, run_dir, command, cp.returncode, cp.stdout, cp.stderr).model_copy(update={"stdout_path": stdout_name, "stderr_path": stderr_name})
-    return ToolResult(status=status, message=message, stdout=cp.stdout[:20000], stderr=cp.stderr[:20000], returncode=cp.returncode, command=command, cwd=str(run_dir), generated_files=generated, tool_calls=[rec])
+    return ToolResult(status=status, message=message, stdout=cp.stdout[:20000], stderr=cp.stderr[:20000], returncode=cp.returncode, command=command, cwd=str(run_dir_abs), generated_files=generated, tool_calls=[rec])
 
 
 def run_openbabel_conversion(run_dir: Path, input_path: Path, output_path: Path, gen3d: bool = False) -> ToolResult:
     exe = detect_openbabel_cli()
     if not exe:
         return _unavailable_result(run_dir)
-    before = {p.resolve() for p in run_dir.rglob("*") if p.is_file()}
+    before = {p.resolve() for p in run_dir.resolve().rglob("*") if p.is_file()}
     command = [exe, str(input_path), "-O", str(output_path)]
     if gen3d:
         command.append("--gen3d")
@@ -125,7 +148,7 @@ def run_openbabel_gen3d(req: MoleculeBuildRequest, run_dir: Path) -> ToolResult:
     command = [exe, str(smi), "-ismi", f"-o{primary}", "-O", f"molecule.{primary}", "--gen3d"]
     if req.build_options.add_hydrogens:
         command.append("-h")
-    before = {p.resolve() for p in run_dir.rglob("*") if p.is_file()}
+    before = {p.resolve() for p in run_dir.resolve().rglob("*") if p.is_file()}
     result = _run_and_collect(command, run_dir, before, "Open Babel fallback 3D generation executed")
     if result.status != "ok":
         return result

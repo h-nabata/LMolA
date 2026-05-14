@@ -64,13 +64,14 @@ def _record(tool: str, status: str, cwd: Path, command: list[str] | None = None,
 
 
 def run_generation(req: MoleculeBuildRequest, run_dir: Path) -> ToolResult:
+    run_dir_abs = run_dir.resolve()
     if req.request_type == "small_molecule":
         backend = (req.backend or "rdkit").lower()
         if backend == "rdkit":
             return run_rdkit_generation(req, run_dir)
         if backend == "openbabel":
             return run_openbabel_gen3d(req, run_dir)
-        return ToolResult(status="not_implemented", message=f"small_molecule backend={backend} is not supported.", cwd=str(run_dir), tool_calls=[_record("dispatcher", "not_implemented", run_dir)])
+        return ToolResult(status="not_implemented", message=f"small_molecule backend={backend} is not supported.", cwd=str(run_dir_abs), tool_calls=[_record("dispatcher", "not_implemented", run_dir_abs)])
 
     if not _is_supported_first_case(req):
         return ToolResult(
@@ -79,8 +80,8 @@ def run_generation(req: MoleculeBuildRequest, run_dir: Path) -> ToolResult:
                 "Only the first supported molSimplify case is implemented: "
                 "metal_complex Fe(II) with one ligand entry h2o x6."
             ),
-            cwd=str(run_dir),
-            tool_calls=[_record("molsimplify", "not_implemented", run_dir)],
+            cwd=str(run_dir_abs),
+            tool_calls=[_record("molsimplify", "not_implemented", run_dir_abs)],
         )
 
     exe = detect_molsimplify_cli()
@@ -88,8 +89,8 @@ def run_generation(req: MoleculeBuildRequest, run_dir: Path) -> ToolResult:
         return ToolResult(
             status="error",
             message="molSimplify CLI is unavailable. Install molSimplify to enable structure generation.",
-            cwd=str(run_dir),
-            tool_calls=[_record("molsimplify", "error", run_dir)],
+            cwd=str(run_dir_abs),
+            tool_calls=[_record("molsimplify", "error", run_dir_abs)],
         )
 
     command = [
@@ -108,14 +109,15 @@ def run_generation(req: MoleculeBuildRequest, run_dir: Path) -> ToolResult:
         "-coord",
         "6",
     ]
-    before = {p.resolve() for p in run_dir.rglob("*") if p.is_file()}
-    cp = subprocess.run(command, cwd=run_dir, capture_output=True, text=True)
+    run_dir_abs = run_dir.resolve()
+    before = {p.resolve() for p in run_dir_abs.rglob("*") if p.is_file()}
+    cp = subprocess.run(command, cwd=run_dir_abs, capture_output=True, text=True)
     stdout_name = "molsimplify.stdout.txt"
     stderr_name = "molsimplify.stderr.txt"
-    (run_dir / stdout_name).write_text(cp.stdout or "", encoding="utf-8")
-    (run_dir / stderr_name).write_text(cp.stderr or "", encoding="utf-8")
-    after = [p.resolve() for p in run_dir.rglob("*") if p.is_file()]
-    generated = sorted(str(p.relative_to(run_dir)) for p in after if p not in before)
+    (run_dir_abs / stdout_name).write_text(cp.stdout or "", encoding="utf-8")
+    (run_dir_abs / stderr_name).write_text(cp.stderr or "", encoding="utf-8")
+    after = [p.resolve() for p in run_dir_abs.rglob("*") if p.is_file()]
+    generated = sorted(str(p.relative_to(run_dir_abs)) for p in after if p not in before)
     status = "ok" if cp.returncode == 0 else "error"
     return ToolResult(
         status=status,
@@ -124,10 +126,10 @@ def run_generation(req: MoleculeBuildRequest, run_dir: Path) -> ToolResult:
         stderr=cp.stderr[:20000],
         returncode=cp.returncode,
         command=command,
-        cwd=str(run_dir),
+        cwd=str(run_dir_abs),
         generated_files=generated,
         tool_calls=[
-            _record("molsimplify", status, run_dir, command, cp.returncode, cp.stdout, cp.stderr).model_copy(
+            _record("molsimplify", status, run_dir_abs, command, cp.returncode, cp.stdout, cp.stderr).model_copy(
                 update={"stdout_path": stdout_name, "stderr_path": stderr_name}
             )
         ],

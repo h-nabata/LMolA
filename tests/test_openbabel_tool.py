@@ -13,6 +13,9 @@ from lmola.tools.molsimplify_tool import run_generation
 
 runner = CliRunner()
 
+def _jsonl(path: Path) -> list[dict]:
+    return [json.loads(line) for line in path.read_text(encoding="utf-8").splitlines() if line.strip()]
+
 
 def _patch_run_dir(monkeypatch, run_dir: Path) -> None:
     def _create_run_dir(base: str = "outputs") -> Path:
@@ -65,10 +68,18 @@ def test_generate_openbabel_external(tmp_path: Path, monkeypatch) -> None:
     result = runner.invoke(app, ["generate", "examples/ethanol_openbabel.yaml"])
     assert result.exit_code == 0
     payload = json.loads((run_dir / "tool_result.json").read_text(encoding="utf-8"))
-    assert "returncode" in payload
-    assert (run_dir / "tool_calls.jsonl").exists()
+    calls = _jsonl(run_dir / "tool_calls.jsonl")
+    assert payload["command"]
+    assert payload["cwd"] == str(run_dir)
+    assert isinstance(payload.get("returncode"), int)
+    assert calls
+    assert calls[0]["tool"] == "openbabel"
+    assert calls[0]["command"]
+    assert calls[0]["cwd"] == str(run_dir)
+    assert isinstance(calls[0].get("returncode"), int)
     if (run_dir / "molecule.xyz").exists():
         assert (run_dir / "validation_report.json").exists()
+        assert "molecule.xyz" in payload.get("generated_files", [])
 
 
 @pytest.mark.external_tools
@@ -80,3 +91,25 @@ def test_convert_openbabel_external(tmp_path: Path, monkeypatch) -> None:
     result = runner.invoke(app, ["convert", "examples/example.xyz", "--to", "sdf"])
     assert result.exit_code == 0
     assert (run_dir / "conversion_result.json").exists()
+
+
+def test_openbabel_run_and_collect_relative_run_dir(tmp_path: Path, monkeypatch) -> None:
+    from lmola.tools import openbabel_tool
+
+    class DummyCompleted:
+        returncode = 0
+        stdout = "ok"
+        stderr = ""
+
+    monkeypatch.chdir(tmp_path)
+    run_dir = Path("outputs") / "run_relative"
+    run_dir.mkdir(parents=True)
+    monkeypatch.setattr(openbabel_tool.subprocess, "run", lambda *args, **kwargs: DummyCompleted())
+
+    result = openbabel_tool._run_and_collect(["obabel", "in.smi", "-O", "molecule.xyz"], run_dir, set(), "test")
+
+    assert result.status == "ok"
+    assert result.cwd
+    assert "openbabel.stdout.txt" in result.generated_files
+    assert "openbabel.stderr.txt" in result.generated_files
+    assert all(not Path(name).is_absolute() for name in result.generated_files)
