@@ -71,3 +71,12 @@ Notes:
 - RDKit is optional and can be installed with `pip install -e ".[rdkit]"` (or conda/mamba).
 - Conformer energies are force-field estimates only (UFF/MMFF), not quantum-chemical energies.
 - Ensemble generation may fail for some SMILES; generated conformers require researcher review.
+
+
+## Open Babel (Phase 8.0)
+Open Babel is optional and CLI-first (`obabel`). RDKit remains the primary small-organic SMILES-to-3D backend; Open Babel is a fallback and conversion backend. Generated structures must be reviewed by researchers and may differ from RDKit.
+
+- Install via conda/mamba (recommended): `conda install -c conda-forge openbabel` or `mamba install -c conda-forge openbabel`.
+- Optional extra: `pip install -e ".[openbabel]"` (bindings may be environment-sensitive).
+- Generate fallback 3D: `lmola generate examples/ethanol_openbabel.yaml`
+- Convert formats: `lmola convert examples/example.xyz --to sdf` and `lmola convert examples/example.sdf --to xyz`.

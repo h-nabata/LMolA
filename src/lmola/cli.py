@@ -17,6 +17,7 @@ from lmola.io.run_artifacts import collect_environment, write_request_yaml, writ
 from lmola.relaxation import get_relaxation_calculator, select_relaxed_structure, write_relaxation_request
 from lmola.tools.llm_client import make_llm_client
 from lmola.tools.molsimplify_tool import detect_molsimplify_cli, detect_molsimplify_import, run_generation
+from lmola.tools.openbabel_tool import run_openbabel_conversion
 from lmola.validation.geometry_checks import validate_xyz
 
 app = typer.Typer(help="LMolA CLI (pre-alpha)")
@@ -34,6 +35,8 @@ def doctor() -> None:
         "ase_importable": backend_statuses["ase"].importable,
         "rdkit_importable": backend_statuses["rdkit"].importable,
         "openbabel_importable": backend_statuses["openbabel"].importable,
+        "openbabel_cli": bool(backend_statuses["openbabel"].executable),
+        "openbabel_executable": backend_statuses["openbabel"].executable,
         "xtb_importable": backend_statuses["xtb"].importable,
         "xtb_cli": bool(backend_statuses["xtb"].executable),
         "xtb_executable": backend_statuses["xtb"].executable,
@@ -57,6 +60,39 @@ def doctor() -> None:
 def validate(structure: str) -> None:
     rep = validate_xyz(structure)
     print(rep.model_dump_json(indent=2))
+
+
+
+
+@app.command()
+def convert(input_path: str, to: str = typer.Option("", "--to"), output: str = typer.Option("", "--output")) -> None:
+    run_dir = create_run_dir()
+    src = Path(input_path)
+    if not src.exists():
+        raise typer.BadParameter(f"Input file not found: {input_path}")
+    copied = run_dir / src.name
+    copied.write_text(src.read_text(encoding="utf-8"), encoding="utf-8")
+    if output:
+        out = run_dir / Path(output).name
+    elif to:
+        out = run_dir / f"{src.stem}.{to.lower()}"
+    else:
+        raise typer.BadParameter("Specify --to or --output")
+
+    dump_json(run_dir / "environment.json", collect_environment())
+    result = run_openbabel_conversion(run_dir, copied, out, gen3d=src.suffix.lower() in {".smi", ".smiles"} and out.suffix.lower() == ".xyz")
+    write_tool_calls(run_dir / "tool_calls.jsonl", result.tool_calls)
+    payload = result.model_dump() | {"run_dir": str(run_dir), "artifact_files": ["environment.json", "tool_calls.jsonl", "conversion_result.json", "README_run.md"]}
+
+    if out.suffix.lower() == ".xyz" and out.exists():
+        validation = validate_xyz(str(out))
+        dump_json(run_dir / "validation_report.json", validation.model_dump())
+        payload["validation_report_path"] = "validation_report.json"
+        payload["artifact_files"].append("validation_report.json")
+
+    dump_json(run_dir / "conversion_result.json", payload)
+    (run_dir / "README_run.md").write_text("\n".join(["# LMolA conversion run", "", f"status: {result.status}", f"message: {result.message}"]), encoding="utf-8")
+    print(f"Created run directory: {run_dir}")
 
 
 @app.command()

@@ -3,6 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 import importlib.util
 from importlib import metadata
+import os
 import shutil
 import re
 import subprocess
@@ -33,7 +34,7 @@ class BackendStatus:
 _BACKENDS: tuple[BackendCapability, ...] = (
     BackendCapability("ase", "validation", module_name="ase", notes="Core parser/validation dependency."),
     BackendCapability("rdkit", "structure_generation", module_name="rdkit", optional_extra="rdkit"),
-    BackendCapability("openbabel", "conversion", module_name="openbabel", optional_extra="openbabel"),
+    BackendCapability("openbabel", "conversion", module_name="openbabel", optional_extra="openbabel", notes="CLI obabel is the primary integration path."),
     BackendCapability("molsimplify", "structure_generation", module_name="molSimplify", executable="molsimplify", optional_extra="molsimplify"),
     BackendCapability("xtb", "relaxation", module_name="xtb", executable="xtb", notes="Python module optional; xtb CLI is primary."),
     BackendCapability("local_llm", "llm", notes="Configured via LMOLA_LLM_* or .lmola/config.yaml (ollama/openai_compatible_local)."),
@@ -77,6 +78,12 @@ def _xtb_version(executable: str | None) -> str | None:
 def _status(cap: BackendCapability) -> BackendStatus:
     importable = _importable(cap.module_name) if cap.module_name else None
     executable = shutil.which(cap.executable) if cap.executable else None
+    if cap.name == "openbabel":
+        override = os.environ.get("LMOLA_OBABEL_EXECUTABLE")
+        if override:
+            executable = override
+        elif not executable:
+            executable = shutil.which("obabel")
     version = None
 
     if cap.name == "xtb":
