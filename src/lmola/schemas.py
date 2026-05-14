@@ -57,12 +57,17 @@ class ToolCallRecord(BaseModel):
 class ToolResult(BaseModel):
     status: Literal["ok", "error", "not_implemented"]
     message: str
+    backend: str = ""
     stdout: str = ""
     stderr: str = ""
     returncode: int | None = None
     command: list[str] = Field(default_factory=list)
     cwd: str = ""
     generated_files: list[str] = Field(default_factory=list)
+    artifact_files: list[str] = Field(default_factory=list)
+    primary_structure: str | None = None
+    validation_report_path: str | None = None
+    run_dir: str = ""
     tool_calls: list[ToolCallRecord] = Field(default_factory=list)
 
 

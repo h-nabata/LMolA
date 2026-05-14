@@ -4,6 +4,7 @@ from datetime import datetime, timezone
 import json
 from pathlib import Path
 
+from lmola.io.structures import select_primary_structure_output
 from lmola.schemas import MoleculeBuildRequest, ToolCallRecord, ToolResult
 
 
@@ -56,17 +57,17 @@ def run_rdkit_generation(req: MoleculeBuildRequest, run_dir: Path) -> ToolResult
         from rdkit.Chem import AllChem
     except Exception:
         msg = "RDKit is unavailable. Install LMolA with the rdkit extra or install RDKit in the environment."
-        return ToolResult(status="error", message=msg, cwd=str(run_dir), tool_calls=[_record("error", run_dir, msg)])
+        return ToolResult(status="error", message=msg, backend="rdkit", cwd=str(run_dir), run_dir=str(run_dir), tool_calls=[_record("error", run_dir, msg)])
 
     smiles = (req.smiles or "").strip()
     if not smiles:
         msg = "SMILES input is required for small_molecule RDKit generation."
-        return ToolResult(status="error", message=msg, cwd=str(run_dir), tool_calls=[_record("error", run_dir, msg)])
+        return ToolResult(status="error", message=msg, backend="rdkit", cwd=str(run_dir), run_dir=str(run_dir), tool_calls=[_record("error", run_dir, msg)])
 
     mol = Chem.MolFromSmiles(smiles)
     if mol is None:
         msg = f"Invalid SMILES string: {smiles}"
-        return ToolResult(status="error", message=msg, cwd=str(run_dir), tool_calls=[_record("error", run_dir, msg)])
+        return ToolResult(status="error", message=msg, backend="rdkit", cwd=str(run_dir), run_dir=str(run_dir), tool_calls=[_record("error", run_dir, msg)])
 
     opts = req.build_options
     if opts.add_hydrogens:
@@ -91,7 +92,7 @@ def run_rdkit_generation(req: MoleculeBuildRequest, run_dir: Path) -> ToolResult
 
     if not conf_ids:
         msg = "RDKit failed to embed a 3D conformer for the provided SMILES."
-        return ToolResult(status="error", message=msg, cwd=str(run_dir), tool_calls=[_record("error", run_dir, msg)])
+        return ToolResult(status="error", message=msg, backend="rdkit", cwd=str(run_dir), run_dir=str(run_dir), tool_calls=[_record("error", run_dir, msg)])
 
     optimize = (opts.optimize or "").lower()
     ff_requested = (opts.force_field or optimize or "").lower() or None
@@ -179,4 +180,5 @@ def run_rdkit_generation(req: MoleculeBuildRequest, run_dir: Path) -> ToolResult
     generated.append("conformer_ensemble.json")
 
     msg = "RDKit generation completed"
-    return ToolResult(status="ok", message=msg, cwd=str(run_dir), generated_files=sorted(set(generated)), tool_calls=[_record("ok", run_dir, msg)])
+    generated_files = sorted(set(generated))
+    return ToolResult(status="ok", message=msg, backend="rdkit", cwd=str(run_dir), run_dir=str(run_dir), generated_files=generated_files, primary_structure=select_primary_structure_output(generated_files), tool_calls=[_record("ok", run_dir, msg)])

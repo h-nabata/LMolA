@@ -203,3 +203,17 @@ Open Babel is optional and CLI-first (`obabel`). RDKit remains the primary small
 - Optional extra: `pip install -e ".[openbabel]"` (bindings may be environment-sensitive).
 - Generate fallback 3D: `lmola generate examples/ethanol_openbabel.yaml`
 - Convert formats: `lmola convert examples/example.xyz --to sdf` and `lmola convert examples/example.sdf --to xyz`.
+
+## Backend selection policy (Phase 8.5)
+- **small_molecule (SMILES):** prefer `rdkit`; fallback to `openbabel` when RDKit is unavailable.
+- **metal_complex:** prefer `molsimplify`.
+- **relaxation:** `xtb` is currently supported.
+- **validation:** ASE-based sanity checks are used when XYZ outputs are present.
+
+### Expected structure outputs
+- Primary generated structure should be `molecule.xyz` where available.
+- `molecule.sdf` may be produced when requested/supported.
+- xTB relaxation should produce `xtbopt.xyz`.
+- Validation runs write `validation_report.json`.
+
+> Generated structures are initial computational models and must be reviewed by a researcher before scientific use.
