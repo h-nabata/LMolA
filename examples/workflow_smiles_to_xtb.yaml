@@ -1,0 +1,26 @@
+workflow_id: smiles_to_xtb_relax
+input:
+  type: smiles_csv
+  path: examples/smiles_list.csv
+columns:
+  id: id
+  smiles: smiles
+steps:
+  - tool: generate_small_molecule_rdkit
+    params:
+      backend: rdkit
+      build_options:
+        add_hydrogens: true
+        num_conformers: 1
+        optimize: uff
+        random_seed: 61453
+        output_formats:
+          - xyz
+          - sdf
+  - tool: validate_structure_ase
+  - tool: relax_structure_xtb
+    params:
+      method: xtb
+outputs:
+  summary_csv: true
+  summary_json: true

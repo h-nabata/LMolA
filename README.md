@@ -225,3 +225,34 @@ LMolA now includes a typed, schema-validated tool registry intended as a stable 
 Current tools wrap existing RDKit, Open Babel, molSimplify, xTB, and ASE-backed functionality. Optional dependencies remain optional: if a backend is missing, the corresponding tool is reported unavailable instead of failing the whole system.
 
 This is groundwork for future local LLM and multi-agent orchestration; autonomous agent behavior and environment switching are not implemented in this phase.
+
+## Minimal Workflow Layer (Phase 9.5)
+
+LMolA now supports deterministic, schema-validated workflow YAML execution (no LLM planning in this phase).
+
+### Task taxonomy
+- structure_generation
+- conformer_generation
+- conversion
+- validation
+- relaxation
+- batch_processing
+- summarization
+
+### Workflow catalog
+- smiles_to_3d_rdkit
+- smiles_to_conformers_rdkit
+- smiles_to_3d_openbabel
+- smiles_to_xtb_relax
+- xyz_to_xtb_relax
+- validate_xyz
+
+### Run workflows
+- `lmola workflow list`
+- `lmola workflow inspect smiles_to_xtb_relax`
+- `lmola workflow run examples/workflow_smiles_to_xtb.yaml`
+
+Future local LLM agents are expected to translate natural language into workflow YAML. LMolA then validates and executes deterministically.
+
+Warning: generated structures are initial computational models and require researcher review.
+

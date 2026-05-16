@@ -90,3 +90,15 @@ Open Babel is optional and CLI-first (`obabel`). RDKit remains the primary small
 ## Typed Tool Registry
 
 Use `lmola tools list` to enumerate registered typed tools and `lmola tools inspect TOOL_NAME` for schema and availability details. The registry exposes only explicit, schema-validated capabilities and does not allow arbitrary command execution.
+
+## Workflow examples
+
+- Batch input CSV: `examples/smiles_list.csv` with at least `id` and `smiles` columns.
+- Example deterministic workflows:
+  - `examples/workflow_smiles_to_3d_rdkit.yaml`
+  - `examples/workflow_smiles_to_xtb.yaml`
+
+Batch outputs include `summary.csv` and `summary.json` with per-item status and artifact paths.
+
+Not yet included: autonomous planning, LLM workflow generation, multi-agent execution, CREST conformer search, and reaction path search.
+
