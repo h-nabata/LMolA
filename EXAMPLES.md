@@ -126,4 +126,11 @@ lmola workflow plan "Generate conformers from examples/smiles_list.csv using RDK
 lmola workflow plan "Validate examples/example.xyz."
 ```
 
-Each command creates a plan directory with artifacts such as `planned_workflow.yaml`, `planned_workflow.json`, and `planning_result.json`.
+Each command creates a plan directory with:
+- `natural_language_request.txt`
+- `planner_prompt.txt`
+- `llm_response.raw.txt`
+- `planned_workflow.yaml` / `planned_workflow.json` (validated LLM proposal)
+- `canonical_workflow.yaml` / `canonical_workflow.json` (catalog-expanded execution candidate)
+- `planning_result.json`
+- `README_plan.md`
