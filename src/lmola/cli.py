@@ -19,8 +19,47 @@ from lmola.tools.llm_client import make_llm_client
 from lmola.tools.molsimplify_tool import detect_molsimplify_cli, detect_molsimplify_import, run_generation
 from lmola.tools.openbabel_tool import run_openbabel_conversion
 from lmola.validation.geometry_checks import validate_xyz
+from lmola.tools.registry import get_tool, get_tool_availability, list_tools
 
 app = typer.Typer(help="LMolA CLI (pre-alpha)")
+
+
+tools_app = typer.Typer(help="Typed tool registry introspection")
+app.add_typer(tools_app, name="tools")
+
+
+@tools_app.command("list")
+def tools_list() -> None:
+    payload = [
+        {
+            "name": t.name,
+            "category": t.category,
+            "input_schema": t.input_schema,
+            "required_backends": t.required_backends,
+        }
+        for t in list_tools()
+    ]
+    print(json.dumps(payload, indent=2))
+
+
+@tools_app.command("inspect")
+def tools_inspect(tool_name: str) -> None:
+    try:
+        tool = get_tool(tool_name)
+    except KeyError as exc:
+        raise typer.BadParameter(str(exc)) from exc
+    availability = get_tool_availability(tool_name)
+    payload = {
+        "name": tool.name,
+        "description": tool.description,
+        "category": tool.category,
+        "input_schema": tool.input_schema,
+        "output_description": tool.output_description,
+        "required_backends": tool.required_backends,
+        "notes": tool.notes,
+        "availability": availability.model_dump(),
+    }
+    print(json.dumps(payload, indent=2))
 
 
 @app.command()

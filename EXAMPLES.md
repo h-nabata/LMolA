@@ -86,3 +86,7 @@ Open Babel is optional and CLI-first (`obabel`). RDKit remains the primary small
 - Transition-metal examples (for example Fe(H2O)6) target molSimplify.
 - Relaxation examples use xTB.
 - Validation output is expected in `validation_report.json` when performed.
+
+## Typed Tool Registry
+
+Use `lmola tools list` to enumerate registered typed tools and `lmola tools inspect TOOL_NAME` for schema and availability details. The registry exposes only explicit, schema-validated capabilities and does not allow arbitrary command execution.
