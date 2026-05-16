@@ -276,7 +276,7 @@ Status policy:
 
 This remains deterministic execution of explicit YAML only. Real LLM workflow planning, autonomous agent execution, CREST conformer search, and reaction-path planning are not implemented in this phase.
 
-## Local LLM workflow planning (Phase 10.0)
+## Local LLM workflow planning (Phase 10.1)
 
 LMolA now supports local-first workflow planning from natural language via:
 
@@ -285,11 +285,13 @@ lmola workflow plan "Generate structures from examples/smiles_list.csv and relax
 ```
 
 Key points:
-- Local LLMs only in this phase (`mock`, `ollama`, `openai_compatible_local`).
+- Local-first planning in this phase (`mock`, `ollama`, `openai_compatible_local`).
+- No single serving platform is required (Ollama or any OpenAI-compatible local server can be used).
 - Cloud hosted APIs are not enabled.
-- LLM output is planning-only workflow JSON/YAML; it does not execute tools directly.
-- Planned workflows are validated with `WorkflowRequest` before acceptance.
-- Default behavior is dry-run planning (no execution).
+- LLM output is planning-only and never executed directly.
+- `planned_workflow.*` is the validated LLM proposal (may keep `steps: null`).
+- `canonical_workflow.*` is catalog-expanded and execution-ready.
+- Default behavior is dry-run planning (no execution). If execution is added, it must require explicit `--execute`.
 - Unsupported tasks return structured safe errors.
 
 Example local configs:
@@ -315,8 +317,14 @@ llm:
 ```
 
 Typical planning artifacts are written under `outputs/plan_.../` and include:
+- `natural_language_request.txt`
+- `planner_prompt.txt`
+- `llm_response.raw.txt`
 - `planned_workflow.yaml`
 - `planned_workflow.json`
+- `canonical_workflow.yaml`
+- `canonical_workflow.json`
 - `planning_result.json`
+- `README_plan.md`
 
 Generated and relaxed structures always require researcher review.

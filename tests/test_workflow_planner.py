@@ -54,6 +54,9 @@ def test_unsupported_request_safe_error(monkeypatch) -> None:
     result = plan_workflow_request("Run DFT on this molecule.", write_artifacts=False)
     assert result.status == "error"
     assert "not supported" in result.message
+    assert result.workflow_json is None
+    assert result.canonical_workflow_json is None
+    assert result.validation_errors == []
 
 
 def test_plan_cli_writes_artifacts(monkeypatch) -> None:
@@ -66,7 +69,33 @@ def test_plan_cli_writes_artifacts(monkeypatch) -> None:
     base = Path(plan_dir)
     assert (base / "planned_workflow.json").exists()
     assert (base / "planned_workflow.yaml").exists()
+    assert (base / "canonical_workflow.json").exists()
+    assert (base / "canonical_workflow.yaml").exists()
     assert (base / "planning_result.json").exists()
+
+
+def test_canonical_expands_catalog_steps(monkeypatch) -> None:
+    _enable_mock(monkeypatch)
+    result = plan_workflow_request("Generate structures from examples/smiles_list.csv and relax them with xTB.", write_artifacts=False)
+    assert result.status == "ok"
+    assert result.workflow_json is not None
+    assert result.workflow_json.get("steps") is None
+    assert result.canonical_workflow_json is not None
+    step_tools = [step["tool"] for step in result.canonical_workflow_json["steps"]]
+    assert step_tools == ["generate_small_molecule_rdkit", "validate_structure_ase", "relax_structure_xtb"]
+
+
+def test_planning_result_contains_planned_and_canonical_paths(monkeypatch) -> None:
+    _enable_mock(monkeypatch)
+    result = runner.invoke(app, ["workflow", "plan", "Generate structures from examples/smiles_list.csv and relax them with xTB."])
+    assert result.exit_code == 0
+    plan_dir = result.stdout.split('"plan_dir": ')[1].split(',')[0].strip().strip('"')
+    payload = __import__("json").loads((Path(plan_dir) / "planning_result.json").read_text(encoding="utf-8"))
+    assert payload["executed"] is False
+    assert payload["planned_workflow_path_json"].endswith("planned_workflow.json")
+    assert payload["planned_workflow_path_yaml"].endswith("planned_workflow.yaml")
+    assert payload["canonical_workflow_path_json"].endswith("canonical_workflow.json")
+    assert payload["canonical_workflow_path_yaml"].endswith("canonical_workflow.yaml")
 
 
 def test_public_remote_endpoint_blocked(monkeypatch) -> None:

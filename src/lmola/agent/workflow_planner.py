@@ -26,9 +26,20 @@ class WorkflowPlanningResult(BaseModel):
     parsed_workflow: dict | None = None
     workflow_json: dict | None = None
     workflow_yaml: str | None = None
+    canonical_workflow_json: dict | None = None
+    canonical_workflow_yaml: str | None = None
+    planned_workflow_path_json: str | None = None
+    planned_workflow_path_yaml: str | None = None
+    canonical_workflow_path_json: str | None = None
+    canonical_workflow_path_yaml: str | None = None
     validation_errors: list[str] = Field(default_factory=list)
     plan_dir: str | None = None
     config_redacted: dict | None = None
+    executed: bool = False
+    execution_result: dict | None = None
+    batch_dir: str | None = None
+    summary_csv: str | None = None
+    summary_json: str | None = None
 
 
 NOT_CONFIGURED_MSG = "Local LLM planning is disabled. Enable llm.enabled to use workflow planning."
@@ -83,6 +94,23 @@ def _parse_planner_output(raw: str) -> dict:
         if isinstance(parsed, dict):
             return parsed
         raise ValueError("Planner output is neither valid JSON nor YAML object.")
+
+
+def _canonicalize_workflow(req: WorkflowRequest) -> dict:
+    from lmola.workflows.catalog import get_workflow_entry
+
+    entry = get_workflow_entry(req.workflow_id)
+    if req.input.type not in entry.input_types:
+        raise ValueError(f"Input type {req.input.type} is not supported by {req.workflow_id}")
+    steps = req.steps or [{"tool": tool_name} for tool_name in entry.tools]
+    return {
+        "workflow_id": req.workflow_id,
+        "input": req.input.model_dump(),
+        "columns": req.columns,
+        "steps": [s if isinstance(s, dict) else s.model_dump() for s in steps],
+        "outputs": req.outputs.model_dump(),
+        "metadata": req.metadata,
+    }
 
 
 def plan_workflow_request(request_text: str, write_artifacts: bool = True) -> WorkflowPlanningResult:
@@ -148,12 +176,36 @@ def plan_workflow_request(request_text: str, write_artifacts: bool = True) -> Wo
         return result
 
     workflow_json = req.model_dump()
+    canonical_workflow_json = _canonicalize_workflow(req)
     workflow_yaml = yaml.safe_dump(workflow_json, sort_keys=False)
-    result = WorkflowPlanningResult(status="ok", message="Workflow plan created and validated.", natural_language_request=request_text, selected_workflow_id=req.workflow_id, raw_llm_response=raw, parsed_workflow=parsed, workflow_json=workflow_json, workflow_yaml=workflow_yaml, plan_dir=str(plan_dir) if plan_dir else None, config_redacted=redacted_llm_config(cfg.llm))
+    canonical_workflow_yaml = yaml.safe_dump(canonical_workflow_json, sort_keys=False)
+    result = WorkflowPlanningResult(status="ok", message="Workflow plan created and validated.", natural_language_request=request_text, selected_workflow_id=req.workflow_id, raw_llm_response=raw, parsed_workflow=parsed, workflow_json=workflow_json, workflow_yaml=workflow_yaml, canonical_workflow_json=canonical_workflow_json, canonical_workflow_yaml=canonical_workflow_yaml, plan_dir=str(plan_dir) if plan_dir else None, config_redacted=redacted_llm_config(cfg.llm))
 
     if plan_dir:
-        dump_json(plan_dir / "planned_workflow.json", workflow_json)
-        (plan_dir / "planned_workflow.yaml").write_text(workflow_yaml, encoding="utf-8")
+        planned_json_path = plan_dir / "planned_workflow.json"
+        planned_yaml_path = plan_dir / "planned_workflow.yaml"
+        canonical_json_path = plan_dir / "canonical_workflow.json"
+        canonical_yaml_path = plan_dir / "canonical_workflow.yaml"
+        dump_json(planned_json_path, workflow_json)
+        planned_yaml_path.write_text(workflow_yaml, encoding="utf-8")
+        dump_json(canonical_json_path, canonical_workflow_json)
+        canonical_yaml_path.write_text(canonical_workflow_yaml, encoding="utf-8")
+        result.planned_workflow_path_json = str(planned_json_path)
+        result.planned_workflow_path_yaml = str(planned_yaml_path)
+        result.canonical_workflow_path_json = str(canonical_json_path)
+        result.canonical_workflow_path_yaml = str(canonical_yaml_path)
         dump_json(plan_dir / "planning_result.json", result.model_dump())
-        (plan_dir / "README_plan.md").write_text("# LMolA plan\n\nPlanning-only artifacts for workflow proposal.\n", encoding="utf-8")
+        (plan_dir / "README_plan.md").write_text(
+            "# LMolA Plan\n\n"
+            f"- Request: {request_text}\n"
+            f"- Selected workflow: {req.workflow_id}\n"
+            "- Validation: success\n"
+            "- Execution: not executed (planning-only dry run)\n\n"
+            "## Artifact meaning\n"
+            "- `planned_workflow.*`: validated LLM proposal (may keep `steps: null`).\n"
+            "- `canonical_workflow.*`: catalog-expanded execution candidate with resolved steps.\n\n"
+            "## Manual execution\n"
+            f"Run: `lmola workflow run {canonical_yaml_path}`\n",
+            encoding="utf-8",
+        )
     return result

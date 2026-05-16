@@ -42,7 +42,7 @@ class MockLLMClient:
         return LLMResult(
             status="ok",
             backend="mock",
-            model=self.cfg.model or "mock-model",
+            model=self.cfg.model or "mock-workflow-planner",
             raw_response=json.dumps(payload),
             parsed_json=payload,
             elapsed_seconds=0.0,
