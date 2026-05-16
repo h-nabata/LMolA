@@ -20,12 +20,41 @@ from lmola.tools.molsimplify_tool import detect_molsimplify_cli, detect_molsimpl
 from lmola.tools.openbabel_tool import run_openbabel_conversion
 from lmola.validation.geometry_checks import validate_xyz
 from lmola.tools.registry import get_tool, get_tool_availability, list_tools
+from lmola.workflows import get_workflow_entry, list_workflows, run_workflow_yaml
 
 app = typer.Typer(help="LMolA CLI (pre-alpha)")
 
 
 tools_app = typer.Typer(help="Typed tool registry introspection")
 app.add_typer(tools_app, name="tools")
+
+workflow_app = typer.Typer(help="Deterministic workflow catalog and runner")
+app.add_typer(workflow_app, name="workflow")
+
+
+@workflow_app.command("list")
+def workflow_list() -> None:
+    payload = [w.model_dump() for w in list_workflows()]
+    print(json.dumps(payload, indent=2))
+
+
+@workflow_app.command("inspect")
+def workflow_inspect(workflow_id: str) -> None:
+    try:
+        entry = get_workflow_entry(workflow_id)
+    except KeyError as exc:
+        raise typer.BadParameter(str(exc)) from exc
+    print(json.dumps(entry.model_dump(), indent=2))
+
+
+@workflow_app.command("run")
+def workflow_run(workflow_yaml: str) -> None:
+    result = run_workflow_yaml(workflow_yaml)
+    print(result.model_dump_json(indent=2))
+    if result.status != "ok":
+        raise typer.Exit(code=1)
+
+
 
 
 @tools_app.command("list")
