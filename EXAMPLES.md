@@ -117,3 +117,13 @@ Important fields include:
 - `validation_status`, `validation_report_path`
 - `relax_status`, `relaxed_structure`, `relaxed_structure_path`
 - `energy`, `energy_units`, `failed_step`, `error_message`
+
+## Local LLM workflow planning
+
+```bash
+lmola workflow plan "Generate structures from examples/smiles_list.csv and relax them with xTB."
+lmola workflow plan "Generate conformers from examples/smiles_list.csv using RDKit."
+lmola workflow plan "Validate examples/example.xyz."
+```
+
+Each command creates a plan directory with artifacts such as `planned_workflow.yaml`, `planned_workflow.json`, and `planning_result.json`.

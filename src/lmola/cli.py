@@ -7,6 +7,7 @@ import typer
 from rich import print
 
 from lmola.agent.planner import plan_request
+from lmola.agent.workflow_planner import plan_workflow_request
 from lmola.agent.prompts import SYSTEM_PROMPT
 from lmola.backends.registry import list_backend_statuses
 from lmola.config import load_app_config, load_request_yaml, redacted_llm_config
@@ -45,6 +46,16 @@ def workflow_inspect(workflow_id: str) -> None:
     except KeyError as exc:
         raise typer.BadParameter(str(exc)) from exc
     print(json.dumps(entry.model_dump(), indent=2))
+
+
+
+
+@workflow_app.command("plan")
+def workflow_plan(request: str) -> None:
+    result = plan_workflow_request(request, write_artifacts=True)
+    print(result.model_dump_json(indent=2))
+    if result.status != "ok":
+        raise typer.Exit(code=1)
 
 
 @workflow_app.command("run")

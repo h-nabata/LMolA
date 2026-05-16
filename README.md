@@ -275,3 +275,48 @@ Status policy:
 - Workflow engine completion may still return `status: ok` with message `Workflow executed with item errors` when item-level failures occur.
 
 This remains deterministic execution of explicit YAML only. Real LLM workflow planning, autonomous agent execution, CREST conformer search, and reaction-path planning are not implemented in this phase.
+
+## Local LLM workflow planning (Phase 10.0)
+
+LMolA now supports local-first workflow planning from natural language via:
+
+```bash
+lmola workflow plan "Generate structures from examples/smiles_list.csv and relax them with xTB."
+```
+
+Key points:
+- Local LLMs only in this phase (`mock`, `ollama`, `openai_compatible_local`).
+- Cloud hosted APIs are not enabled.
+- LLM output is planning-only workflow JSON/YAML; it does not execute tools directly.
+- Planned workflows are validated with `WorkflowRequest` before acceptance.
+- Default behavior is dry-run planning (no execution).
+- Unsupported tasks return structured safe errors.
+
+Example local configs:
+
+```yaml
+llm:
+  enabled: true
+  backend: ollama
+  base_url: http://127.0.0.1:11434
+  model: qwen2.5:7b
+  temperature: 0
+  timeout_seconds: 60
+```
+
+```yaml
+llm:
+  enabled: true
+  backend: openai_compatible_local
+  base_url: http://127.0.0.1:1234/v1
+  model: local-model-name
+  temperature: 0
+  timeout_seconds: 60
+```
+
+Typical planning artifacts are written under `outputs/plan_.../` and include:
+- `planned_workflow.yaml`
+- `planned_workflow.json`
+- `planning_result.json`
+
+Generated and relaxed structures always require researcher review.
