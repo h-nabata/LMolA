@@ -38,6 +38,13 @@ def test_external_workflow_smiles_to_3d_rdkit() -> None:
     for r in rows:
         if r.get("primary_structure_path"):
             assert Path(r["primary_structure_path"]).exists()
+        if r.get("validation_status") == "ok":
+            assert Path(r["validation_report_path"]).exists()
+        if r.get("conformer_ensemble_path"):
+            assert r["conformer_ensemble_path"].endswith("conformer_ensemble.json")
+            assert Path(r["conformer_ensemble_path"]).exists()
+        if r.get("sdf_path"):
+            assert Path(r["sdf_path"]).exists()
 
 
 def test_external_workflow_smiles_to_xtb_relax() -> None:
@@ -49,5 +56,9 @@ def test_external_workflow_smiles_to_xtb_relax() -> None:
     assert any(r["validation_status"] == "ok" for r in rows)
     assert any(r["relax_run_dir"] for r in rows)
     for r in rows:
+        if r.get("primary_structure_path"):
+            assert Path(r["primary_structure_path"]).exists()
+        if r.get("validation_status") == "ok":
+            assert Path(r["validation_report_path"]).exists()
         if r.get("relaxed_structure_path"):
             assert Path(r["relaxed_structure_path"]).exists()

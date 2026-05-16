@@ -256,3 +256,22 @@ Future local LLM agents are expected to translate natural language into workflow
 
 Warning: generated structures are initial computational models and require researcher review.
 
+
+## Workflow summary schema (Phase 9.5.2 cleanup)
+
+`summary.csv` is intended for human inspection. `summary.json` is intended for downstream automation and future local LLM/agent consumption once planner integration is added.
+
+Field conventions:
+- `primary_structure`: backend-relative artifact name (for example `molecule.xyz`).
+- `primary_structure_path`: resolved filesystem path to `primary_structure`.
+- `relaxed_structure`: backend-relative artifact name (for example `xtbopt.xyz`).
+- `relaxed_structure_path`: resolved filesystem path to `relaxed_structure`.
+- `conformer_ensemble_path`: path to `conformer_ensemble.json` only (when present).
+- `sdf_path`: path to `.sdf` output when produced; this is separate from conformer ensemble metadata.
+
+Status policy:
+- `ok_count`: items where all required workflow steps succeeded.
+- `error_count`: items where one or more required workflow steps failed.
+- Workflow engine completion may still return `status: ok` with message `Workflow executed with item errors` when item-level failures occur.
+
+This remains deterministic execution of explicit YAML only. Real LLM workflow planning, autonomous agent execution, CREST conformer search, and reaction-path planning are not implemented in this phase.

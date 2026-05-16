@@ -117,8 +117,13 @@ def run_workflow_yaml(workflow_yaml_path: str) -> WorkflowExecutionResult:
                     current_structure_path = r.primary_structure_path
                     if out.payload.get("generated_files"):
                         for gf in out.payload["generated_files"]:
-                            if str(gf).endswith(".sdf"):
-                                r.conformer_ensemble_path = _resolve_artifact_path(out.run_dir, str(gf)) or str(gf)
+                            gf_str = str(gf)
+                            if gf_str.endswith("conformer_ensemble.json"):
+                                r.conformer_ensemble_path = _resolve_artifact_path(out.run_dir, gf_str) or gf_str
+                            elif gf_str.endswith(".sdf"):
+                                r.sdf_path = _resolve_artifact_path(out.run_dir, gf_str) or gf_str
+                    if out.status != "ok":
+                        raise RuntimeError(f"{step_tool}: {out.message}")
 
                 elif step_tool == "validate_structure_ase":
                     r.validation_status = out.status
@@ -174,7 +179,20 @@ def run_workflow_yaml(workflow_yaml_path: str) -> WorkflowExecutionResult:
     error_count = len(results) - ok_count
     message = "Workflow executed" if error_count == 0 else "Workflow executed with item errors"
     summary = WorkflowSummary(batch_id=batch_id, workflow_id=req.workflow_id, item_count=len(results), ok_count=ok_count, error_count=error_count)
-    dump_json(batch_dir / "workflow_result.json", {"status": "ok", "message": message, "summary": summary.model_dump()})
+    workflow_result_payload = {
+        "status": "ok",
+        "message": message,
+        "batch_id": batch_id,
+        "workflow_id": req.workflow_id,
+        "item_count": len(results),
+        "ok_count": ok_count,
+        "error_count": error_count,
+        "summary_csv": str(batch_dir / "summary.csv"),
+        "summary_json": str(batch_dir / "summary.json"),
+        "batch_dir": str(batch_dir),
+        "summary": summary.model_dump(),
+    }
+    dump_json(batch_dir / "workflow_result.json", workflow_result_payload)
     (batch_dir / "run.log").write_text(f"{message}.\n", encoding="utf-8")
     (batch_dir / "README_batch.md").write_text("# LMolA Batch Workflow Run\n", encoding="utf-8")
 

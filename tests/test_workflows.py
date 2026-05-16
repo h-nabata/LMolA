@@ -146,3 +146,77 @@ def test_workflow_relax_reads_tool_execution_result(monkeypatch: pytest.MonkeyPa
     assert summary[0]["relax_status"] == "ok"
     assert summary[0]["energy"] == -1.23
     assert Path(summary[0]["relaxed_structure_path"]).exists()
+
+
+def test_conformer_ensemble_field_not_overloaded_with_sdf(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    wf = tmp_path / "workflow.yaml"
+    wf.write_text("workflow_id: smiles_to_3d_rdkit\ninput:\n  type: smiles\n  value: CCO\n", encoding="utf-8")
+
+    def fake_execute(tool: str, payload: dict, run_dir: Path) -> ToolExecutionResult:
+        if tool == "generate_small_molecule_rdkit":
+            (run_dir / "molecule.xyz").write_text("3\n\nH 0 0 0\nH 0 0 1\nO 0 1 0\n", encoding="utf-8")
+            (run_dir / "molecule.sdf").write_text("$$$$\n", encoding="utf-8")
+            (run_dir / "conformer_ensemble.json").write_text("{}", encoding="utf-8")
+            return ToolExecutionResult(status="ok", message="generated", tool_name=tool, run_dir=str(run_dir), payload={"primary_structure": "molecule.xyz", "generated_files": ["molecule.xyz", "molecule.sdf", "conformer_ensemble.json"]})
+        (run_dir / "validation_report.json").write_text('{"valid": true, "messages": []}', encoding="utf-8")
+        return ToolExecutionResult(status="ok", message="Validation completed", tool_name=tool, run_dir=str(run_dir), payload={"valid": True, "messages": []})
+
+    monkeypatch.setattr("lmola.workflows.runner.execute_tool", fake_execute)
+    result = run_workflow_yaml(str(wf))
+    summary = json.loads(Path(result.summary_json or "").read_text(encoding="utf-8"))
+    row = summary[0]
+    assert row["conformer_ensemble_path"] and row["conformer_ensemble_path"].endswith("conformer_ensemble.json")
+    assert row["sdf_path"] and row["sdf_path"].endswith("molecule.sdf")
+    assert "molecule.sdf" not in (row["conformer_ensemble_path"] or "")
+
+
+def test_workflow_result_json_metadata_and_counts(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    csv_path = tmp_path / "in.csv"
+    csv_path.write_text("id,smiles\none,CCO\ntwo,BAD\n", encoding="utf-8")
+    wf = tmp_path / "workflow.yaml"
+    wf.write_text(f"workflow_id: smiles_to_3d_rdkit\ninput:\n  type: smiles_csv\n  path: {csv_path}\n", encoding="utf-8")
+
+    def fake_execute(tool: str, payload: dict, run_dir: Path) -> ToolExecutionResult:
+        if tool == "generate_small_molecule_rdkit" and payload.get("smiles") == "BAD":
+            return ToolExecutionResult(status="error", message="bad smiles", tool_name=tool, run_dir=str(run_dir), payload={})
+        if tool == "generate_small_molecule_rdkit":
+            (run_dir / "molecule.xyz").write_text("3\n\nH 0 0 0\nH 0 0 1\nO 0 1 0\n", encoding="utf-8")
+            return ToolExecutionResult(status="ok", message="generated", tool_name=tool, run_dir=str(run_dir), payload={"primary_structure": "molecule.xyz"})
+        (run_dir / "validation_report.json").write_text('{"valid": true, "messages": []}', encoding="utf-8")
+        return ToolExecutionResult(status="ok", message="Validation completed", tool_name=tool, run_dir=str(run_dir), payload={"valid": True, "messages": []})
+
+    monkeypatch.setattr("lmola.workflows.runner.execute_tool", fake_execute)
+    result = run_workflow_yaml(str(wf))
+    batch_dir = Path(result.batch_dir or "")
+    payload = json.loads((batch_dir / "workflow_result.json").read_text(encoding="utf-8"))
+    assert payload["batch_dir"] == str(batch_dir)
+    assert payload["summary_csv"] == str(batch_dir / "summary.csv")
+    assert payload["summary_json"] == str(batch_dir / "summary.json")
+    assert payload["workflow_id"] == "smiles_to_3d_rdkit"
+    assert payload["item_count"] == 2
+    assert payload["ok_count"] == 1
+    assert payload["error_count"] == 1
+    assert payload["message"] == "Workflow executed with item errors"
+
+
+def test_ok_status_paths_exist_in_summary(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    wf = tmp_path / "workflow.yaml"
+    wf.write_text("workflow_id: smiles_to_xtb_relax\ninput:\n  type: smiles\n  value: CCO\n", encoding="utf-8")
+
+    def fake_execute(tool: str, payload: dict, run_dir: Path) -> ToolExecutionResult:
+        if tool == "generate_small_molecule_rdkit":
+            (run_dir / "molecule.xyz").write_text("3\n\nH 0 0 0\nH 0 0 1\nO 0 1 0\n", encoding="utf-8")
+            return ToolExecutionResult(status="ok", message="generated", tool_name=tool, run_dir=str(run_dir), payload={"primary_structure": "molecule.xyz", "generated_files": ["molecule.xyz"]})
+        if tool == "validate_structure_ase":
+            (run_dir / "validation_report.json").write_text('{"valid": true, "messages": []}', encoding="utf-8")
+            return ToolExecutionResult(status="ok", message="Validation completed", tool_name=tool, run_dir=str(run_dir), payload={"valid": True, "messages": []})
+        (run_dir / "xtbopt.xyz").write_text("3\n\nH 0 0 0\nH 0 0 1\nO 0 1 0\n", encoding="utf-8")
+        (run_dir / "tool_execution_result.json").write_text('{"energy": -1.0, "energy_units": "Eh"}', encoding="utf-8")
+        return ToolExecutionResult(status="ok", message="relaxed", tool_name=tool, run_dir=str(run_dir), payload={"output_structure": "xtbopt.xyz"})
+
+    monkeypatch.setattr("lmola.workflows.runner.execute_tool", fake_execute)
+    result = run_workflow_yaml(str(wf))
+    row = json.loads(Path(result.summary_json or "").read_text(encoding="utf-8"))[0]
+    assert row["generate_status"] == "ok" and Path(row["primary_structure_path"]).exists()
+    assert row["validation_status"] == "ok" and Path(row["validation_report_path"]).exists()
+    assert row["relax_status"] == "ok" and Path(row["relaxed_structure_path"]).exists()

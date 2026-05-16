@@ -44,6 +44,7 @@ class BatchItemResult(BaseModel):
     primary_structure: str | None = None
     primary_structure_path: str | None = None
     conformer_ensemble_path: str | None = None
+    sdf_path: str | None = None
     validation_status: str | None = None
     validation_report_path: str | None = None
     relax_status: str | None = None
