@@ -217,3 +217,11 @@ Open Babel is optional and CLI-first (`obabel`). RDKit remains the primary small
 - Validation runs write `validation_report.json`.
 
 > Generated structures are initial computational models and must be reviewed by a researcher before scientific use.
+
+## Typed Tool Registry
+
+LMolA now includes a typed, schema-validated tool registry intended as a stable interface between future local LLM agents and existing LMolA chemistry backends. Agents should call registered tools rather than arbitrary shell commands.
+
+Current tools wrap existing RDKit, Open Babel, molSimplify, xTB, and ASE-backed functionality. Optional dependencies remain optional: if a backend is missing, the corresponding tool is reported unavailable instead of failing the whole system.
+
+This is groundwork for future local LLM and multi-agent orchestration; autonomous agent behavior and environment switching are not implemented in this phase.
