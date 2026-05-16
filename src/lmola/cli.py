@@ -8,6 +8,7 @@ from rich import print
 
 from lmola.agent.planner import plan_request
 from lmola.agent.workflow_planner import plan_workflow_request
+from lmola.agent.planner_eval import run_planner_eval
 from lmola.agent.prompts import SYSTEM_PROMPT
 from lmola.backends.registry import list_backend_statuses
 from lmola.config import load_app_config, load_request_yaml, redacted_llm_config
@@ -54,6 +55,25 @@ def workflow_inspect(workflow_id: str) -> None:
 def workflow_plan(request: str) -> None:
     result = plan_workflow_request(request, write_artifacts=True)
     print(result.model_dump_json(indent=2))
+    if result.status != "ok":
+        raise typer.Exit(code=1)
+
+
+@workflow_app.command("eval-planner")
+def workflow_eval_planner(eval_cases_yaml: str) -> None:
+    result = run_planner_eval(eval_cases_yaml)
+    payload = {
+        "status": result.status,
+        "message": result.message,
+        "eval_dir": result.eval_dir,
+        "total_cases": result.total_cases,
+        "passed_cases": result.passed_cases,
+        "failed_cases": result.failed_cases,
+        "pass_rate": result.pass_rate,
+        "summary_csv": result.summary_csv,
+        "summary_json": result.summary_json,
+    }
+    print(json.dumps(payload, indent=2))
     if result.status != "ok":
         raise typer.Exit(code=1)
 

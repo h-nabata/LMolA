@@ -134,3 +134,47 @@ Each command creates a plan directory with:
 - `canonical_workflow.yaml` / `canonical_workflow.json` (catalog-expanded execution candidate)
 - `planning_result.json`
 - `README_plan.md`
+
+
+## Real local LLM planner evaluation (Phase 10.5)
+
+Use planner evaluation to measure planning quality only (no workflow execution):
+
+```bash
+lmola workflow eval-planner examples/planner_eval_cases.yaml
+```
+
+- Uses the same planner pipeline as `lmola workflow plan`.
+- Writes `eval_summary.csv`, `eval_summary.json`, and `eval_result.json` under `outputs/eval_...`.
+- Supports `mock`, `ollama`, and `openai_compatible_local` via existing LLM config.
+- For LM Studio / vLLM / llama.cpp server / text-generation-webui, use `openai_compatible_local` when they expose a local OpenAI-compatible endpoint.
+- Default tests use mock only.
+- Security remains unchanged: endpoint safety checks apply and public remote endpoints are blocked unless unsafe override is explicitly enabled.
+
+Example Ollama config:
+
+```yaml
+llm:
+  enabled: true
+  backend: ollama
+  base_url: http://127.0.0.1:11434
+  model: qwen2.5:7b
+  temperature: 0
+  timeout_seconds: 60
+  max_tokens: 2048
+```
+
+Example OpenAI-compatible local config:
+
+```yaml
+llm:
+  enabled: true
+  backend: openai_compatible_local
+  base_url: http://127.0.0.1:1234/v1
+  model: local-model-name
+  temperature: 0
+  timeout_seconds: 60
+  max_tokens: 2048
+```
+
+Evaluation metrics include `workflow_match`, `tools_match`, `parse_ok`, `validation_ok`, `canonicalization_ok`, `unsupported_handled`, and overall `pass_rate`.

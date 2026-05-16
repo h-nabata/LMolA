@@ -1,0 +1,39 @@
+suite_id: planner_eval_phase_10_5
+description: Planner evaluation suite for local LLM planning behavior.
+cases:
+  - id: smiles_to_3d_rdkit
+    request: Generate 3D structures from examples/smiles_list.csv using RDKit.
+    expected_status: ok
+    expected_workflow_id: smiles_to_3d_rdkit
+    expected_tools:
+      - generate_small_molecule_rdkit
+      - validate_structure_ase
+  - id: smiles_to_xtb_relax
+    request: Generate structures from examples/smiles_list.csv and relax them with xTB.
+    expected_status: ok
+    expected_workflow_id: smiles_to_xtb_relax
+    expected_tools:
+      - generate_small_molecule_rdkit
+      - validate_structure_ase
+      - relax_structure_xtb
+  - id: conformers_rdkit
+    request: Generate conformers from examples/smiles_list.csv using RDKit.
+    expected_status: ok
+    expected_workflow_id: smiles_to_conformers_rdkit
+    expected_tools:
+      - generate_small_molecule_rdkit
+      - validate_structure_ase
+  - id: validate_xyz
+    request: Validate examples/example.xyz.
+    expected_status: ok
+    expected_workflow_id: validate_xyz
+    expected_tools:
+      - validate_structure_ase
+  - id: unsupported_ts_search
+    request: Find a transition state for this reaction using DFT and run a reaction path search.
+    expected_status: unsupported
+    expected_workflow_id: null
+  - id: unsupported_crest_search
+    request: Run CREST conformer search from this XYZ file.
+    expected_status: unsupported
+    expected_workflow_id: null
