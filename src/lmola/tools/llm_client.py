@@ -29,13 +29,16 @@ class MockLLMClient:
         self.cfg = cfg
 
     def complete_json(self, system_prompt: str, user_prompt: str) -> LLMResult:
-        payload = {
-            "request_type": "metal_complex",
-            "metal": "Fe",
-            "oxidation_state": 2,
-            "ligands": [{"name": "H2O", "count": 6}],
-            "build_options": {"expected_elements": ["Fe", "O", "H"]},
-        }
+        if "LMolA local workflow planner" in system_prompt:
+            payload = _mock_workflow_plan(user_prompt)
+        else:
+            payload = {
+                "request_type": "metal_complex",
+                "metal": "Fe",
+                "oxidation_state": 2,
+                "ligands": [{"name": "H2O", "count": 6}],
+                "build_options": {"expected_elements": ["Fe", "O", "H"]},
+            }
         return LLMResult(
             status="ok",
             backend="mock",
@@ -119,3 +122,16 @@ def make_llm_client(cfg: LLMConfig) -> BaseLLMClient:
     if cfg.backend == "openai_compatible_local":
         return OpenAICompatibleLocalClient(cfg)
     raise ValueError(f"Unsupported backend: {cfg.backend}")
+
+
+def _mock_workflow_plan(request: str) -> dict:
+    key = request.strip()
+    if key == "Generate 3D structures from examples/smiles_list.csv using RDKit.":
+        return {"workflow_id": "smiles_to_3d_rdkit", "input": {"type": "smiles_csv", "path": "examples/smiles_list.csv"}, "columns": {"id": "id", "smiles": "smiles"}, "outputs": {"summary_csv": True, "summary_json": True}}
+    if key == "Generate structures from examples/smiles_list.csv and relax them with xTB.":
+        return {"workflow_id": "smiles_to_xtb_relax", "input": {"type": "smiles_csv", "path": "examples/smiles_list.csv"}, "columns": {"id": "id", "smiles": "smiles"}, "outputs": {"summary_csv": True, "summary_json": True}}
+    if key == "Generate conformers from examples/smiles_list.csv using RDKit.":
+        return {"workflow_id": "smiles_to_conformers_rdkit", "input": {"type": "smiles_csv", "path": "examples/smiles_list.csv"}, "columns": {"id": "id", "smiles": "smiles"}, "outputs": {"summary_csv": True, "summary_json": True}}
+    if key == "Validate examples/example.xyz.":
+        return {"workflow_id": "validate_xyz", "input": {"type": "xyz", "path": "examples/example.xyz"}, "outputs": {"summary_csv": True, "summary_json": True}}
+    return {"status": "unsupported", "reason": "Requested task is not supported by the current workflow catalog.", "suggested_supported_workflows": ["smiles_to_3d_rdkit", "smiles_to_xtb_relax"]}
