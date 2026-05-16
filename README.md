@@ -225,3 +225,53 @@ LMolA now includes a typed, schema-validated tool registry intended as a stable 
 Current tools wrap existing RDKit, Open Babel, molSimplify, xTB, and ASE-backed functionality. Optional dependencies remain optional: if a backend is missing, the corresponding tool is reported unavailable instead of failing the whole system.
 
 This is groundwork for future local LLM and multi-agent orchestration; autonomous agent behavior and environment switching are not implemented in this phase.
+
+## Minimal Workflow Layer (Phase 9.5)
+
+LMolA now supports deterministic, schema-validated workflow YAML execution (no LLM planning in this phase).
+
+### Task taxonomy
+- structure_generation
+- conformer_generation
+- conversion
+- validation
+- relaxation
+- batch_processing
+- summarization
+
+### Workflow catalog
+- smiles_to_3d_rdkit
+- smiles_to_conformers_rdkit
+- smiles_to_3d_openbabel
+- smiles_to_xtb_relax
+- xyz_to_xtb_relax
+- validate_xyz
+
+### Run workflows
+- `lmola workflow list`
+- `lmola workflow inspect smiles_to_xtb_relax`
+- `lmola workflow run examples/workflow_smiles_to_xtb.yaml`
+
+Future local LLM agents are expected to translate natural language into workflow YAML. LMolA then validates and executes deterministically.
+
+Warning: generated structures are initial computational models and require researcher review.
+
+
+## Workflow summary schema (Phase 9.5.2 cleanup)
+
+`summary.csv` is intended for human inspection. `summary.json` is intended for downstream automation and future local LLM/agent consumption once planner integration is added.
+
+Field conventions:
+- `primary_structure`: backend-relative artifact name (for example `molecule.xyz`).
+- `primary_structure_path`: resolved filesystem path to `primary_structure`.
+- `relaxed_structure`: backend-relative artifact name (for example `xtbopt.xyz`).
+- `relaxed_structure_path`: resolved filesystem path to `relaxed_structure`.
+- `conformer_ensemble_path`: path to `conformer_ensemble.json` only (when present).
+- `sdf_path`: path to `.sdf` output when produced; this is separate from conformer ensemble metadata.
+
+Status policy:
+- `ok_count`: items where all required workflow steps succeeded.
+- `error_count`: items where one or more required workflow steps failed.
+- Workflow engine completion may still return `status: ok` with message `Workflow executed with item errors` when item-level failures occur.
+
+This remains deterministic execution of explicit YAML only. Real LLM workflow planning, autonomous agent execution, CREST conformer search, and reaction-path planning are not implemented in this phase.

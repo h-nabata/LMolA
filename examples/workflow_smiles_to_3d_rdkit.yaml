@@ -1,0 +1,22 @@
+workflow_id: smiles_to_3d_rdkit
+input:
+  type: smiles_csv
+  path: examples/smiles_list.csv
+columns:
+  id: id
+  smiles: smiles
+steps:
+  - tool: generate_small_molecule_rdkit
+    params:
+      backend: rdkit
+      build_options:
+        add_hydrogens: true
+        num_conformers: 1
+        optimize: uff
+        random_seed: 61453
+        output_formats:
+          - xyz
+  - tool: validate_structure_ase
+outputs:
+  summary_csv: true
+  summary_json: true
