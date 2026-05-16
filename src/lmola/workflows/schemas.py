@@ -42,14 +42,17 @@ class BatchItemResult(BaseModel):
     generate_status: str | None = None
     generate_run_dir: str | None = None
     primary_structure: str | None = None
+    primary_structure_path: str | None = None
     conformer_ensemble_path: str | None = None
     validation_status: str | None = None
     validation_report_path: str | None = None
     relax_status: str | None = None
     relax_run_dir: str | None = None
     relaxed_structure: str | None = None
+    relaxed_structure_path: str | None = None
     energy: float | None = None
     energy_units: str | None = None
+    failed_step: str | None = None
     error_message: str | None = None
 
 
