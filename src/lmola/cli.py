@@ -8,7 +8,7 @@ from rich import print
 
 from lmola.agent.planner import plan_request
 from lmola.agent.workflow_planner import plan_workflow_request
-from lmola.agent.planner_eval import run_planner_eval
+from lmola.agent.planner_eval import compare_planner_evals, run_planner_eval
 from lmola.agent.prompts import SYSTEM_PROMPT
 from lmola.backends.registry import list_backend_statuses
 from lmola.config import load_app_config, load_request_yaml, redacted_llm_config
@@ -76,6 +76,11 @@ def workflow_eval_planner(eval_cases_yaml: str) -> None:
     print(json.dumps(payload, indent=2))
     if result.status != "ok":
         raise typer.Exit(code=1)
+
+
+@workflow_app.command("compare-planner-evals")
+def workflow_compare_planner_evals(eval_dir_a: str, eval_dir_b: str) -> None:
+    print(json.dumps(compare_planner_evals(eval_dir_a, eval_dir_b), indent=2))
 
 
 @workflow_app.command("run")
