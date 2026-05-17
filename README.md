@@ -151,6 +151,12 @@ llm:
 If not configured, `lmola run-agent` fails safely with a clear message and does not call cloud APIs.
 GPU is optional; CPU-only workflows remain supported for doctor/validate/generate/tests.
 
+Doctor diagnostics notes:
+- `python_cuda_detected` / `gpu_cuda_detected` reports CUDA visibility in the LMolA Python environment (`gpu_detection_scope=python_environment`).
+- This does **not** guarantee Ollama runtime GPU usage.
+- To check Ollama GPU usage directly, run: `ollama ps`, `nvidia-smi`, `watch -n 1 nvidia-smi`.
+- To confirm model configuration and availability, compare: `lmola doctor` and `ollama list`.
+
 
 ## Relaxation workflow (Phase 5.1)
 `xTB` is optional and never auto-installed. Run:
