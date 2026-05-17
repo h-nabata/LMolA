@@ -1,0 +1,174 @@
+from __future__ import annotations
+
+from datetime import datetime, timezone
+import json
+from pathlib import Path
+import uuid
+
+import yaml
+
+from lmola.agent.planner_eval import PlannerEvalCase, PlannerEvalSuite
+from lmola.schemas import BuildOptions, MoleculeBuildRequest, ToolCallRecord, ToolResult
+from lmola.tools.registry import RelaxXtbRequest, ValidateStructureRequest, list_tools
+from lmola.workflows import list_workflows
+from lmola.workflows.schemas import WorkflowInput, WorkflowOutputs, WorkflowRequest, WorkflowStep
+
+MODEL_REGISTRY = {
+    "WorkflowRequest": WorkflowRequest,
+    "WorkflowInput": WorkflowInput,
+    "WorkflowOutputs": WorkflowOutputs,
+    "WorkflowStep": WorkflowStep,
+    "MoleculeBuildRequest": MoleculeBuildRequest,
+    "BuildOptions": BuildOptions,
+    "RelaxXtbRequest": RelaxXtbRequest,
+    "ValidateStructureRequest": ValidateStructureRequest,
+    "ToolResult": ToolResult,
+    "ToolCallRecord": ToolCallRecord,
+    "PlannerEvalSuite": PlannerEvalSuite,
+    "PlannerEvalCase": PlannerEvalCase,
+}
+
+
+def _canonicalize(obj):
+    if isinstance(obj, dict):
+        return {k: _canonicalize(v) for k, v in sorted(obj.items(), key=lambda kv: kv[0])}
+    if isinstance(obj, list):
+        return [_canonicalize(v) for v in obj]
+    return obj
+
+
+def export_model_schemas() -> dict:
+    models = {name: model.model_json_schema() for name, model in sorted(MODEL_REGISTRY.items())}
+    return _canonicalize({"schema_version": "lmola.schema.v1", "generated_by": "LMolA", "models": models})
+
+
+def export_tool_registry_schema() -> dict:
+    tools = []
+    for tool in list_tools():
+        tools.append(
+            {
+                "name": tool.name,
+                "category": tool.category,
+                "description": tool.description,
+                "input_schema": tool.input_schema,
+                "input_json_schema": MODEL_REGISTRY.get(tool.input_schema).model_json_schema() if MODEL_REGISTRY.get(tool.input_schema) else None,
+                "required_backends": sorted(tool.required_backends),
+                "output_schema": "ToolExecutionResult",
+                "safe_execution_notes": tool.notes,
+                "allowed_in_planner": True,
+                "execution_kind": "validation" if tool.category == "validation" else ("external_cli" if tool.name in {"generate_small_molecule_openbabel", "generate_metal_complex_molsimplify", "relax_structure_xtb"} else "in_process"),
+            }
+        )
+    return _canonicalize({"schema_version": "lmola.tools.v1", "tools": tools, "tool_names": [t["name"] for t in tools]})
+
+
+def export_workflow_catalog_schema(*, compact: bool = False) -> dict:
+    tool_map = {t.name: t for t in list_tools()}
+    workflows = []
+    for entry in list_workflows():
+        canonical_steps = [{"tool": t} for t in entry.tools]
+        backends = sorted({b for name in entry.tools for b in tool_map.get(name).required_backends})
+        payload = {
+            "workflow_id": entry.workflow_id,
+            "task_type": entry.task_type,
+            "input_types": entry.input_types,
+            "tools": entry.tools,
+            "description": entry.description,
+            "canonical_steps": canonical_steps,
+            "required_backends": backends,
+            "supported": True,
+            "notes": "",
+        }
+        if compact:
+            payload = {
+                "workflow_id": entry.workflow_id,
+                "task_type": entry.task_type,
+                "input_types": entry.input_types,
+                "tools": entry.tools,
+                "description": entry.description,
+            }
+        workflows.append(payload)
+    return _canonicalize({"schema_version": "lmola.workflow_catalog.v1", "workflows": workflows, "workflow_ids": [w["workflow_id"] for w in workflows]})
+
+
+def export_planner_schema_bundle() -> dict:
+    full = export_workflow_catalog_schema(compact=False)
+    return _canonicalize(
+        {
+            "schema_version": "lmola.planner_context.v1",
+            "output_contract": {
+                "supported_task": {"required_fields": ["workflow_id", "input"], "optional_fields": ["columns", "outputs", "metadata"]},
+                "unsupported_task": {"required_fields": ["status", "reason"], "status_value": "unsupported"},
+            },
+            "allowed_workflow_ids": full["workflow_ids"],
+            "allowed_input_types": sorted({it for wf in full["workflows"] for it in wf.get("input_types", [])}),
+            "workflows": [
+                {
+                    "workflow_id": wf["workflow_id"],
+                    "task_type": wf["task_type"],
+                    "input_types": wf["input_types"],
+                    "canonical_tools": wf["tools"],
+                    "description": wf["description"],
+                }
+                for wf in full["workflows"]
+            ],
+            "unsupported_task_policy": "Return status='unsupported' with a short reason when no catalog workflow matches the user request.",
+        }
+    )
+
+
+def export_all_schemas() -> dict:
+    return _canonicalize(
+        {
+            "schema_version": "lmola.schema_bundle.v1",
+            "generated_by": "LMolA",
+            "models": export_model_schemas(),
+            "tools": export_tool_registry_schema(),
+            "workflow_catalog": export_workflow_catalog_schema(compact=False),
+            "workflow_catalog_compact": export_workflow_catalog_schema(compact=True),
+            "planner_context_compact": export_planner_schema_bundle(),
+        }
+    )
+
+
+def write_schema_artifacts(output_dir: str | Path) -> dict:
+    base = Path(output_dir)
+    if base.name == "":
+        base = Path("outputs")
+    if base.name.startswith("schema_"):
+        target = base
+    else:
+        stamp = datetime.now(timezone.utc).strftime("schema_%Y%m%d_%H%M%S_") + uuid.uuid4().hex[:6]
+        target = base / stamp
+    target.mkdir(parents=True, exist_ok=False)
+
+    files = {
+        "schema_bundle.json": export_all_schemas(),
+        "model_schemas.json": export_model_schemas(),
+        "tool_registry_schema.json": export_tool_registry_schema(),
+        "workflow_catalog.json": export_workflow_catalog_schema(compact=False),
+        "workflow_catalog.yaml": export_workflow_catalog_schema(compact=False),
+        "planner_context_compact.json": export_planner_schema_bundle(),
+    }
+    for name, payload in files.items():
+        path = target / name
+        if name.endswith(".yaml"):
+            path.write_text(yaml.safe_dump(payload, sort_keys=True), encoding="utf-8")
+        else:
+            path.write_text(json.dumps(payload, indent=2, sort_keys=True), encoding="utf-8")
+
+    (target / "README_schema.md").write_text(
+        "\n".join(
+            [
+                "# LMolA Schema Export",
+                "",
+                "- These schemas are generated from LMolA internal definitions.",
+                "- LLMs should output WorkflowRequest JSON, not arbitrary commands.",
+                "- Canonical workflows are generated by LMolA and not blindly trusted from LLM output.",
+                "- Schema export is LLM-engine agnostic.",
+                "- Ollama is one possible backend and not a schema dependency.",
+            ]
+        ),
+        encoding="utf-8",
+    )
+    return {"status": "ok", "output_dir": str(target), "files": sorted([*files.keys(), "README_schema.md"])}

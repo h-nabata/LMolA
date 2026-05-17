@@ -24,6 +24,13 @@ from lmola.tools.openbabel_tool import run_openbabel_conversion
 from lmola.validation.geometry_checks import validate_xyz
 from lmola.tools.registry import get_tool, get_tool_availability, list_tools
 from lmola.workflows import get_workflow_entry, list_workflows, run_workflow_yaml
+from lmola.schema_export import (
+    export_all_schemas,
+    export_model_schemas,
+    export_tool_registry_schema,
+    export_workflow_catalog_schema,
+    write_schema_artifacts,
+)
 
 app = typer.Typer(help="LMolA CLI (pre-alpha)")
 
@@ -34,7 +41,40 @@ app.add_typer(tools_app, name="tools")
 workflow_app = typer.Typer(help="Deterministic workflow catalog and runner")
 app.add_typer(workflow_app, name="workflow")
 
+schema_app = typer.Typer(help="Schema exports")
+app.add_typer(schema_app, name="schema")
 
+
+
+
+def _emit_schema(payload: dict, fmt: str) -> None:
+    if fmt == "yaml":
+        typer.echo(__import__("yaml").safe_dump(payload, sort_keys=True))
+    else:
+        typer.echo(json.dumps(payload, indent=2, sort_keys=True))
+
+
+@schema_app.command("export")
+def schema_export(fmt: str = typer.Option("json", "--format"), out: str = typer.Option("", "--out")) -> None:
+    if out:
+        typer.echo(json.dumps(write_schema_artifacts(out), indent=2, sort_keys=True))
+        return
+    _emit_schema(export_all_schemas(), fmt)
+
+
+@schema_app.command("export-models")
+def schema_export_models(fmt: str = typer.Option("json", "--format")) -> None:
+    _emit_schema(export_model_schemas(), fmt)
+
+
+@tools_app.command("export-schema")
+def tools_export_schema(fmt: str = typer.Option("json", "--format")) -> None:
+    _emit_schema(export_tool_registry_schema(), fmt)
+
+
+@workflow_app.command("export-catalog")
+def workflow_export_catalog(fmt: str = typer.Option("json", "--format")) -> None:
+    _emit_schema(export_workflow_catalog_schema(compact=False), fmt)
 @workflow_app.command("list")
 def workflow_list() -> None:
     payload = [w.model_dump() for w in list_workflows()]

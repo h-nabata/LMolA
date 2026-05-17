@@ -203,3 +203,13 @@ Doctor diagnostics reminders:
 - This field does not imply Ollama is using GPU for inference.
 - For Ollama runtime checks, run `ollama ps`, `nvidia-smi`, and `watch -n 1 nvidia-smi`.
 - For configured model checks, compare `lmola doctor` with `ollama list`.
+
+## Schema-driven LMolA agents
+
+Use schema exports to drive planner prompts and external clients without coupling to a specific LLM runtime.
+
+- `lmola schema export --format json`
+- `lmola schema export --out outputs/schema_test`
+- `lmola tools export-schema --format json`
+- `lmola workflow export-catalog --format json`
+- `lmola workflow export-catalog --format yaml`
