@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+from importlib import import_module
 from pathlib import Path
 
 import typer
@@ -132,6 +133,7 @@ def doctor() -> None:
     cfg = load_app_config()
     molsimplify_cli = detect_molsimplify_cli()
     backend_statuses = list_backend_statuses()
+    python_cuda_detected = _detect_python_cuda()
     report = {
         "molsimplify_importable": detect_molsimplify_import(),
         "molsimplify_cli": bool(molsimplify_cli),
@@ -148,9 +150,13 @@ def doctor() -> None:
         "llm_config_present": cfg.llm.model is not None or cfg.llm.base_url is not None,
         "llm_enabled": cfg.llm.enabled,
         "llm_backend": cfg.llm.backend,
-        "gpu_cuda_detected": False,
+        "python_cuda_detected": python_cuda_detected,
+        "gpu_cuda_detected": python_cuda_detected,
+        "gpu_detection_scope": "python_environment",
         "backends": {name: status.__dict__ for name, status in backend_statuses.items()},
     }
+    if report["gpu_cuda_detected"] is not None:
+        report["gpu_cuda_detected_deprecated"] = report["gpu_cuda_detected"]
     if cfg.llm.enabled and cfg.llm.backend in {"ollama", "openai_compatible_local"} and cfg.llm.base_url:
         try:
             c = make_llm_client(cfg.llm)
@@ -158,7 +164,63 @@ def doctor() -> None:
             report[f"{cfg.llm.backend}_reachable"] = res.status == "ok" or bool(res.raw_response)
         except Exception:
             report[f"{cfg.llm.backend}_reachable"] = False
-    print(json.dumps(report, indent=2))
+    if cfg.llm.enabled and cfg.llm.backend == "ollama":
+        report.update(_collect_ollama_diagnostics(cfg.llm.base_url, cfg.llm.model, cfg.llm.timeout_seconds))
+    typer.echo(json.dumps(report, indent=2))
+
+
+def _detect_python_cuda() -> bool:
+    try:
+        torch = import_module("torch")
+    except Exception:
+        return False
+    try:
+        return bool(torch.cuda.is_available())
+    except Exception:
+        return False
+
+
+def _collect_ollama_diagnostics(base_url: str | None, model: str | None, timeout_seconds: int) -> dict:
+    report = {
+        "ollama_reachable": False,
+        "ollama_base_url": base_url,
+        "ollama_configured_model": model,
+        "ollama_configured_model_available": None,
+        "ollama_available_models": None,
+        "ollama_loaded_models": None,
+        "ollama_error": None,
+        "ollama_ps_error": None,
+    }
+    if not base_url:
+        report["ollama_error"] = "No Ollama base URL configured."
+        return report
+
+    from httpx import Client
+
+    try:
+        with Client(timeout=timeout_seconds) as client:
+            resp = client.get(f"{base_url.rstrip('/')}/api/tags")
+            resp.raise_for_status()
+            payload = resp.json()
+            models = [m.get("name") for m in payload.get("models", []) if isinstance(m, dict) and m.get("name")]
+            report["ollama_reachable"] = True
+            report["ollama_available_models"] = models
+            if model:
+                report["ollama_configured_model_available"] = model in models
+    except Exception as exc:
+        report["ollama_error"] = str(exc)
+        return report
+
+    try:
+        with Client(timeout=timeout_seconds) as client:
+            resp = client.get(f"{base_url.rstrip('/')}/api/ps")
+            resp.raise_for_status()
+            payload = resp.json()
+            loaded = [m.get("name") for m in payload.get("models", []) if isinstance(m, dict) and m.get("name")]
+            report["ollama_loaded_models"] = loaded
+    except Exception as exc:
+        report["ollama_ps_error"] = str(exc)
+    return report
 
 
 @app.command()

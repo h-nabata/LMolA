@@ -196,3 +196,10 @@ Manual qwen2.5-coder baseline run:
 3. Run `lmola workflow plan "Generate structures from examples/smiles_list.csv and relax them with xTB."`.
 4. Run `lmola workflow eval-planner examples/planner_eval_cases.yaml`.
 5. Inspect `eval_summary.csv` and `eval_result.json` in the generated `outputs/eval_*` directory.
+
+Doctor diagnostics reminders:
+
+- `python_cuda_detected` / `gpu_cuda_detected` indicates CUDA visibility from LMolA's Python environment only.
+- This field does not imply Ollama is using GPU for inference.
+- For Ollama runtime checks, run `ollama ps`, `nvidia-smi`, and `watch -n 1 nvidia-smi`.
+- For configured model checks, compare `lmola doctor` with `ollama list`.
