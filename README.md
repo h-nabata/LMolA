@@ -396,3 +396,23 @@ Manual qwen2.5-coder baseline run:
 3. Run `lmola workflow plan "Generate structures from examples/smiles_list.csv and relax them with xTB."`.
 4. Run `lmola workflow eval-planner examples/planner_eval_cases.yaml`.
 5. Inspect `eval_summary.csv` and `eval_result.json` in the generated `outputs/eval_*` directory.
+
+## Schema-driven LMolA agents
+
+LMolA agents should generate `WorkflowRequest` JSON as the stable interface. LLM choice is independent from schema exports. Ollama with `qwen2.5-coder:14b` is one tested local engine, but schema export is LLM-engine agnostic.
+
+- Exported artifacts are generated from internal Pydantic models, Tool Registry, and Workflow Catalog.
+- LLM output is never executed directly; it is parsed, validated, canonicalized, and then optionally executed by deterministic LMolA code.
+- YAML remains convenient for humans; JSON is preferred for LLM output and schema validation.
+
+Commands:
+- `lmola schema export --format json`
+- `lmola schema export --out outputs/schema_test`
+- `lmola tools export-schema --format json`
+- `lmola workflow export-catalog --format json`
+- `lmola workflow export-catalog --format yaml`
+
+Roadmap:
+- Phase 11.1: schema-driven planner prompts.
+- Phase 11.5: MCP-compatible descriptor preview.
+- Phase 12: MCP adapter.
