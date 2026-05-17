@@ -42,7 +42,33 @@ class PlannerEvalRunResult(BaseModel):
     summary_json: str
     backend: str
     model: str | None = None
+    base_url: str | None = None
+    temperature: float | None = None
+    timeout_seconds: int | None = None
+    max_tokens: int | None = None
     cases: list[dict] = Field(default_factory=list)
+
+
+def _classify_failure(row: dict) -> str:
+    if row.get("passed"):
+        return "none"
+    if not row.get("parse_ok", False):
+        return "parse_failure"
+    if not row.get("validation_ok", False):
+        return "schema_validation_failure"
+    if row.get("expected_status") == "unsupported" and not row.get("unsupported_handled", False):
+        return "unsupported_not_handled"
+    if not row.get("workflow_match", True):
+        return "wrong_workflow"
+    if not row.get("tools_match", True):
+        return "tool_mismatch"
+    if str(row.get("actual_status", "")).lower() in {"endpoint_error", "client_error"}:
+        return "endpoint_error"
+    if "endpoint" in str(row.get("error_message", "")).lower() or "connection" in str(row.get("error_message", "")).lower():
+        return "endpoint_error"
+    if row.get("actual_status") == "error":
+        return "unexpected_error"
+    return "unknown"
 
 
 def _create_eval_dir(base: str = "outputs") -> Path:
@@ -110,6 +136,9 @@ def run_planner_eval(eval_cases_yaml: str) -> PlannerEvalRunResult:
         canonicalization_ok = planning_payload.get("canonical_workflow_json") is not None
         selected_workflow_id = planning_payload.get("selected_workflow_id")
         actual_status = "ok" if planning.status == "ok" else "error"
+        msg = (planning.message or "").lower()
+        if planning.status != "ok" and ("endpoint" in msg or "connection" in msg or "refused" in msg or "timeout" in msg):
+            actual_status = "endpoint_error"
 
         workflow_match = case.expected_workflow_id == selected_workflow_id if case.expected_workflow_id is not None else selected_workflow_id is None
         canonical_tools = _canonical_tools_from_result(planning_payload)
@@ -154,6 +183,7 @@ def run_planner_eval(eval_cases_yaml: str) -> PlannerEvalRunResult:
             "elapsed_seconds": elapsed,
             "passed": case_passed,
         }
+        row["failure_category"] = _classify_failure(row)
         rows.append(row)
         dump_json(case_dir / "case_result.json", row)
 
@@ -185,8 +215,52 @@ def run_planner_eval(eval_cases_yaml: str) -> PlannerEvalRunResult:
         summary_json=str(summary_json),
         backend=cfg.llm.backend,
         model=cfg.llm.model,
+        base_url=cfg.llm.base_url,
+        temperature=cfg.llm.temperature,
+        timeout_seconds=cfg.llm.timeout_seconds,
+        max_tokens=cfg.llm.max_tokens,
         cases=rows,
     )
     dump_json(eval_dir / "eval_result.json", result.model_dump())
     (eval_dir / "README_eval.md").write_text("# LMolA planner evaluation\n\nThis evaluation measures planning quality only. Workflows are not executed.\n", encoding="utf-8")
     return result
+
+
+def compare_planner_evals(eval_dir_a: str, eval_dir_b: str) -> dict:
+    dir_a = Path(eval_dir_a)
+    dir_b = Path(eval_dir_b)
+    result_a = yaml.safe_load((dir_a / "eval_result.json").read_text(encoding="utf-8"))
+    result_b = yaml.safe_load((dir_b / "eval_result.json").read_text(encoding="utf-8"))
+    rows_a = yaml.safe_load((dir_a / "eval_summary.json").read_text(encoding="utf-8")) or []
+    rows_b = yaml.safe_load((dir_b / "eval_summary.json").read_text(encoding="utf-8")) or []
+    by_case_a = {row["case_id"]: row for row in rows_a}
+    by_case_b = {row["case_id"]: row for row in rows_b}
+    case_ids = sorted(set(by_case_a) | set(by_case_b))
+    per_case: list[dict] = []
+    for case_id in case_ids:
+        a = by_case_a.get(case_id, {})
+        b = by_case_b.get(case_id, {})
+        per_case.append({
+            "case_id": case_id,
+            "a": {k: a.get(k) for k in ["passed", "workflow_match", "tools_match", "parse_ok", "validation_ok", "unsupported_handled", "failure_category"]},
+            "b": {k: b.get(k) for k in ["passed", "workflow_match", "tools_match", "parse_ok", "validation_ok", "unsupported_handled", "failure_category"]},
+        })
+    return {
+        "a": {
+            "eval_dir": str(dir_a),
+            "backend": result_a.get("backend"),
+            "model": result_a.get("model"),
+            "pass_rate": result_a.get("pass_rate"),
+            "passed_cases": result_a.get("passed_cases"),
+            "failed_cases": result_a.get("failed_cases"),
+        },
+        "b": {
+            "eval_dir": str(dir_b),
+            "backend": result_b.get("backend"),
+            "model": result_b.get("model"),
+            "pass_rate": result_b.get("pass_rate"),
+            "passed_cases": result_b.get("passed_cases"),
+            "failed_cases": result_b.get("failed_cases"),
+        },
+        "per_case": per_case,
+    }

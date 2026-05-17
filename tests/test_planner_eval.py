@@ -37,6 +37,8 @@ def test_eval_writes_case_results_and_metrics(monkeypatch) -> None:
     result = run_planner_eval("examples/planner_eval_cases.yaml")
     assert result.total_cases == 6
     assert result.failed_cases == 0
+    assert result.backend == "mock"
+    assert "qwen2.5" not in str(result.model)
     eval_dir = Path(result.eval_dir)
     rows = json.loads((eval_dir / "eval_summary.json").read_text(encoding="utf-8"))
     xtb = [r for r in rows if r["case_id"] == "smiles_to_xtb_relax"][0]
@@ -45,9 +47,15 @@ def test_eval_writes_case_results_and_metrics(monkeypatch) -> None:
     unsupported = [r for r in rows if r["case_id"] == "unsupported_ts_search"][0]
     assert unsupported["unsupported_handled"] is True
     assert unsupported["passed"] is True
+    assert unsupported["failure_category"] == "none"
     for r in rows:
         assert r["executed"] is False
+        assert r["failure_category"] == "none"
         assert Path(r["case_dir"]).joinpath("case_result.json").exists()
+
+    eval_result = json.loads((eval_dir / "eval_result.json").read_text(encoding="utf-8"))
+    for key in ["backend", "model", "base_url", "temperature", "timeout_seconds", "max_tokens", "suite_id", "summary_csv", "summary_json"]:
+        assert key in eval_result
 
 
 def test_eval_endpoint_failure_safe(monkeypatch) -> None:
@@ -66,3 +74,11 @@ def test_eval_public_remote_endpoint_blocked(monkeypatch) -> None:
     result = run_planner_eval("examples/planner_eval_cases.yaml")
     assert result.status == "error"
     assert result.failed_cases > 0
+
+
+def test_qwen_example_config_yaml_parses() -> None:
+    import yaml
+
+    payload = yaml.safe_load(Path("examples/config_ollama_qwen2_5_coder_14b.yaml").read_text(encoding="utf-8"))
+    assert payload["llm"]["backend"] == "ollama"
+    assert payload["llm"]["model"] == "qwen2.5-coder:14b"

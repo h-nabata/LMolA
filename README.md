@@ -144,8 +144,8 @@ llm:
   enabled: true
   backend: ollama
   base_url: http://localhost:11434
-  model: qwen2.5:7b-instruct
-  timeout_seconds: 60
+  model: qwen2.5-coder:14b-instruct
+  timeout_seconds: 180
 ```
 
 If not configured, `lmola run-agent` fails safely with a clear message and does not call cloud APIs.
@@ -301,9 +301,9 @@ llm:
   enabled: true
   backend: ollama
   base_url: http://127.0.0.1:11434
-  model: qwen2.5:7b
+  model: qwen2.5-coder:14b
   temperature: 0
-  timeout_seconds: 60
+  timeout_seconds: 180
 ```
 
 ```yaml
@@ -313,7 +313,7 @@ llm:
   base_url: http://127.0.0.1:1234/v1
   model: local-model-name
   temperature: 0
-  timeout_seconds: 60
+  timeout_seconds: 180
 ```
 
 Typical planning artifacts are written under `outputs/plan_.../` and include:
@@ -330,7 +330,7 @@ Typical planning artifacts are written under `outputs/plan_.../` and include:
 Generated and relaxed structures always require researcher review.
 
 
-## Real local LLM planner evaluation (Phase 10.5)
+## Real local LLM planner evaluation (Phase 10.6)
 
 Use planner evaluation to measure planning quality only (no workflow execution):
 
@@ -352,9 +352,9 @@ llm:
   enabled: true
   backend: ollama
   base_url: http://127.0.0.1:11434
-  model: qwen2.5:7b
+  model: qwen2.5-coder:14b
   temperature: 0
-  timeout_seconds: 60
+  timeout_seconds: 180
   max_tokens: 2048
 ```
 
@@ -367,8 +367,26 @@ llm:
   base_url: http://127.0.0.1:1234/v1
   model: local-model-name
   temperature: 0
-  timeout_seconds: 60
+  timeout_seconds: 180
   max_tokens: 2048
 ```
 
 Evaluation metrics include `workflow_match`, `tools_match`, `parse_ok`, `validation_ok`, `canonicalization_ok`, `unsupported_handled`, and overall `pass_rate`.
+
+
+### Phase 10.6 baseline interpretation notes
+
+- `qwen2.5-coder:14b` is used as a structured JSON/workflow planner, not a chemistry correctness authority.
+- Chemical correctness, charge/spin checks, canonicalization, and unsupported-task refusal remain deterministic LMolA responsibilities.
+- `eval-planner` measures planning only and does not execute chemistry workflows.
+- Mock backend remains the default in automated tests; expected mock pass rate is `1.0` for the baseline suite.
+- Real local LLM pass rate may be lower; failures are reported and classified with `failure_category` (not hidden).
+- Prompt optimization is intentionally deferred to later schema-driven phases.
+
+Manual qwen2.5-coder baseline run:
+
+1. Copy `examples/config_ollama_qwen2_5_coder_14b.yaml` into `.lmola/config.yaml` and adjust only if needed.
+2. Run `lmola doctor` and confirm `llm_backend=ollama` and `ollama_reachable=true`.
+3. Run `lmola workflow plan "Generate structures from examples/smiles_list.csv and relax them with xTB."`.
+4. Run `lmola workflow eval-planner examples/planner_eval_cases.yaml`.
+5. Inspect `eval_summary.csv` and `eval_result.json` in the generated `outputs/eval_*` directory.
