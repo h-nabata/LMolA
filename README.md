@@ -448,3 +448,33 @@ Commands:
 - Ollama/qwen2.5-coder:14b is a tested local backend, not a schema dependency.
 - `lmola workflow plan` stores debug artifacts: `planner_context_compact.json` and `planner_prompt.txt` in `plan_dir`.
 - Full MCP descriptor generation remains Phase 11.5, and MCP server/runtime remains Phase 12.
+
+## Phase 12.0 read-only MCP runtime adapter
+
+LMolA now includes a **minimal MCP-compatible read-only runtime adapter** over local stdio JSON-RPC.
+
+- Local stdio only (`serve-readonly`), no TCP listener or port binding.
+- Runtime `tools/list` is stricter than static preview descriptors.
+- Runtime exposes only safe read-only tools in Phase 12.0:
+  - `lmola.list_workflows`
+  - `lmola.inspect_workflow`
+  - `lmola.get_schema_bundle`
+  - `lmola.get_tool_registry_schema`
+  - `lmola.get_workflow_catalog`
+  - `lmola.get_planner_context`
+  - `lmola.validate_workflow`
+- Runtime **does not** expose `lmola.run_workflow` yet.
+- Runtime **does not** expose low-level chemistry execution tools.
+- Runtime validation canonicalizes workflows without executing chemistry workflows.
+- Static preview (`lmola mcp preview*`) remains available and may include future tools.
+
+Commands:
+- `lmola mcp preview-tools --format json`
+- `lmola mcp preview --out outputs/mcp_preview_manual_test`
+- `lmola mcp runtime-tools --format json`
+- `lmola mcp call-tool lmola.list_workflows --args-json '{"compact": true}'`
+- `lmola mcp call-tool lmola.inspect_workflow --args-json '{"workflow_id": "smiles_to_xtb_relax"}'`
+- `lmola mcp call-tool lmola.validate_workflow --args-json '{"workflow_id":"smiles_to_xtb_relax","input":{"type":"smiles_csv","path":"examples/smiles_list.csv"},"columns":{"id":"id","smiles":"smiles"}}'`
+- `lmola mcp serve-readonly`
+
+Execution-capable MCP workflow calls remain deferred to a later phase with explicit safety policy and confirmation controls.
