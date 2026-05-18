@@ -1,0 +1,9 @@
+{
+  "mcpServers": {
+    "lmola": {
+      "command": "/path/to/conda/env/bin/lmola",
+      "args": ["mcp", "serve-stdio"],
+      "cwd": "/path/to/LMolA"
+    }
+  }
+}

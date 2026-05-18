@@ -515,3 +515,26 @@ Commands:
 - `before=$(find outputs/mcp_runs -maxdepth 1 -type d -name "batch_*" | wc -l); lmola mcp call-tool lmola.run_workflow --args-json '{"workflow_id":"smiles_to_xtb_relax","input":{"type":"smiles_csv","path":"examples/smiles_list.csv"},"columns":{"id":"id","smiles":"smiles"},"dry_run":false,"allow_execution":true,"confirm":true}'; after=$(find outputs/mcp_runs -maxdepth 1 -type d -name "batch_*" | wc -l); echo "before=$before after=$after"`
 
 `lmola mcp jsonrpc --request-json ...` is a one-shot helper for local testing; `serve-stdio` is the persistent stdio adapter entrypoint.
+
+## External MCP client integration smoke (Phase 12.5)
+
+LMolA can be launched as a local stdio MCP-compatible server:
+
+- `lmola mcp serve-stdio`
+
+Phase 12.5 adds an internal client smoke command:
+
+- `lmola mcp client-smoke --format json`
+
+This smoke does **not** require Claude Desktop or any external GUI MCP client. It validates the same Content-Length framed JSON-RPC transport pattern used by external clients.
+
+For real client integration, configure:
+
+- command: `/path/to/lmola` (or `/path/to/conda/env/bin/lmola`)
+- args: `["mcp", "serve-stdio"]`
+- cwd: `/path/to/LMolA`
+
+See:
+
+- `docs/mcp/claude_desktop_config.example.json`
+- `docs/mcp/lmola_mcp_client_notes.md`
