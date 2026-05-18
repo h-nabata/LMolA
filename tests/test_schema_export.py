@@ -7,6 +7,7 @@ from typer.testing import CliRunner
 
 from lmola.cli import app
 from lmola.schema_export import export_all_schemas, export_model_schemas, export_planner_schema_bundle
+from lmola.agent.workflow_planner import build_schema_driven_planner_context
 
 runner = CliRunner()
 
@@ -121,3 +122,7 @@ def test_schema_export_out_deterministic_json_payloads(tmp_path: Path) -> None:
         a = json.loads((out_a / name).read_text())
         b = json.loads((out_b / name).read_text())
         assert a == b
+
+
+def test_schema_driven_context_matches_export() -> None:
+    assert build_schema_driven_planner_context() == export_planner_schema_bundle()

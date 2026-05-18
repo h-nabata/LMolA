@@ -47,6 +47,10 @@ class PlannerEvalRunResult(BaseModel):
     timeout_seconds: int | None = None
     max_tokens: int | None = None
     cases: list[dict] = Field(default_factory=list)
+    planner_prompt_mode: str | None = None
+    planner_context_schema_version: str | None = None
+    planner_context_workflow_count: int | None = None
+    planner_context_allowed_workflow_ids: list[str] = Field(default_factory=list)
 
 
 def _classify_failure(row: dict) -> str:
@@ -123,7 +127,7 @@ def run_planner_eval(eval_cases_yaml: str) -> PlannerEvalRunResult:
             raw = pdir / "llm_response.raw.txt"
             if raw.exists():
                 (case_dir / "llm_response.raw.txt").write_text(raw.read_text(encoding="utf-8"), encoding="utf-8")
-            for name in ["planned_workflow.json", "planned_workflow.yaml", "canonical_workflow.json", "canonical_workflow.yaml", "planning_result.json"]:
+            for name in ["planned_workflow.json", "planned_workflow.yaml", "canonical_workflow.json", "canonical_workflow.yaml", "planning_result.json", "planner_context_compact.json", "planner_prompt.txt"]:
                 src = pdir / name
                 if src.exists():
                     (case_dir / name).write_text(src.read_text(encoding="utf-8"), encoding="utf-8")
@@ -202,6 +206,10 @@ def run_planner_eval(eval_cases_yaml: str) -> PlannerEvalRunResult:
     status = "ok" if failed == 0 else "error"
     message = "Planner evaluation completed." if status == "ok" else "Planner evaluation completed with failures."
 
+    from lmola.schema_export import export_planner_schema_bundle
+
+    planner_context = export_planner_schema_bundle()
+
     result = PlannerEvalRunResult(
         status=status,
         message=message,
@@ -220,6 +228,10 @@ def run_planner_eval(eval_cases_yaml: str) -> PlannerEvalRunResult:
         timeout_seconds=cfg.llm.timeout_seconds,
         max_tokens=cfg.llm.max_tokens,
         cases=rows,
+        planner_prompt_mode="schema_driven",
+        planner_context_schema_version=planner_context.get("schema_version"),
+        planner_context_workflow_count=len(planner_context.get("workflows", [])),
+        planner_context_allowed_workflow_ids=planner_context.get("allowed_workflow_ids", []),
     )
     dump_json(eval_dir / "eval_result.json", result.model_dump())
     (eval_dir / "README_eval.md").write_text("# LMolA planner evaluation\n\nThis evaluation measures planning quality only. Workflows are not executed.\n", encoding="utf-8")

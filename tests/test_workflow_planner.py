@@ -2,7 +2,7 @@ from pathlib import Path
 
 from typer.testing import CliRunner
 
-from lmola.agent.workflow_planner import _build_planner_prompt, plan_workflow_request
+from lmola.agent.workflow_planner import _build_planner_prompt, build_schema_driven_planner_context, plan_workflow_request
 from lmola.cli import app
 
 runner = CliRunner()
@@ -13,12 +13,13 @@ def _enable_mock(monkeypatch) -> None:
     monkeypatch.setenv("LMOLA_LLM_BACKEND", "mock")
 
 
-def test_prompt_includes_catalog_and_tools() -> None:
+def test_prompt_includes_catalog_and_contract() -> None:
+    context = build_schema_driven_planner_context()
     prompt = _build_planner_prompt("Generate 3D structures")
-    assert "smiles_to_3d_rdkit" in prompt
-    assert "smiles_to_xtb_relax" in prompt
-    assert "generate_small_molecule_rdkit" in prompt
-    assert "validate_structure_ase" in prompt
+    assert all(wf_id in prompt for wf_id in context["allowed_workflow_ids"])
+    assert "unsupported" in prompt
+    assert "JSON only" in prompt
+    assert "Never execute shell commands" in prompt
 
 
 def test_mock_planner_smiles_to_3d(monkeypatch) -> None:
@@ -72,6 +73,8 @@ def test_plan_cli_writes_artifacts(monkeypatch) -> None:
     assert (base / "canonical_workflow.json").exists()
     assert (base / "canonical_workflow.yaml").exists()
     assert (base / "planning_result.json").exists()
+    assert (base / "planner_context_compact.json").exists()
+    assert (base / "planner_prompt.txt").exists()
 
 
 def test_canonical_expands_catalog_steps(monkeypatch) -> None:
@@ -96,6 +99,8 @@ def test_planning_result_contains_planned_and_canonical_paths(monkeypatch) -> No
     assert payload["planned_workflow_path_yaml"].endswith("planned_workflow.yaml")
     assert payload["canonical_workflow_path_json"].endswith("canonical_workflow.json")
     assert payload["canonical_workflow_path_yaml"].endswith("canonical_workflow.yaml")
+    assert payload["planner_prompt_mode"] == "schema_driven"
+    assert payload["planner_context_schema_version"] == "lmola.planner_context.v1"
 
 
 def test_public_remote_endpoint_blocked(monkeypatch) -> None:

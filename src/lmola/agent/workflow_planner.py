@@ -12,8 +12,6 @@ from lmola.config import is_local_llm_url_allowed, load_app_config, redacted_llm
 from lmola.io.converters import dump_json
 from lmola.io.run_artifacts import collect_environment
 from lmola.tools.llm_client import make_llm_client
-from lmola.tools.registry import list_tools
-from lmola.workflows.catalog import FUTURE_TASK_TYPES, TASK_TAXONOMY, list_workflows
 from lmola.workflows.schemas import WorkflowRequest
 
 
@@ -40,6 +38,10 @@ class WorkflowPlanningResult(BaseModel):
     batch_dir: str | None = None
     summary_csv: str | None = None
     summary_json: str | None = None
+    planner_prompt_mode: str | None = None
+    planner_context_schema_version: str | None = None
+    planner_context_workflow_count: int | None = None
+    planner_context_allowed_workflow_ids: list[str] | None = None
 
 
 NOT_CONFIGURED_MSG = "Local LLM planning is disabled. Enable llm.enabled to use workflow planning."
@@ -52,29 +54,56 @@ def _create_plan_dir(base: str = "outputs") -> Path:
     return path
 
 
-def _build_planner_prompt(request: str) -> str:
-    catalog = [w.model_dump() for w in list_workflows()]
-    tool_names = sorted(t.name for t in list_tools())
-    supported_input_types = ["smiles", "smiles_csv", "xyz", "xyz_list"]
+def build_schema_driven_planner_context() -> dict:
+    from lmola.schema_export import export_planner_schema_bundle
+
+    return export_planner_schema_bundle()
+
+
+def build_schema_driven_planner_prompt(context: dict) -> str:
+    supported_example = {
+        "workflow_id": "<one of allowed_workflow_ids>",
+        "input": {"type": "<one of allowed input types>", "path": "<input file path>"},
+        "columns": {"id": "id", "smiles": "smiles"},
+        "outputs": {"summary_csv": True, "summary_json": True},
+    }
+    supported_value_example = {"input": {"type": "smiles", "value": "CCO"}}
+    unsupported_example = {"status": "unsupported", "reason": "short reason"}
     return (
-        "You are LMolA local workflow planner. Output only JSON.\\n"
-        "Do not output prose, markdown, code fences, shell commands, or Python code.\\n"
-        "Never execute tools. Never claim execution happened.\\n"
-        "Use only workflow_id values from workflow catalog.\\n"
-        "Use only tool names from typed tool registry.\\n"
-        "Use only supported input types.\\n"
-        "Do not invent tools, chemistry backends, package installation, environment changes, or cloud API calls.\\n"
-        "If task unsupported, return: {\"status\":\"unsupported\",\"reason\":\"...\",\"suggested_supported_workflows\":[...]}\\n\\n"
-        f"Task taxonomy: {json.dumps(TASK_TAXONOMY)}\\n"
-        f"Future/unsupported task types: {json.dumps(FUTURE_TASK_TYPES)}\\n"
-        f"Workflow catalog: {json.dumps(catalog, indent=2)}\\n"
-        f"Typed tools: {json.dumps(tool_names)}\\n"
-        f"Supported input types: {json.dumps(supported_input_types)}\\n"
-        "Minimal valid workflow example:\\n"
-        "{\"workflow_id\":\"smiles_to_3d_rdkit\",\"input\":{\"type\":\"smiles_csv\",\"path\":\"examples/smiles_list.csv\"},\"columns\":{\"id\":\"id\",\"smiles\":\"smiles\"},\"outputs\":{\"summary_csv\":true,\"summary_json\":true}}\\n\\n"
-        f"Natural language request: {request}"
+        "You are LMolA local workflow planner.\\n"
+        "You are the LMolA schema-driven workflow planner.\\n"
+        "Output exactly one JSON object. JSON only.\\n"
+        "Do not output Markdown, prose, code fences, comments, shell commands, tool command lines, or Python code.\\n"
+        "Never execute tools. Never execute shell commands. Never claim execution happened.\\n"
+        "Do not invent workflow IDs or tool names.\\n"
+        "Use only workflows from allowed_workflow_ids and input types from allowed_input_types.\\n"
+        "If no workflow matches, return unsupported JSON. Do not force nearest workflow.\\n"
+        "For supported tasks, include workflow_id and input.\\n"
+        "For smiles_csv input, include columns when obvious: {\"id\":\"id\",\"smiles\":\"smiles\"}.\\n"
+        "If the user names a file, prefer input.path. input.value is allowed for direct values like a single SMILES string.\\n\\n"
+        f"Planner context schema version: {context.get('schema_version')}\\n"
+        f"Allowed workflow IDs: {json.dumps(context.get('allowed_workflow_ids', []))}\\n"
+        f"Allowed input types: {json.dumps(context.get('allowed_input_types', []))}\\n"
+        f"Compact workflow list: {json.dumps(context.get('workflows', []), indent=2)}\\n"
+        f"Output contract supported_task: {json.dumps(context.get('output_contract', {}).get('supported_task', {}))}\\n"
+        f"Output contract unsupported_task: {json.dumps(context.get('output_contract', {}).get('unsupported_task', {}))}\\n"
+        f"Supported task output example: {json.dumps(supported_example)}\\n"
+        f"Value input example: {json.dumps(supported_value_example)}\\n"
+        f"Unsupported task output example: {json.dumps(unsupported_example)}"
     )
 
+
+def build_planner_messages(request_text: str, context: dict) -> list[dict]:
+    return [
+        {"role": "system", "content": build_schema_driven_planner_prompt(context)},
+        {"role": "user", "content": request_text},
+    ]
+
+
+
+def _build_planner_prompt(request: str) -> str:
+    context = build_schema_driven_planner_context()
+    return build_schema_driven_planner_prompt(context) + f"\n\nNatural language request: {request}"
 
 def _strip_code_fences(text: str) -> str:
     stripped = text.strip()
@@ -116,23 +145,26 @@ def _canonicalize_workflow(req: WorkflowRequest) -> dict:
 def plan_workflow_request(request_text: str, write_artifacts: bool = True) -> WorkflowPlanningResult:
     cfg = load_app_config()
     plan_dir = _create_plan_dir() if write_artifacts else None
-    prompt = _build_planner_prompt(request_text)
+    context = build_schema_driven_planner_context()
+    messages = build_planner_messages(request_text, context)
+    prompt = messages[0]["content"] + f"\n\nNatural language request: {request_text}"
 
     if plan_dir:
         (plan_dir / "natural_language_request.txt").write_text(request_text, encoding="utf-8")
+        dump_json(plan_dir / "planner_context_compact.json", context)
         (plan_dir / "planner_prompt.txt").write_text(prompt, encoding="utf-8")
         dump_json(plan_dir / "effective_config.json", cfg.model_dump())
         dump_json(plan_dir / "environment.json", collect_environment())
 
     if not cfg.llm.enabled:
-        result = WorkflowPlanningResult(status="error", message=NOT_CONFIGURED_MSG, natural_language_request=request_text, plan_dir=str(plan_dir) if plan_dir else None, config_redacted=redacted_llm_config(cfg.llm))
+        result = WorkflowPlanningResult(status="error", message=NOT_CONFIGURED_MSG, natural_language_request=request_text, plan_dir=str(plan_dir) if plan_dir else None, config_redacted=redacted_llm_config(cfg.llm), planner_prompt_mode="schema_driven", planner_context_schema_version=context.get("schema_version"), planner_context_workflow_count=len(context.get("workflows", [])), planner_context_allowed_workflow_ids=context.get("allowed_workflow_ids", []))
         if plan_dir:
             dump_json(plan_dir / "planning_result.json", result.model_dump())
         return result
 
     allowed, reason = is_local_llm_url_allowed(cfg.llm)
     if not allowed:
-        result = WorkflowPlanningResult(status="error", message=f"Unsafe LLM endpoint: {reason}", natural_language_request=request_text, plan_dir=str(plan_dir) if plan_dir else None, config_redacted=redacted_llm_config(cfg.llm))
+        result = WorkflowPlanningResult(status="error", message=f"Unsafe LLM endpoint: {reason}", natural_language_request=request_text, plan_dir=str(plan_dir) if plan_dir else None, config_redacted=redacted_llm_config(cfg.llm), planner_prompt_mode="schema_driven", planner_context_schema_version=context.get("schema_version"), planner_context_workflow_count=len(context.get("workflows", [])), planner_context_allowed_workflow_ids=context.get("allowed_workflow_ids", []))
         if plan_dir:
             dump_json(plan_dir / "planning_result.json", result.model_dump())
         return result
@@ -142,7 +174,7 @@ def plan_workflow_request(request_text: str, write_artifacts: bool = True) -> Wo
     if plan_dir:
         (plan_dir / "llm_response.raw.txt").write_text(raw, encoding="utf-8")
     if llm_result.status != "ok":
-        result = WorkflowPlanningResult(status="error", message=llm_result.error_message or "LLM request failed", natural_language_request=request_text, raw_llm_response=raw, plan_dir=str(plan_dir) if plan_dir else None, config_redacted=redacted_llm_config(cfg.llm))
+        result = WorkflowPlanningResult(status="error", message=llm_result.error_message or "LLM request failed", natural_language_request=request_text, raw_llm_response=raw, plan_dir=str(plan_dir) if plan_dir else None, config_redacted=redacted_llm_config(cfg.llm), planner_prompt_mode="schema_driven", planner_context_schema_version=context.get("schema_version"), planner_context_workflow_count=len(context.get("workflows", [])), planner_context_allowed_workflow_ids=context.get("allowed_workflow_ids", []))
         if plan_dir:
             dump_json(plan_dir / "planning_result.json", result.model_dump())
         return result
@@ -150,19 +182,19 @@ def plan_workflow_request(request_text: str, write_artifacts: bool = True) -> Wo
     try:
         parsed = _parse_planner_output(raw)
     except Exception as exc:
-        result = WorkflowPlanningResult(status="error", message="Failed to parse planner output", natural_language_request=request_text, raw_llm_response=raw, validation_errors=[str(exc)], plan_dir=str(plan_dir) if plan_dir else None, config_redacted=redacted_llm_config(cfg.llm))
+        result = WorkflowPlanningResult(status="error", message="Failed to parse planner output", natural_language_request=request_text, raw_llm_response=raw, validation_errors=[str(exc)], plan_dir=str(plan_dir) if plan_dir else None, config_redacted=redacted_llm_config(cfg.llm), planner_prompt_mode="schema_driven", planner_context_schema_version=context.get("schema_version"), planner_context_workflow_count=len(context.get("workflows", [])), planner_context_allowed_workflow_ids=context.get("allowed_workflow_ids", []))
         if plan_dir:
             dump_json(plan_dir / "planning_result.json", result.model_dump())
         return result
 
     if parsed.get("status") == "unsupported":
-        result = WorkflowPlanningResult(status="error", message=parsed.get("reason", "Requested task is not supported by the current workflow catalog."), natural_language_request=request_text, raw_llm_response=raw, parsed_workflow=parsed, plan_dir=str(plan_dir) if plan_dir else None, config_redacted=redacted_llm_config(cfg.llm))
+        result = WorkflowPlanningResult(status="error", message=parsed.get("reason", "Requested task is not supported by the current workflow catalog."), natural_language_request=request_text, raw_llm_response=raw, parsed_workflow=parsed, plan_dir=str(plan_dir) if plan_dir else None, config_redacted=redacted_llm_config(cfg.llm), planner_prompt_mode="schema_driven", planner_context_schema_version=context.get("schema_version"), planner_context_workflow_count=len(context.get("workflows", [])), planner_context_allowed_workflow_ids=context.get("allowed_workflow_ids", []))
         if plan_dir:
             dump_json(plan_dir / "planning_result.json", result.model_dump())
         return result
 
     if "command" in parsed or "commands" in parsed:
-        result = WorkflowPlanningResult(status="error", message="Planner output includes forbidden command fields.", natural_language_request=request_text, raw_llm_response=raw, parsed_workflow=parsed, validation_errors=["Forbidden fields: command/commands"], plan_dir=str(plan_dir) if plan_dir else None, config_redacted=redacted_llm_config(cfg.llm))
+        result = WorkflowPlanningResult(status="error", message="Planner output includes forbidden command fields.", natural_language_request=request_text, raw_llm_response=raw, parsed_workflow=parsed, validation_errors=["Forbidden fields: command/commands"], plan_dir=str(plan_dir) if plan_dir else None, config_redacted=redacted_llm_config(cfg.llm), planner_prompt_mode="schema_driven", planner_context_schema_version=context.get("schema_version"), planner_context_workflow_count=len(context.get("workflows", [])), planner_context_allowed_workflow_ids=context.get("allowed_workflow_ids", []))
         if plan_dir:
             dump_json(plan_dir / "planning_result.json", result.model_dump())
         return result
@@ -170,7 +202,7 @@ def plan_workflow_request(request_text: str, write_artifacts: bool = True) -> Wo
     try:
         req = WorkflowRequest.model_validate(parsed)
     except ValidationError as exc:
-        result = WorkflowPlanningResult(status="error", message="Planned workflow failed validation", natural_language_request=request_text, raw_llm_response=raw, parsed_workflow=parsed, validation_errors=[str(exc)], plan_dir=str(plan_dir) if plan_dir else None, config_redacted=redacted_llm_config(cfg.llm))
+        result = WorkflowPlanningResult(status="error", message="Planned workflow failed validation", natural_language_request=request_text, raw_llm_response=raw, parsed_workflow=parsed, validation_errors=[str(exc)], plan_dir=str(plan_dir) if plan_dir else None, config_redacted=redacted_llm_config(cfg.llm), planner_prompt_mode="schema_driven", planner_context_schema_version=context.get("schema_version"), planner_context_workflow_count=len(context.get("workflows", [])), planner_context_allowed_workflow_ids=context.get("allowed_workflow_ids", []))
         if plan_dir:
             dump_json(plan_dir / "planning_result.json", result.model_dump())
         return result
@@ -179,7 +211,7 @@ def plan_workflow_request(request_text: str, write_artifacts: bool = True) -> Wo
     canonical_workflow_json = _canonicalize_workflow(req)
     workflow_yaml = yaml.safe_dump(workflow_json, sort_keys=False)
     canonical_workflow_yaml = yaml.safe_dump(canonical_workflow_json, sort_keys=False)
-    result = WorkflowPlanningResult(status="ok", message="Workflow plan created and validated.", natural_language_request=request_text, selected_workflow_id=req.workflow_id, raw_llm_response=raw, parsed_workflow=parsed, workflow_json=workflow_json, workflow_yaml=workflow_yaml, canonical_workflow_json=canonical_workflow_json, canonical_workflow_yaml=canonical_workflow_yaml, plan_dir=str(plan_dir) if plan_dir else None, config_redacted=redacted_llm_config(cfg.llm))
+    result = WorkflowPlanningResult(status="ok", message="Workflow plan created and validated.", natural_language_request=request_text, selected_workflow_id=req.workflow_id, raw_llm_response=raw, parsed_workflow=parsed, workflow_json=workflow_json, workflow_yaml=workflow_yaml, canonical_workflow_json=canonical_workflow_json, canonical_workflow_yaml=canonical_workflow_yaml, plan_dir=str(plan_dir) if plan_dir else None, config_redacted=redacted_llm_config(cfg.llm), planner_prompt_mode="schema_driven", planner_context_schema_version=context.get("schema_version"), planner_context_workflow_count=len(context.get("workflows", [])), planner_context_allowed_workflow_ids=context.get("allowed_workflow_ids", []))
 
     if plan_dir:
         planned_json_path = plan_dir / "planned_workflow.json"

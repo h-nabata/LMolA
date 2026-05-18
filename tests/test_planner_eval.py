@@ -51,10 +51,13 @@ def test_eval_writes_case_results_and_metrics(monkeypatch) -> None:
     for r in rows:
         assert r["executed"] is False
         assert r["failure_category"] == "none"
-        assert Path(r["case_dir"]).joinpath("case_result.json").exists()
+        case_path = Path(r["case_dir"])
+        assert case_path.joinpath("case_result.json").exists()
+        assert case_path.joinpath("planning_result.json").exists()
+        assert case_path.joinpath("planner_context_compact.json").exists()
 
     eval_result = json.loads((eval_dir / "eval_result.json").read_text(encoding="utf-8"))
-    for key in ["backend", "model", "base_url", "temperature", "timeout_seconds", "max_tokens", "suite_id", "summary_csv", "summary_json"]:
+    for key in ["backend", "model", "base_url", "temperature", "timeout_seconds", "max_tokens", "suite_id", "summary_csv", "summary_json", "planner_prompt_mode", "planner_context_schema_version"]:
         assert key in eval_result
 
 

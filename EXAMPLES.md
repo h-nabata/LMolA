@@ -218,3 +218,9 @@ Contract notes:
 - `schema_bundle["models"]` is a direct model-name to JSON-schema map.
 - `model_schemas.json` is the standalone model schema bundle.
 - `--out` writes directly to the provided output directory path.
+
+## Schema-driven planner prompt (Phase 11.1)
+- Planner prompt content is built from LMolA internal schema/catalog exports, not hand-maintained workflow constants.
+- The model must output exactly one JSON object (supported `WorkflowRequest` or unsupported payload).
+- Planning is backend-agnostic; no cloud LLM provider dependency is introduced.
+- Debug artifacts under `outputs/plan_*` include `planner_context_compact.json` and `planner_prompt.txt`.
