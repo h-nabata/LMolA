@@ -1,9 +1,7 @@
 from __future__ import annotations
 
-from datetime import datetime, timezone
 import json
 from pathlib import Path
-import uuid
 
 import yaml
 
@@ -39,7 +37,7 @@ def _canonicalize(obj):
 
 def export_model_schemas() -> dict:
     models = {name: model.model_json_schema() for name, model in sorted(MODEL_REGISTRY.items())}
-    return _canonicalize({"schema_version": "lmola.schema.v1", "generated_by": "LMolA", "models": models})
+    return _canonicalize({"schema_version": "lmola.models.v1", "generated_by": "LMolA", "models": models})
 
 
 def export_tool_registry_schema() -> dict:
@@ -118,11 +116,13 @@ def export_planner_schema_bundle() -> dict:
 
 
 def export_all_schemas() -> dict:
+    model_bundle = export_model_schemas()
     return _canonicalize(
         {
             "schema_version": "lmola.schema_bundle.v1",
             "generated_by": "LMolA",
-            "models": export_model_schemas(),
+            "models": model_bundle["models"],
+            "model_schema_bundle": model_bundle,
             "tools": export_tool_registry_schema(),
             "workflow_catalog": export_workflow_catalog_schema(compact=False),
             "workflow_catalog_compact": export_workflow_catalog_schema(compact=True),
@@ -133,14 +133,10 @@ def export_all_schemas() -> dict:
 
 def write_schema_artifacts(output_dir: str | Path) -> dict:
     base = Path(output_dir)
-    if base.name == "":
+    if str(base) == "":
         base = Path("outputs")
-    if base.name.startswith("schema_"):
-        target = base
-    else:
-        stamp = datetime.now(timezone.utc).strftime("schema_%Y%m%d_%H%M%S_") + uuid.uuid4().hex[:6]
-        target = base / stamp
-    target.mkdir(parents=True, exist_ok=False)
+    target = base
+    target.mkdir(parents=True, exist_ok=True)
 
     files = {
         "schema_bundle.json": export_all_schemas(),

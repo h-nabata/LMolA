@@ -213,3 +213,8 @@ Use schema exports to drive planner prompts and external clients without couplin
 - `lmola tools export-schema --format json`
 - `lmola workflow export-catalog --format json`
 - `lmola workflow export-catalog --format yaml`
+
+Contract notes:
+- `schema_bundle["models"]` is a direct model-name to JSON-schema map.
+- `model_schemas.json` is the standalone model schema bundle.
+- `--out` writes directly to the provided output directory path.
