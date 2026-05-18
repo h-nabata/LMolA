@@ -241,9 +241,13 @@ Notes:
 - LMolA-specific metadata is under `_meta.lmola`.
 
 
-## Phase 12.1 MCP plan/validate runtime
+## Phase 12.2+12.3 confirmed MCP workflow execution
 
 - `runtime-tools` is the actual callable runtime tools list for the current phase.
+- `lmola.run_workflow` is runtime-exposed but defaults to dry-run and does not execute.
+- To execute, set `dry_run=false`, `allow_execution=true`, and `confirm=true`.
+- Only allowlisted workflow IDs are executable through MCP runtime.
+- Low-level chemistry tools remain denied as direct MCP runtime tools.
 - `preview-tools` is static and may include future/non-runtime tools.
 - `lmola.plan_workflow` is dry-run only (`executed=false`, `batch_dir=null`).
 - `lmola.validate_workflow` canonicalizes only; no execution.
