@@ -24,7 +24,7 @@ from lmola.mcp_preview import (
     validate_mcp_preview_bundle,
     write_mcp_preview,
 )
-from lmola.mcp_runtime import RUNTIME_PHASE, call_mcp_tool, list_mcp_tools_runtime, run_mcp_stdio_server
+from lmola.mcp_runtime import RUNTIME_PHASE, call_mcp_tool, handle_jsonrpc_message, list_mcp_tools_runtime, run_mcp_stdio_server
 from lmola.relaxation import get_relaxation_calculator, select_relaxed_structure, write_relaxation_request
 from lmola.tools.llm_client import make_llm_client
 from lmola.tools.molsimplify_tool import detect_molsimplify_cli, detect_molsimplify_import, run_generation
@@ -104,9 +104,20 @@ def mcp_call_tool(tool_name: str, args_json: str = typer.Option("{}", "--args-js
         raise typer.Exit(code=1)
 
 
+@mcp_app.command("serve-stdio")
+def mcp_serve_stdio() -> None:
+    run_mcp_stdio_server()
+
+
 @mcp_app.command("serve-readonly")
 def mcp_serve_readonly() -> None:
     run_mcp_stdio_server()
+
+
+@mcp_app.command("jsonrpc")
+def mcp_jsonrpc(request_json: str = typer.Option(..., "--request-json")) -> None:
+    response = handle_jsonrpc_message(json.loads(request_json))
+    typer.echo(json.dumps(response, indent=2, sort_keys=True))
 
 @schema_app.command("export")
 def schema_export(fmt: str = typer.Option("json", "--format"), out: str = typer.Option("", "--out")) -> None:

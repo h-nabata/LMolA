@@ -480,12 +480,14 @@ Commands:
 Execution-capable MCP workflow calls remain deferred to a later phase with explicit safety policy and confirmation controls.
 
 
-## Phase 12.2+12.3 confirmed MCP workflow execution
+## Phase 12.4 MCP-compatible stdio runtime
 
-LMolA MCP runtime now supports confirmed allowlisted workflow execution in runtime phase `12.3_confirmed_execution`.
+LMolA MCP runtime now supports a **minimal JSON-RPC stdio adapter** in runtime phase `12.4_stdio_compatibility`.
 
 - `lmola mcp runtime-tools` is the actual callable `tools/list` equivalent for current runtime phase.
 - Runtime now includes `lmola.run_workflow` with strict confirmation + allowlist policy.
+- `lmola mcp serve-stdio` provides local stdio transport using Content-Length framed JSON-RPC messages (`initialize`, `tools/list`, `tools/call`).
+- No network listener is opened and no TCP ports are bound.
 - Execution is disabled by default (`dry_run=true`).
 - Real execution requires all of: `dry_run=false`, `allow_execution=true`, `confirm=true`.
 - Only allowlisted workflows can execute via MCP runtime.
@@ -502,6 +504,10 @@ LMolA MCP runtime now supports confirmed allowlisted workflow execution in runti
 
 Commands:
 - `lmola mcp runtime-tools --format json`
+- `lmola mcp serve-stdio`
+- `lmola mcp jsonrpc --request-json '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{}}'`
+- `lmola mcp jsonrpc --request-json '{"jsonrpc":"2.0","id":2,"method":"tools/list","params":{}}'`
+- `lmola mcp jsonrpc --request-json '{"jsonrpc":"2.0","id":3,"method":"tools/call","params":{"name":"lmola.list_workflows","arguments":{"compact":true}}}'`
 - `lmola mcp call-tool lmola.plan_workflow --args-json '{"request":"Generate structures from examples/smiles_list.csv and relax them with xTB."}'`
 - `lmola mcp call-tool lmola.validate_workflow --args-json '{"workflow_id":"smiles_to_xtb_relax","input":{"type":"smiles_csv","path":"examples/smiles_list.csv"},"columns":{"id":"id","smiles":"smiles"}}'`
 - `lmola mcp call-tool lmola.run_workflow --args-json '{"workflow_id":"smiles_to_xtb_relax","input":{"type":"smiles_csv","path":"examples/smiles_list.csv"}}'`
