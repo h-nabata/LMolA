@@ -480,11 +480,18 @@ Commands:
 Execution-capable MCP workflow calls remain deferred to a later phase with explicit safety policy and confirmation controls.
 
 
-## Phase 12.1 MCP plan/validate runtime
+## Phase 12.2+12.3 confirmed MCP workflow execution
 
 LMolA MCP runtime now supports **planning + validation only** in runtime phase `12.1_plan_validate`.
 
 - `lmola mcp runtime-tools` is the actual callable `tools/list` equivalent for current runtime phase.
+- Runtime now includes `lmola.run_workflow` with strict confirmation + allowlist policy.
+- Execution is disabled by default (`dry_run=true`).
+- Real execution requires all of: `dry_run=false`, `allow_execution=true`, `confirm=true`.
+- Only allowlisted workflows can execute via MCP runtime.
+- Low-level chemistry tools remain unavailable as direct MCP runtime tools.
+- All `lmola.run_workflow` MCP calls (including denied/dry-run) write audit records under `outputs/mcp_audit/`.
+- `plan_workflow` and `validate_workflow` remain execution-free and must not create batch directories.
 - `lmola mcp preview-tools` remains a static descriptor preview and may include future candidates (for example `lmola.run_workflow`).
 - Runtime-enabled tools now include `lmola.plan_workflow` and `lmola.validate_workflow` (both dry-run only).
 - `lmola.plan_workflow` converts natural language to validated workflow JSON, returns `executed=false`, `batch_dir=null`, and does not execute chemistry tools.

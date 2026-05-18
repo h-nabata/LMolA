@@ -24,7 +24,7 @@ from lmola.mcp_preview import (
     validate_mcp_preview_bundle,
     write_mcp_preview,
 )
-from lmola.mcp_runtime import call_mcp_tool, list_mcp_tools_runtime, run_mcp_stdio_server
+from lmola.mcp_runtime import RUNTIME_PHASE, call_mcp_tool, list_mcp_tools_runtime, run_mcp_stdio_server
 from lmola.relaxation import get_relaxation_calculator, select_relaxed_structure, write_relaxation_request
 from lmola.tools.llm_client import make_llm_client
 from lmola.tools.molsimplify_tool import detect_molsimplify_cli, detect_molsimplify_import, run_generation
@@ -93,7 +93,7 @@ def mcp_validate_preview(path: str) -> None:
 
 @mcp_app.command("runtime-tools")
 def mcp_runtime_tools(fmt: str = typer.Option("json", "--format")) -> None:
-    typer.echo(render_preview({"runtime_phase": "12.1_plan_validate", "server_runtime": True, "jsonrpc": False, "transport": "none/test_helper", "tools": list_mcp_tools_runtime()}, fmt))
+    typer.echo(render_preview({"runtime_phase": RUNTIME_PHASE, "server_runtime": True, "jsonrpc": False, "transport": "none/test_helper", "tools": list_mcp_tools_runtime()}, fmt))
 
 
 @mcp_app.command("call-tool")

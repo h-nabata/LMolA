@@ -59,11 +59,8 @@ def _load_items(req: WorkflowRequest) -> list[dict[str, str]]:
     raise ValueError(f"Unsupported input.type: {req.input.type}")
 
 
-def run_workflow_yaml(workflow_yaml_path: str) -> WorkflowExecutionResult:
-    source_path = Path(workflow_yaml_path)
+def _run_workflow_request(req: WorkflowRequest, *, source_yaml: str | None, output_root: Path | None = None) -> WorkflowExecutionResult:
     try:
-        raw = _load_yaml(source_path)
-        req = WorkflowRequest.model_validate(raw)
         entry = get_workflow_entry(req.workflow_id)
         if req.input.type not in entry.input_types:
             raise ValueError(f"Input type {req.input.type} is not supported by {req.workflow_id}")
@@ -76,10 +73,12 @@ def run_workflow_yaml(workflow_yaml_path: str) -> WorkflowExecutionResult:
         return WorkflowExecutionResult(status="error", message=f"Workflow validation failed: {exc}")
 
     batch_id = f"batch_{datetime.now(UTC).strftime('%Y%m%d_%H%M%S')}_{uuid4().hex[:6]}"
-    batch_dir = Path("outputs") / batch_id
+    batch_base = output_root or Path("outputs")
+    batch_dir = batch_base / batch_id
     items_dir = batch_dir / "items"
     items_dir.mkdir(parents=True, exist_ok=True)
-    (batch_dir / "workflow.yaml").write_text(source_path.read_text(encoding="utf-8"), encoding="utf-8")
+    if source_yaml:
+        (batch_dir / "workflow.yaml").write_text(source_yaml, encoding="utf-8")
     dump_json(batch_dir / "normalized_workflow.json", req.model_dump())
 
     item_inputs = _load_items(req)
@@ -197,3 +196,17 @@ def run_workflow_yaml(workflow_yaml_path: str) -> WorkflowExecutionResult:
     (batch_dir / "README_batch.md").write_text("# LMolA Batch Workflow Run\n", encoding="utf-8")
 
     return WorkflowExecutionResult(status="ok", message=message, batch_dir=str(batch_dir), summary_csv=str(batch_dir / "summary.csv"), summary_json=str(batch_dir / "summary.json"), summary=summary)
+
+
+def run_workflow_yaml(workflow_yaml_path: str) -> WorkflowExecutionResult:
+    source_path = Path(workflow_yaml_path)
+    try:
+        raw = _load_yaml(source_path)
+        req = WorkflowRequest.model_validate(raw)
+    except Exception as exc:  # noqa: BLE001
+        return WorkflowExecutionResult(status="error", message=f"Workflow validation failed: {exc}")
+    return _run_workflow_request(req, source_yaml=source_path.read_text(encoding="utf-8"))
+
+
+def run_workflow_request(req: WorkflowRequest, *, output_root: Path | None = None) -> WorkflowExecutionResult:
+    return _run_workflow_request(req, source_yaml=None, output_root=output_root)
