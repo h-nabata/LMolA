@@ -2,7 +2,8 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from lmola.mcp_runtime import call_mcp_tool, handle_jsonrpc_message, list_mcp_tools_runtime
+from lmola.workflows.schemas import WorkflowExecutionResult, WorkflowSummary
+from lmola.mcp_runtime import MCP_EXECUTION_ALLOWLIST, call_mcp_tool, handle_jsonrpc_message, list_mcp_tools_runtime
 
 
 def test_runtime_tools_allowlist_shape() -> None:
@@ -12,7 +13,7 @@ def test_runtime_tools_allowlist_shape() -> None:
     assert "lmola.inspect_workflow" in names
     assert "lmola.validate_workflow" in names
     assert "lmola.plan_workflow" in names
-    assert "lmola.run_workflow" not in names
+    assert "lmola.run_workflow" in names
     assert "lmola.relax_structure_xtb" not in names
     assert "lmola.generate_small_molecule_rdkit" not in names
     plan_tool = next(t for t in tools if t["name"] == "lmola.plan_workflow")
@@ -20,6 +21,16 @@ def test_runtime_tools_allowlist_shape() -> None:
     assert meta.get("dry_run_only") is True
     assert meta.get("executes_workflow") is False
     assert meta.get("writes_batch_artifacts") is False
+    run_tool = next(t for t in tools if t["name"] == "lmola.run_workflow")
+    run_meta = run_tool.get("_meta", {}).get("lmola", {})
+    assert run_meta.get("requires_confirmation") is True
+    assert run_meta.get("side_effects") is True
+    assert run_meta.get("writes_batch_artifacts") is True
+    assert sorted(run_meta.get("mcp_execution_allowlist", [])) == sorted(MCP_EXECUTION_ALLOWLIST)
+    notes = run_meta.get("safe_execution_notes", "")
+    assert "Phase 11.5" not in notes
+    assert "allowlisted workflows" in notes
+    assert "dry_run=false" in notes
     for t in tools:
         assert "name" in t and "description" in t and "inputSchema" in t
         assert t.get("_meta", {}).get("lmola", {}).get("runtime_enabled") is True
@@ -77,7 +88,15 @@ def test_call_readonly_tools_and_errors(monkeypatch) -> None:
     assert invalid_request["status"] == "error"
     assert invalid_request["error_type"] == "invalid_arguments"
 
-    assert call_mcp_tool("lmola.run_workflow", {"workflow_id": "smiles_to_xtb_relax"})["error_type"] == "tool_not_allowed"
+    run_dry = call_mcp_tool(
+        "lmola.run_workflow",
+        {"workflow_id": "smiles_to_xtb_relax", "input": {"type": "smiles_csv", "path": "examples/smiles_list.csv"}, "columns": {"id": "id", "smiles": "smiles"}},
+    )
+    assert run_dry["status"] == "ok"
+    assert run_dry["dry_run"] is True
+    assert run_dry["executed"] is False
+    assert run_dry["canonical_workflow_json"]["workflow_id"] == "smiles_to_xtb_relax"
+    assert Path(run_dry["audit_path"]).exists()
     assert call_mcp_tool("lmola.relax_structure_xtb", {"input_structure": "examples/example.xyz"})["error_type"] == "tool_not_allowed"
 
 
@@ -97,6 +116,70 @@ def test_runtime_plan_validate_do_not_create_batch_dirs(monkeypatch) -> None:
     )
     after = len(list(outputs.glob("batch_*"))) if outputs.exists() else 0
     assert after == before
+
+
+def test_run_workflow_dryrun_and_denied_do_not_create_mcp_runs() -> None:
+    mcp_runs = Path("outputs/mcp_runs")
+    before = len(list(mcp_runs.glob("batch_*"))) if mcp_runs.exists() else 0
+    call_mcp_tool(
+        "lmola.run_workflow",
+        {"workflow_id": "smiles_to_xtb_relax", "input": {"type": "smiles_csv", "path": "examples/smiles_list.csv"}},
+    )
+    call_mcp_tool(
+        "lmola.run_workflow",
+        {"workflow_id": "smiles_to_xtb_relax", "input": {"type": "smiles_csv", "path": "examples/smiles_list.csv"}, "dry_run": False},
+    )
+    after = len(list(mcp_runs.glob("batch_*"))) if mcp_runs.exists() else 0
+    assert after == before
+
+
+def test_run_workflow_confirmation_and_allowlist_errors() -> None:
+    no_confirm = call_mcp_tool(
+        "lmola.run_workflow",
+        {"workflow_id": "smiles_to_xtb_relax", "input": {"type": "smiles_csv", "path": "examples/smiles_list.csv"}, "dry_run": False, "allow_execution": True},
+    )
+    assert no_confirm["error_type"] == "confirmation_required"
+    no_allow = call_mcp_tool(
+        "lmola.run_workflow",
+        {"workflow_id": "smiles_to_xtb_relax", "input": {"type": "smiles_csv", "path": "examples/smiles_list.csv"}, "dry_run": False, "confirm": True},
+    )
+    assert no_allow["error_type"] == "execution_not_allowed"
+    blocked = call_mcp_tool(
+        "lmola.run_workflow",
+        {"workflow_id": "not_real_workflow", "input": {"type": "smiles_csv", "path": "examples/smiles_list.csv"}, "dry_run": False, "allow_execution": True, "confirm": True},
+    )
+    assert blocked["error_type"] in {"workflow_not_allowlisted", "validation_error"}
+
+
+def test_run_workflow_execution_path_with_monkeypatched_runner(monkeypatch, tmp_path: Path) -> None:
+    def _fake_run(req, output_root=None):  # noqa: ANN001
+        run_dir = (output_root or tmp_path) / "batch_fake"
+        run_dir.mkdir(parents=True, exist_ok=True)
+        return WorkflowExecutionResult(
+            status="ok",
+            message="ok",
+            batch_dir=str(run_dir),
+            summary_csv=str(run_dir / "summary.csv"),
+            summary_json=str(run_dir / "summary.json"),
+            summary=WorkflowSummary(batch_id="batch_fake", workflow_id=req.workflow_id, item_count=1, ok_count=1, error_count=0),
+        )
+
+    monkeypatch.setattr("lmola.mcp_runtime.run_workflow_request", _fake_run)
+    out_root = Path("/tmp/lmola_mcp_runs") / "test_run_workflow_execution_path"
+    result = call_mcp_tool(
+        "lmola.run_workflow",
+        {
+            "workflow_id": "smiles_to_3d_rdkit",
+            "input": {"type": "smiles", "value": "CCO"},
+            "dry_run": False,
+            "allow_execution": True,
+            "confirm": True,
+            "output_root": str(out_root),
+        },
+    )
+    assert result["status"] == "ok"
+    assert result["executed"] is True
+    assert Path(result["audit_path"]).exists()
 
 
 def test_jsonrpc_minimal_methods() -> None:

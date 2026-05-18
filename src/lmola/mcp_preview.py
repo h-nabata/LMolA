@@ -90,7 +90,7 @@ def make_high_level_workflow_descriptors() -> list[dict[str, Any]]:
                 "writes_files": True,
                 "requires_confirmation": True,
                 "dry_run_only": False,
-                "safe_execution_notes": "Descriptor preview only in Phase 11.5; no MCP runtime execution is implemented.",
+                "safe_execution_notes": "Static preview metadata only; runtime availability is determined by lmola mcp runtime-tools for the active phase.",
             },
         ),
     ]

@@ -2,7 +2,10 @@ from __future__ import annotations
 
 import json
 import sys
+from datetime import UTC, datetime
+from pathlib import Path
 from typing import Any
+from uuid import uuid4
 
 from pydantic import ValidationError
 
@@ -10,9 +13,18 @@ from lmola.agent.workflow_planner import plan_workflow_request
 from lmola.mcp_preview import export_mcp_tools_preview
 from lmola.schema_export import export_all_schemas, export_planner_schema_bundle, export_tool_registry_schema, export_workflow_catalog_schema
 from lmola.workflows.catalog import get_workflow_entry, list_workflows
+from lmola.workflows.runner import run_workflow_request
 from lmola.workflows.schemas import WorkflowRequest
 
-RUNTIME_PHASE = "12.1_plan_validate"
+RUNTIME_PHASE = "12.3_confirmed_execution"
+MCP_EXECUTION_ALLOWLIST = {
+    "smiles_to_3d_rdkit",
+    "smiles_to_conformers_rdkit",
+    "smiles_to_3d_openbabel",
+    "smiles_to_xtb_relax",
+    "validate_xyz",
+    "xyz_to_xtb_relax",
+}
 RUNTIME_ALLOWED_TOOLS = {
     "lmola.list_workflows",
     "lmola.inspect_workflow",
@@ -22,6 +34,7 @@ RUNTIME_ALLOWED_TOOLS = {
     "lmola.get_planner_context",
     "lmola.validate_workflow",
     "lmola.plan_workflow",
+    "lmola.run_workflow",
 }
 
 
@@ -54,6 +67,25 @@ def _canonicalize_workflow(req: WorkflowRequest) -> dict[str, Any]:
     }
 
 
+def _safe_output_root(root: str | None) -> Path:
+    requested = Path(root) if root else Path("outputs/mcp_runs")
+    resolved = requested.resolve()
+    allowed = [Path("outputs").resolve(), Path("/tmp/lmola_mcp_runs").resolve()]
+    if not any(resolved == base or base in resolved.parents for base in allowed):
+        raise ValueError("output_root must resolve under outputs/ or /tmp/lmola_mcp_runs/")
+    resolved.mkdir(parents=True, exist_ok=True)
+    return resolved
+
+
+def _write_audit(payload: dict[str, Any]) -> str:
+    audit_dir = Path("outputs/mcp_audit")
+    audit_dir.mkdir(parents=True, exist_ok=True)
+    stamp = datetime.now(UTC).strftime("%Y%m%d_%H%M%S")
+    path = audit_dir / f"mcp_run_{stamp}_{uuid4().hex[:6]}.json"
+    path.write_text(json.dumps(payload, indent=2, sort_keys=True), encoding="utf-8")
+    return str(path)
+
+
 def list_mcp_tools_runtime() -> list[dict[str, Any]]:
     preview_map = {t["name"]: t for t in export_mcp_tools_preview(include_low_level=True)["tools"]}
     runtime_specs = {
@@ -65,6 +97,7 @@ def list_mcp_tools_runtime() -> list[dict[str, Any]]:
         "lmola.get_planner_context": {"description": "Return compact planner context export.", "inputSchema": {"type": "object", "properties": {}, "additionalProperties": False}},
         "lmola.validate_workflow": {"description": "Validate and canonicalize an LMolA WorkflowRequest without executing chemistry tools.", "inputSchema": WorkflowRequest.model_json_schema()},
         "lmola.plan_workflow": {"description": "Convert a natural-language request into a validated LMolA WorkflowRequest plan without executing chemistry tools.", "inputSchema": {"type": "object", "additionalProperties": False, "properties": {"request": {"type": "string"}, "write_artifacts": {"type": "boolean", "default": False}}, "required": ["request"]}},
+        "lmola.run_workflow": {"description": "Run a validated, allowlisted LMolA workflow request after explicit confirmation and write batch artifacts.", "inputSchema": {"type": "object", "additionalProperties": False, "properties": {"workflow_id": {"type": "string"}, "input": {"type": "object"}, "columns": {"type": ["object", "null"]}, "outputs": {"type": ["object", "null"]}, "metadata": {"type": ["object", "null"]}, "dry_run": {"type": "boolean", "default": True}, "allow_execution": {"type": "boolean", "default": False}, "confirm": {"type": "boolean", "default": False}, "confirmation_text": {"type": ["string", "null"]}, "output_root": {"type": ["string", "null"]}, "reason": {"type": ["string", "null"]}}, "required": ["workflow_id", "input"]}},
     }
     runtime_tools: list[dict[str, Any]] = []
     for name in sorted(RUNTIME_ALLOWED_TOOLS):
@@ -85,6 +118,18 @@ def list_mcp_tools_runtime() -> list[dict[str, Any]]:
             writes_plan_artifacts = False
             meta["writes_plan_artifacts"] = writes_plan_artifacts
             meta["side_effects"] = "plan_artifacts_only" if writes_plan_artifacts else False
+        if name == "lmola.run_workflow":
+            meta["runtime_phase"] = RUNTIME_PHASE
+            meta["source"] = "pydantic_schema"
+            meta["dry_run_only"] = False
+            meta["side_effects"] = True
+            meta["executes_workflow"] = True
+            meta["writes_batch_artifacts"] = True
+            meta["requires_confirmation"] = True
+            meta["requires_allow_execution"] = True
+            meta["allowlisted_only"] = True
+            meta["mcp_execution_allowlist"] = sorted(MCP_EXECUTION_ALLOWLIST)
+            meta["safe_execution_notes"] = "MCP runtime execution is enabled only for allowlisted workflows and requires dry_run=false, allow_execution=true, and confirm=true. Low-level chemistry tools remain unavailable as direct MCP runtime tools."
         runtime_tools.append(base)
     return runtime_tools
 
@@ -92,7 +137,7 @@ def list_mcp_tools_runtime() -> list[dict[str, Any]]:
 def call_mcp_tool(name: str, arguments: dict[str, Any] | None = None) -> dict[str, Any]:
     args = arguments or {}
     if name not in RUNTIME_ALLOWED_TOOLS:
-        return _runtime_error("tool_not_allowed", "Tool is not enabled in Phase 12.1 plan/validate MCP runtime.", tool=name, runtime_phase=RUNTIME_PHASE)
+        return _runtime_error("tool_not_allowed", "Tool is not enabled in MCP runtime.", tool=name, runtime_phase=RUNTIME_PHASE)
 
     try:
         if name == "lmola.list_workflows":
@@ -133,6 +178,85 @@ def call_mcp_tool(name: str, arguments: dict[str, Any] | None = None) -> dict[st
             if planning.status == "ok":
                 return {"status": "ok", "planning_result": planning_payload}
             return _runtime_error("planning_error", planning.message, planning_result=planning_payload)
+        if name == "lmola.run_workflow":
+            dry_run = bool(args.get("dry_run", True))
+            allow_execution = bool(args.get("allow_execution", False))
+            confirm = bool(args.get("confirm", False))
+            workflow_id = args.get("workflow_id")
+            audit_payload: dict[str, Any] = {
+                "timestamp": datetime.now(UTC).isoformat(),
+                "runtime_phase": RUNTIME_PHASE,
+                "tool": name,
+                "workflow_id": workflow_id,
+                "dry_run": dry_run,
+                "allow_execution": allow_execution,
+                "confirm": confirm,
+                "confirmation_text": args.get("confirmation_text"),
+                "reason": args.get("reason"),
+                "output_root": args.get("output_root"),
+                "request_json": args,
+                "execution_allowed": False,
+                "executed": False,
+                "status": "error",
+                "error_type": None,
+                "message": None,
+                "batch_dir": None,
+                "summary_csv": None,
+                "summary_json": None,
+            }
+            try:
+                req = WorkflowRequest.model_validate({k: v for k, v in args.items() if k in {"workflow_id", "input", "columns", "steps", "outputs", "metadata"}})
+                canonical: dict[str, Any] | None = None
+                if dry_run:
+                    canonical = _canonicalize_workflow(req)
+                    audit_payload["canonical_workflow_json"] = canonical
+                    audit_payload["status"] = "ok"
+                    audit_path = _write_audit(audit_payload)
+                    return {"status": "ok", "dry_run": True, "execution_allowed": False, "executed": False, "canonical_workflow_json": canonical, "batch_dir": None, "summary_csv": None, "summary_json": None, "audit_path": audit_path}
+                if not confirm:
+                    audit_payload["error_type"] = "confirmation_required"
+                    audit_payload["message"] = "Explicit confirm=true is required when dry_run is false."
+                    audit_path = _write_audit(audit_payload)
+                    return _runtime_error("confirmation_required", audit_payload["message"], executed=False, batch_dir=None, audit_path=audit_path)
+                if not allow_execution:
+                    audit_payload["error_type"] = "execution_not_allowed"
+                    audit_payload["message"] = "allow_execution=true is required when dry_run is false."
+                    audit_path = _write_audit(audit_payload)
+                    return _runtime_error("execution_not_allowed", audit_payload["message"], executed=False, batch_dir=None, audit_path=audit_path)
+                if req.workflow_id not in MCP_EXECUTION_ALLOWLIST:
+                    audit_payload["error_type"] = "workflow_not_allowlisted"
+                    audit_payload["message"] = f"Workflow {req.workflow_id} is not in the MCP execution allowlist."
+                    audit_path = _write_audit(audit_payload)
+                    return _runtime_error("workflow_not_allowlisted", audit_payload["message"], executed=False, batch_dir=None, audit_path=audit_path)
+                output_root = _safe_output_root(args.get("output_root"))
+                canonical = _canonicalize_workflow(req)
+                audit_payload["canonical_workflow_json"] = canonical
+                audit_payload["execution_allowed"] = True
+                result = run_workflow_request(req, output_root=output_root)
+                audit_payload["executed"] = True
+                audit_payload["batch_dir"] = result.batch_dir
+                audit_payload["summary_csv"] = result.summary_csv
+                audit_payload["summary_json"] = result.summary_json
+                if result.status != "ok":
+                    audit_payload["error_type"] = "execution_failed"
+                    audit_payload["message"] = result.message
+                    audit_path = _write_audit(audit_payload)
+                    return _runtime_error("execution_failed", result.message, executed=True, workflow_id=req.workflow_id, batch_dir=result.batch_dir, summary_csv=result.summary_csv, summary_json=result.summary_json, execution_result=result.model_dump(), audit_path=audit_path)
+                audit_payload["status"] = "ok"
+                audit_path = _write_audit(audit_payload)
+                return {"status": "ok", "executed": True, "workflow_id": req.workflow_id, "batch_dir": result.batch_dir, "summary_csv": result.summary_csv, "summary_json": result.summary_json, "execution_result": result.model_dump(), "audit_path": audit_path}
+            except ValidationError as exc:
+                audit_payload["error_type"] = "validation_error"
+                audit_payload["message"] = "WorkflowRequest validation failed."
+                audit_payload["validation_errors"] = exc.errors()
+                audit_path = _write_audit(audit_payload)
+                return _runtime_error("validation_error", "WorkflowRequest validation failed.", validation_errors=exc.errors(), executed=False, batch_dir=None, audit_path=audit_path)
+            except ValueError as exc:
+                etype = "unsafe_output_path" if "output_root" in str(exc) else "validation_error"
+                audit_payload["error_type"] = etype
+                audit_payload["message"] = str(exc)
+                audit_path = _write_audit(audit_payload)
+                return _runtime_error(etype, str(exc), executed=False, batch_dir=None, audit_path=audit_path)
     except KeyError as exc:
         return _runtime_error("not_found", str(exc))
     except ValidationError as exc:

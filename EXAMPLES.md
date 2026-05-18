@@ -241,17 +241,22 @@ Notes:
 - LMolA-specific metadata is under `_meta.lmola`.
 
 
-## Phase 12.1 MCP plan/validate runtime
+## Phase 12.2+12.3 confirmed MCP workflow execution
 
 - `runtime-tools` is the actual callable runtime tools list for the current phase.
+- `lmola.run_workflow` is runtime-exposed but defaults to dry-run and does not execute.
+- To execute, set `dry_run=false`, `allow_execution=true`, and `confirm=true`.
+- Only allowlisted workflow IDs are executable through MCP runtime.
+- Low-level chemistry tools remain denied as direct MCP runtime tools.
 - `preview-tools` is static and may include future/non-runtime tools.
 - `lmola.plan_workflow` is dry-run only (`executed=false`, `batch_dir=null`).
 - `lmola.validate_workflow` canonicalizes only; no execution.
-- `lmola.run_workflow` remains disabled in MCP runtime.
+- Confirmed MCP execution writes batch outputs under `outputs/mcp_runs/batch_*` by default.
 
 ```bash
 lmola mcp runtime-tools --format json
 lmola mcp call-tool lmola.plan_workflow --args-json '{"request":"Generate structures from examples/smiles_list.csv and relax them with xTB."}'
 lmola mcp call-tool lmola.validate_workflow --args-json '{"workflow_id":"smiles_to_xtb_relax","input":{"type":"smiles_csv","path":"examples/smiles_list.csv"},"columns":{"id":"id","smiles":"smiles"}}'
 lmola mcp call-tool lmola.run_workflow --args-json '{"workflow_id":"smiles_to_xtb_relax","input":{"type":"smiles_csv","path":"examples/smiles_list.csv"}}'
+find outputs/mcp_runs -maxdepth 1 -type d -name "batch_*"
 ```
