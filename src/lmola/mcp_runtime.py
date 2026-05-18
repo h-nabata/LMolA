@@ -129,6 +129,7 @@ def list_mcp_tools_runtime() -> list[dict[str, Any]]:
             meta["requires_allow_execution"] = True
             meta["allowlisted_only"] = True
             meta["mcp_execution_allowlist"] = sorted(MCP_EXECUTION_ALLOWLIST)
+            meta["safe_execution_notes"] = "MCP runtime execution is enabled only for allowlisted workflows and requires dry_run=false, allow_execution=true, and confirm=true. Low-level chemistry tools remain unavailable as direct MCP runtime tools."
         runtime_tools.append(base)
     return runtime_tools
 

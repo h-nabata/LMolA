@@ -482,7 +482,7 @@ Execution-capable MCP workflow calls remain deferred to a later phase with expli
 
 ## Phase 12.2+12.3 confirmed MCP workflow execution
 
-LMolA MCP runtime now supports **planning + validation only** in runtime phase `12.1_plan_validate`.
+LMolA MCP runtime now supports confirmed allowlisted workflow execution in runtime phase `12.3_confirmed_execution`.
 
 - `lmola mcp runtime-tools` is the actual callable `tools/list` equivalent for current runtime phase.
 - Runtime now includes `lmola.run_workflow` with strict confirmation + allowlist policy.
@@ -493,10 +493,10 @@ LMolA MCP runtime now supports **planning + validation only** in runtime phase `
 - All `lmola.run_workflow` MCP calls (including denied/dry-run) write audit records under `outputs/mcp_audit/`.
 - `plan_workflow` and `validate_workflow` remain execution-free and must not create batch directories.
 - `lmola mcp preview-tools` remains a static descriptor preview and may include future candidates (for example `lmola.run_workflow`).
-- Runtime-enabled tools now include `lmola.plan_workflow` and `lmola.validate_workflow` (both dry-run only).
+- Runtime-enabled tools include `lmola.plan_workflow`, `lmola.validate_workflow`, and `lmola.run_workflow`.
 - `lmola.plan_workflow` converts natural language to validated workflow JSON, returns `executed=false`, `batch_dir=null`, and does not execute chemistry tools.
 - `lmola.validate_workflow` canonicalizes a supplied `WorkflowRequest` without execution.
-- `lmola.run_workflow` and low-level chemistry tools remain disabled at runtime (`tool_not_allowed`).
+- `lmola.run_workflow` remains gated by confirmation + allowlist policy; low-level chemistry tools remain disabled at runtime (`tool_not_allowed`).
 - `actual_status` vs `normalized_status`: unsupported planning requests can report `actual_status=error` with `normalized_status=unsupported` for safer evaluation/debugging.
 - `write_artifacts` defaults to false for MCP planning; if enabled, plan artifacts are planner debug artifacts only (not workflow execution artifacts).
 
@@ -505,3 +505,4 @@ Commands:
 - `lmola mcp call-tool lmola.plan_workflow --args-json '{"request":"Generate structures from examples/smiles_list.csv and relax them with xTB."}'`
 - `lmola mcp call-tool lmola.validate_workflow --args-json '{"workflow_id":"smiles_to_xtb_relax","input":{"type":"smiles_csv","path":"examples/smiles_list.csv"},"columns":{"id":"id","smiles":"smiles"}}'`
 - `lmola mcp call-tool lmola.run_workflow --args-json '{"workflow_id":"smiles_to_xtb_relax","input":{"type":"smiles_csv","path":"examples/smiles_list.csv"}}'`
+- `before=$(find outputs/mcp_runs -maxdepth 1 -type d -name "batch_*" | wc -l); lmola mcp call-tool lmola.run_workflow --args-json '{"workflow_id":"smiles_to_xtb_relax","input":{"type":"smiles_csv","path":"examples/smiles_list.csv"},"columns":{"id":"id","smiles":"smiles"},"dry_run":false,"allow_execution":true,"confirm":true}'; after=$(find outputs/mcp_runs -maxdepth 1 -type d -name "batch_*" | wc -l); echo "before=$before after=$after"`

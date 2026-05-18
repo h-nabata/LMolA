@@ -27,6 +27,10 @@ def test_runtime_tools_allowlist_shape() -> None:
     assert run_meta.get("side_effects") is True
     assert run_meta.get("writes_batch_artifacts") is True
     assert sorted(run_meta.get("mcp_execution_allowlist", [])) == sorted(MCP_EXECUTION_ALLOWLIST)
+    notes = run_meta.get("safe_execution_notes", "")
+    assert "Phase 11.5" not in notes
+    assert "allowlisted workflows" in notes
+    assert "dry_run=false" in notes
     for t in tools:
         assert "name" in t and "description" in t and "inputSchema" in t
         assert t.get("_meta", {}).get("lmola", {}).get("runtime_enabled") is True
@@ -111,6 +115,21 @@ def test_runtime_plan_validate_do_not_create_batch_dirs(monkeypatch) -> None:
         },
     )
     after = len(list(outputs.glob("batch_*"))) if outputs.exists() else 0
+    assert after == before
+
+
+def test_run_workflow_dryrun_and_denied_do_not_create_mcp_runs() -> None:
+    mcp_runs = Path("outputs/mcp_runs")
+    before = len(list(mcp_runs.glob("batch_*"))) if mcp_runs.exists() else 0
+    call_mcp_tool(
+        "lmola.run_workflow",
+        {"workflow_id": "smiles_to_xtb_relax", "input": {"type": "smiles_csv", "path": "examples/smiles_list.csv"}},
+    )
+    call_mcp_tool(
+        "lmola.run_workflow",
+        {"workflow_id": "smiles_to_xtb_relax", "input": {"type": "smiles_csv", "path": "examples/smiles_list.csv"}, "dry_run": False},
+    )
+    after = len(list(mcp_runs.glob("batch_*"))) if mcp_runs.exists() else 0
     assert after == before
 
 
