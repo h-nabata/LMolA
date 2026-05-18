@@ -412,6 +412,11 @@ Commands:
 - `lmola workflow export-catalog --format json`
 - `lmola workflow export-catalog --format yaml`
 
+Schema export contract:
+- `schema_bundle.json` uses `models` as a direct `{model_name: json_schema}` mapping.
+- `model_schemas.json` remains the standalone model schema bundle (`schema_version=lmola.models.v1`).
+- `--out` writes files directly into the exact requested directory (creating it if needed).
+
 Roadmap:
 - Phase 11.1: schema-driven planner prompts.
 - Phase 11.5: MCP-compatible descriptor preview.
