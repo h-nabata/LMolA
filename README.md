@@ -422,6 +422,25 @@ Roadmap:
 - Phase 11.5: MCP-compatible descriptor preview.
 - Phase 12: MCP adapter.
 
+## MCP-compatible descriptor preview (Phase 11.5)
+
+LMolA now supports **static MCP-compatible descriptor preview export** (tools/list-style shape) to stabilize descriptor conversion before runtime adapter work.
+
+- This does **not** start an MCP server.
+- This does **not** implement JSON-RPC transport.
+- This does **not** implement runtime `tools/call`.
+- Standard descriptor fields are: `name`, `description`, `inputSchema`.
+- LMolA-specific metadata is namespaced under `_meta.lmola`.
+- High-level workflow descriptors are preferred for external agents.
+- Low-level chemistry tool descriptors are included for advanced integrations and are marked as low-level.
+- `lmola.run_workflow` is marked with side effects and requires confirmation metadata for future runtime integration.
+
+Commands:
+- `lmola mcp preview-tools --format json`
+- `lmola mcp preview-tools --format yaml`
+- `lmola mcp preview --out outputs/mcp_preview_manual_test`
+- `lmola mcp validate-preview outputs/mcp_preview_manual_test/mcp_preview_bundle.json`
+
 ## Schema-driven planner prompt (Phase 11.1)
 - Planner prompts are generated from LMolA schema/catalog context (`planner_context_compact`) and are LLM-engine independent.
 - The planner asks the LLM to return JSON only: either a supported `WorkflowRequest` object or `{"status":"unsupported","reason":"..."}`.

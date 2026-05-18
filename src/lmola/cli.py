@@ -17,6 +17,13 @@ from lmola.io.converters import dump_json
 from lmola.io.files import create_run_dir
 from lmola.io.logging import write_log
 from lmola.io.run_artifacts import collect_environment, write_request_yaml, write_tool_calls
+from lmola.mcp_preview import (
+    export_mcp_preview_bundle,
+    export_mcp_tools_preview,
+    render_preview,
+    validate_mcp_preview_bundle,
+    write_mcp_preview,
+)
 from lmola.relaxation import get_relaxation_calculator, select_relaxed_structure, write_relaxation_request
 from lmola.tools.llm_client import make_llm_client
 from lmola.tools.molsimplify_tool import detect_molsimplify_cli, detect_molsimplify_import, run_generation
@@ -45,6 +52,8 @@ app.add_typer(workflow_app, name="workflow")
 schema_app = typer.Typer(help="Schema exports")
 app.add_typer(schema_app, name="schema")
 
+mcp_app = typer.Typer(help="MCP-compatible descriptor preview (static)")
+app.add_typer(mcp_app, name="mcp")
 
 
 
@@ -53,6 +62,30 @@ def _emit_schema(payload: dict, fmt: str) -> None:
         typer.echo(__import__("yaml").safe_dump(payload, sort_keys=True))
     else:
         typer.echo(json.dumps(payload, indent=2, sort_keys=True))
+
+
+@mcp_app.command("preview-tools")
+def mcp_preview_tools(fmt: str = typer.Option("json", "--format")) -> None:
+    typer.echo(render_preview(export_mcp_tools_preview(), fmt))
+
+
+@mcp_app.command("preview")
+def mcp_preview(fmt: str = typer.Option("json", "--format"), out: str = typer.Option("", "--out")) -> None:
+    if out:
+        typer.echo(json.dumps(write_mcp_preview(Path(out)), indent=2, sort_keys=True))
+        return
+    typer.echo(render_preview(export_mcp_preview_bundle(), fmt))
+
+
+@mcp_app.command("validate-preview")
+def mcp_validate_preview(path: str) -> None:
+    payload = json.loads(Path(path).read_text(encoding="utf-8"))
+    data = {"tools": payload["tools"]} if "tools" in payload and "schema_version" not in payload else payload
+    errors = validate_mcp_preview_bundle(data)
+    result = {"status": "ok" if not errors else "error", "tool_count": len(data.get("tools", [])), "errors": errors}
+    typer.echo(json.dumps(result, indent=2, sort_keys=True))
+    if errors:
+        raise typer.Exit(code=1)
 
 
 @schema_app.command("export")
