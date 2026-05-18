@@ -24,6 +24,7 @@ from lmola.mcp_preview import (
     validate_mcp_preview_bundle,
     write_mcp_preview,
 )
+from lmola.mcp_runtime import call_mcp_tool, list_mcp_tools_runtime, run_mcp_stdio_server
 from lmola.relaxation import get_relaxation_calculator, select_relaxed_structure, write_relaxation_request
 from lmola.tools.llm_client import make_llm_client
 from lmola.tools.molsimplify_tool import detect_molsimplify_cli, detect_molsimplify_import, run_generation
@@ -87,6 +88,25 @@ def mcp_validate_preview(path: str) -> None:
     if errors:
         raise typer.Exit(code=1)
 
+
+
+
+@mcp_app.command("runtime-tools")
+def mcp_runtime_tools(fmt: str = typer.Option("json", "--format")) -> None:
+    typer.echo(render_preview({"tools": list_mcp_tools_runtime()}, fmt))
+
+
+@mcp_app.command("call-tool")
+def mcp_call_tool(tool_name: str, args_json: str = typer.Option("{}", "--args-json")) -> None:
+    payload = call_mcp_tool(tool_name, json.loads(args_json))
+    typer.echo(json.dumps(payload, indent=2, sort_keys=True))
+    if payload.get("status") == "error":
+        raise typer.Exit(code=1)
+
+
+@mcp_app.command("serve-readonly")
+def mcp_serve_readonly() -> None:
+    run_mcp_stdio_server()
 
 @schema_app.command("export")
 def schema_export(fmt: str = typer.Option("json", "--format"), out: str = typer.Option("", "--out")) -> None:
