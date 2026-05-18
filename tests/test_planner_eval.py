@@ -1,5 +1,6 @@
 import json
 from pathlib import Path
+import csv
 
 from typer.testing import CliRunner
 
@@ -59,6 +60,29 @@ def test_eval_writes_case_results_and_metrics(monkeypatch) -> None:
     eval_result = json.loads((eval_dir / "eval_result.json").read_text(encoding="utf-8"))
     for key in ["backend", "model", "base_url", "temperature", "timeout_seconds", "max_tokens", "suite_id", "summary_csv", "summary_json", "planner_prompt_mode", "planner_context_schema_version"]:
         assert key in eval_result
+    for case in eval_result["cases"]:
+        assert isinstance(case["elapsed_seconds"], (int, float))
+        assert case["elapsed_seconds"] >= 0.0
+
+    with Path(result.summary_csv).open(newline="", encoding="utf-8") as fh:
+        rows_csv = list(csv.DictReader(fh))
+    for row in rows_csv:
+        assert float(row["elapsed_seconds"]) >= 0.0
+
+
+def test_eval_elapsed_seconds_non_negative_on_exception(monkeypatch, tmp_path) -> None:
+    _enable_mock(monkeypatch)
+    from lmola.agent import planner_eval as pe
+
+    def _boom(request_text: str, write_artifacts: bool = True):  # noqa: ARG001
+        raise RuntimeError("boom")
+
+    monkeypatch.setattr(pe, "plan_workflow_request", _boom)
+    suite = tmp_path / "suite_elapsed.yaml"
+    suite.write_text("suite_id: elapsed_non_negative\ncases:\n  - id: bad\n    request: fail\n    expected_status: ok\n", encoding="utf-8")
+    result = run_planner_eval(str(suite))
+    rows = json.loads(Path(result.summary_json).read_text(encoding="utf-8"))
+    assert rows[0]["elapsed_seconds"] >= 0.0
 
 
 def test_eval_endpoint_failure_safe(monkeypatch) -> None:

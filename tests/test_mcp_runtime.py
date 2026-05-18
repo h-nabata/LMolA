@@ -3,7 +3,15 @@ from __future__ import annotations
 from pathlib import Path
 
 from lmola.workflows.schemas import WorkflowExecutionResult, WorkflowSummary
-from lmola.mcp_runtime import MCP_EXECUTION_ALLOWLIST, call_mcp_tool, handle_jsonrpc_message, list_mcp_tools_runtime
+from lmola.mcp_runtime import (
+    MCP_EXECUTION_ALLOWLIST,
+    call_mcp_tool,
+    decode_content_length_message,
+    encode_content_length_message,
+    handle_jsonrpc_message,
+    list_mcp_tools_runtime,
+    read_content_length_message,
+)
 
 
 def test_runtime_tools_allowlist_shape() -> None:
@@ -184,11 +192,43 @@ def test_run_workflow_execution_path_with_monkeypatched_runner(monkeypatch, tmp_
 
 def test_jsonrpc_minimal_methods() -> None:
     init = handle_jsonrpc_message({"jsonrpc": "2.0", "id": 1, "method": "initialize", "params": {}})
-    assert init and init["result"]["serverInfo"]["name"] == "lmola-mcp-runtime"
+    assert init and init["result"]["serverInfo"]["name"] == "lmola"
+    assert init["result"]["protocolVersion"] == "2024-11-05"
     listed = handle_jsonrpc_message({"jsonrpc": "2.0", "id": 2, "method": "tools/list", "params": {}})
     assert listed and "tools" in listed["result"]
     assert "runtime_phase" in listed["result"]
+    assert "lmola.run_workflow" in {t["name"] for t in listed["result"]["tools"]}
+    assert "lmola.relax_structure_xtb" not in {t["name"] for t in listed["result"]["tools"]}
     called = handle_jsonrpc_message({"jsonrpc": "2.0", "id": 3, "method": "tools/call", "params": {"name": "lmola.list_workflows", "arguments": {"compact": True}}})
     assert called and called["result"]["structuredContent"]["status"] == "ok"
+    assert called["result"]["isError"] is False
     unknown_method = handle_jsonrpc_message({"jsonrpc": "2.0", "id": 4, "method": "x/unknown", "params": {}})
     assert unknown_method and unknown_method["error"]["code"] == -32601
+    bad_params = handle_jsonrpc_message({"jsonrpc": "2.0", "id": 5, "method": "tools/call", "params": []})
+    assert bad_params and bad_params["error"]["code"] == -32602
+    unknown_tool = handle_jsonrpc_message({"jsonrpc": "2.0", "id": 6, "method": "tools/call", "params": {"name": "lmola.relax_structure_xtb", "arguments": {}}})
+    assert unknown_tool and unknown_tool["error"]["code"] == -32601
+
+
+def test_jsonrpc_run_workflow_safety_paths() -> None:
+    dry = handle_jsonrpc_message(
+        {"jsonrpc": "2.0", "id": 7, "method": "tools/call", "params": {"name": "lmola.run_workflow", "arguments": {"workflow_id": "smiles_to_xtb_relax", "input": {"type": "smiles_csv", "path": "examples/smiles_list.csv"}}}}
+    )
+    assert dry and dry["result"]["structuredContent"]["executed"] is False
+    assert dry["result"]["structuredContent"]["batch_dir"] is None
+    no_confirm = handle_jsonrpc_message(
+        {"jsonrpc": "2.0", "id": 8, "method": "tools/call", "params": {"name": "lmola.run_workflow", "arguments": {"workflow_id": "smiles_to_xtb_relax", "input": {"type": "smiles_csv", "path": "examples/smiles_list.csv"}, "dry_run": False, "allow_execution": True}}}
+    )
+    assert no_confirm and no_confirm["result"]["isError"] is True
+    assert no_confirm["result"]["structuredContent"]["error_type"] == "confirmation_required"
+
+
+def test_content_length_roundtrip() -> None:
+    payload = {"jsonrpc": "2.0", "id": 1, "method": "initialize", "params": {}}
+    encoded = encode_content_length_message(payload)
+    decoded = decode_content_length_message(encoded)
+    assert decoded == payload
+    import io
+
+    msg = read_content_length_message(io.BytesIO(encoded))
+    assert msg == payload

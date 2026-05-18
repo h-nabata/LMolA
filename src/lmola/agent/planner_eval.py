@@ -3,6 +3,7 @@ from __future__ import annotations
 import csv
 from datetime import datetime, timezone
 from pathlib import Path
+from time import perf_counter
 import uuid
 
 import yaml
@@ -120,11 +121,11 @@ def run_planner_eval(eval_cases_yaml: str) -> PlannerEvalRunResult:
         case_dir.mkdir(parents=True, exist_ok=True)
         (case_dir / "natural_language_request.txt").write_text(case.request, encoding="utf-8")
 
-        started = datetime.now(timezone.utc)
+        started_perf = perf_counter()
         try:
             planning = plan_workflow_request(case.request, write_artifacts=True)
         except Exception as exc:
-            elapsed = (datetime.now(timezone.utc) - started).total_seconds()
+            elapsed = max(0.0, perf_counter() - started_perf)
             row = {
                 "suite_id": suite.suite_id,
                 "case_id": case.id,
@@ -153,7 +154,7 @@ def run_planner_eval(eval_cases_yaml: str) -> PlannerEvalRunResult:
             rows.append(row)
             dump_json(case_dir / "case_result.json", row)
             continue
-        elapsed = (datetime.now(timezone.utc) - started).total_seconds()
+        elapsed = max(0.0, perf_counter() - started_perf)
 
         if planning.plan_dir:
             pdir = Path(planning.plan_dir)
