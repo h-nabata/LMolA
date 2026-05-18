@@ -56,18 +56,20 @@ class PlannerEvalRunResult(BaseModel):
 def _classify_failure(row: dict) -> str:
     if row.get("passed"):
         return "none"
+    if str(row.get("actual_status", "")).lower() in {"endpoint_error", "client_error"}:
+        return "endpoint_error"
     if not row.get("parse_ok", False):
         return "parse_failure"
     if not row.get("validation_ok", False):
         return "schema_validation_failure"
+    if not row.get("canonicalization_ok", False):
+        return "canonicalization_failure"
     if row.get("expected_status") == "unsupported" and not row.get("unsupported_handled", False):
         return "unsupported_not_handled"
     if not row.get("workflow_match", True):
         return "wrong_workflow"
     if not row.get("tools_match", True):
         return "tool_mismatch"
-    if str(row.get("actual_status", "")).lower() in {"endpoint_error", "client_error"}:
-        return "endpoint_error"
     if "endpoint" in str(row.get("error_message", "")).lower() or "connection" in str(row.get("error_message", "")).lower():
         return "endpoint_error"
     if row.get("actual_status") == "error":
@@ -119,7 +121,38 @@ def run_planner_eval(eval_cases_yaml: str) -> PlannerEvalRunResult:
         (case_dir / "natural_language_request.txt").write_text(case.request, encoding="utf-8")
 
         started = datetime.now(timezone.utc)
-        planning = plan_workflow_request(case.request, write_artifacts=True)
+        try:
+            planning = plan_workflow_request(case.request, write_artifacts=True)
+        except Exception as exc:
+            elapsed = (datetime.now(timezone.utc) - started).total_seconds()
+            row = {
+                "suite_id": suite.suite_id,
+                "case_id": case.id,
+                "request": case.request,
+                "expected_status": case.expected_status,
+                "actual_status": "error",
+                "normalized_status": "error",
+                "expected_workflow_id": case.expected_workflow_id,
+                "selected_workflow_id": None,
+                "workflow_match": False,
+                "expected_tools": case.expected_tools,
+                "canonical_tools": None,
+                "tools_match": False,
+                "parse_ok": None,
+                "validation_ok": False,
+                "canonicalization_ok": False,
+                "unsupported_handled": False,
+                "executed": False,
+                "plan_dir": None,
+                "case_dir": str(case_dir),
+                "error_message": str(exc),
+                "elapsed_seconds": elapsed,
+                "passed": False,
+            }
+            row["failure_category"] = "unexpected_error"
+            rows.append(row)
+            dump_json(case_dir / "case_result.json", row)
+            continue
         elapsed = (datetime.now(timezone.utc) - started).total_seconds()
 
         if planning.plan_dir:
@@ -153,6 +186,7 @@ def run_planner_eval(eval_cases_yaml: str) -> PlannerEvalRunResult:
         unsupported_handled = False
         if case.expected_status == "unsupported":
             unsupported_handled = planning.status == "error" and not canonicalization_ok and selected_workflow_id is None
+        normalized_status = "unsupported" if unsupported_handled else actual_status
 
         if case.expected_status == "ok":
             case_passed = planning.status == "ok" and workflow_match and tools_match
@@ -170,6 +204,7 @@ def run_planner_eval(eval_cases_yaml: str) -> PlannerEvalRunResult:
             "request": case.request,
             "expected_status": case.expected_status,
             "actual_status": actual_status,
+            "normalized_status": normalized_status,
             "expected_workflow_id": case.expected_workflow_id,
             "selected_workflow_id": selected_workflow_id,
             "workflow_match": workflow_match,

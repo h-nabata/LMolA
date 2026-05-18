@@ -77,6 +77,10 @@ def build_schema_driven_planner_prompt(context: dict) -> str:
         "Never execute tools. Never execute shell commands. Never claim execution happened.\\n"
         "Do not invent workflow IDs or tool names.\\n"
         "Use only workflows from allowed_workflow_ids and input types from allowed_input_types.\\n"
+        "The selected workflow_id must support the selected input.type.\\n"
+        "Check each workflow's input_types before selecting a workflow.\\n"
+        "For XYZ inputs, do not select SMILES-only workflows.\\n"
+        "For CREST/DFT/TS/NEB tasks not in catalog, return unsupported.\\n"
         "If no workflow matches, return unsupported JSON. Do not force nearest workflow.\\n"
         "For supported tasks, include workflow_id and input.\\n"
         "For smiles_csv input, include columns when obvious: {\"id\":\"id\",\"smiles\":\"smiles\"}.\\n"
@@ -208,8 +212,39 @@ def plan_workflow_request(request_text: str, write_artifacts: bool = True) -> Wo
         return result
 
     workflow_json = req.model_dump()
-    canonical_workflow_json = _canonicalize_workflow(req)
     workflow_yaml = yaml.safe_dump(workflow_json, sort_keys=False)
+    if plan_dir:
+        planned_json_path = plan_dir / "planned_workflow.json"
+        planned_yaml_path = plan_dir / "planned_workflow.yaml"
+        dump_json(planned_json_path, workflow_json)
+        planned_yaml_path.write_text(workflow_yaml, encoding="utf-8")
+    try:
+        canonical_workflow_json = _canonicalize_workflow(req)
+    except Exception as exc:
+        result = WorkflowPlanningResult(
+            status="error",
+            message="Planned workflow failed canonicalization",
+            natural_language_request=request_text,
+            selected_workflow_id=req.workflow_id,
+            raw_llm_response=raw,
+            parsed_workflow=parsed,
+            workflow_json=workflow_json,
+            workflow_yaml=workflow_yaml,
+            canonical_workflow_json=None,
+            canonical_workflow_yaml=None,
+            validation_errors=[str(exc)],
+            plan_dir=str(plan_dir) if plan_dir else None,
+            config_redacted=redacted_llm_config(cfg.llm),
+            planner_prompt_mode="schema_driven",
+            planner_context_schema_version=context.get("schema_version"),
+            planner_context_workflow_count=len(context.get("workflows", [])),
+            planner_context_allowed_workflow_ids=context.get("allowed_workflow_ids", []),
+        )
+        if plan_dir:
+            result.planned_workflow_path_json = str(plan_dir / "planned_workflow.json")
+            result.planned_workflow_path_yaml = str(plan_dir / "planned_workflow.yaml")
+            dump_json(plan_dir / "planning_result.json", result.model_dump())
+        return result
     canonical_workflow_yaml = yaml.safe_dump(canonical_workflow_json, sort_keys=False)
     result = WorkflowPlanningResult(status="ok", message="Workflow plan created and validated.", natural_language_request=request_text, selected_workflow_id=req.workflow_id, raw_llm_response=raw, parsed_workflow=parsed, workflow_json=workflow_json, workflow_yaml=workflow_yaml, canonical_workflow_json=canonical_workflow_json, canonical_workflow_yaml=canonical_workflow_yaml, plan_dir=str(plan_dir) if plan_dir else None, config_redacted=redacted_llm_config(cfg.llm), planner_prompt_mode="schema_driven", planner_context_schema_version=context.get("schema_version"), planner_context_workflow_count=len(context.get("workflows", [])), planner_context_allowed_workflow_ids=context.get("allowed_workflow_ids", []))
 
@@ -218,8 +253,6 @@ def plan_workflow_request(request_text: str, write_artifacts: bool = True) -> Wo
         planned_yaml_path = plan_dir / "planned_workflow.yaml"
         canonical_json_path = plan_dir / "canonical_workflow.json"
         canonical_yaml_path = plan_dir / "canonical_workflow.yaml"
-        dump_json(planned_json_path, workflow_json)
-        planned_yaml_path.write_text(workflow_yaml, encoding="utf-8")
         dump_json(canonical_json_path, canonical_workflow_json)
         canonical_yaml_path.write_text(canonical_workflow_yaml, encoding="utf-8")
         result.planned_workflow_path_json = str(planned_json_path)

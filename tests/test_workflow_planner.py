@@ -110,3 +110,26 @@ def test_public_remote_endpoint_blocked(monkeypatch) -> None:
     result = plan_workflow_request("Validate examples/example.xyz.", write_artifacts=False)
     assert result.status == "error"
     assert "Unsafe LLM endpoint" in result.message
+
+
+def test_canonicalization_failure_is_structured_and_writes_artifacts(monkeypatch) -> None:
+    _enable_mock(monkeypatch)
+    from lmola.agent import workflow_planner as wp
+    from lmola.tools.llm_client import LLMResult
+
+    bad = '{"workflow_id":"smiles_to_conformers_rdkit","input":{"type":"xyz","path":"examples/example.xyz"}}'
+
+    class _BadClient:
+        def complete_json(self, system_prompt: str, user_prompt: str) -> LLMResult:
+            return LLMResult(status="ok", backend="mock", raw_response=bad)
+
+    monkeypatch.setattr(wp, "make_llm_client", lambda _cfg: _BadClient())
+    result = plan_workflow_request("plan bad", write_artifacts=True)
+    assert result.status == "error"
+    assert result.validation_errors
+    assert "Input type xyz is not supported by smiles_to_conformers_rdkit" in result.validation_errors[0]
+    assert result.plan_dir is not None
+    base = Path(result.plan_dir)
+    assert (base / "planning_result.json").exists()
+    assert (base / "planned_workflow.json").exists()
+    assert not (base / "canonical_workflow.json").exists()

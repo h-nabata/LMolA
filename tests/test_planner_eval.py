@@ -85,3 +85,54 @@ def test_qwen_example_config_yaml_parses() -> None:
     payload = yaml.safe_load(Path("examples/config_ollama_qwen2_5_coder_14b.yaml").read_text(encoding="utf-8"))
     assert payload["llm"]["backend"] == "ollama"
     assert payload["llm"]["model"] == "qwen2.5-coder:14b"
+
+
+def test_eval_marks_canonicalization_failure(monkeypatch, tmp_path) -> None:
+    _enable_mock(monkeypatch)
+    from lmola.agent import workflow_planner as wp
+    from lmola.tools.llm_client import LLMResult
+
+    bad = '{"workflow_id":"smiles_to_conformers_rdkit","input":{"type":"xyz","path":"examples/example.xyz"}}'
+
+    class _BadClient:
+        def complete_json(self, system_prompt: str, user_prompt: str) -> LLMResult:
+            return LLMResult(status="ok", backend="mock", raw_response=bad)
+
+    monkeypatch.setattr(wp, "make_llm_client", lambda _cfg: _BadClient())
+    suite = tmp_path / "suite.yaml"
+    suite.write_text(
+        "suite_id: canon_fail\ncases:\n  - id: c1\n    request: bad combo\n    expected_status: ok\n    expected_workflow_id: smiles_to_conformers_rdkit\n",
+        encoding="utf-8",
+    )
+    result = run_planner_eval(str(suite))
+    eval_dir = Path(result.eval_dir)
+    assert (eval_dir / "eval_result.json").exists()
+    rows = json.loads((eval_dir / "eval_summary.json").read_text(encoding="utf-8"))
+    assert rows[0]["failure_category"] == "canonicalization_failure"
+
+
+def test_eval_continues_on_unexpected_exception(monkeypatch, tmp_path) -> None:
+    _enable_mock(monkeypatch)
+    from lmola.agent import planner_eval as pe
+
+    real = pe.plan_workflow_request
+    seen = {"n": 0}
+
+    def _flaky(request_text: str, write_artifacts: bool = True):
+        seen["n"] += 1
+        if seen["n"] == 1:
+            raise RuntimeError("boom")
+        return real(request_text, write_artifacts=write_artifacts)
+
+    monkeypatch.setattr(pe, "plan_workflow_request", _flaky)
+    suite = tmp_path / "suite2.yaml"
+    suite.write_text(
+        "suite_id: unexpected\ncases:\n  - id: bad\n    request: first\n    expected_status: ok\n  - id: good\n    request: Validate examples/example.xyz.\n    expected_status: ok\n    expected_workflow_id: validate_xyz\n",
+        encoding="utf-8",
+    )
+    result = run_planner_eval(str(suite))
+    eval_dir = Path(result.eval_dir)
+    assert (eval_dir / "eval_result.json").exists()
+    rows = json.loads((eval_dir / "eval_summary.json").read_text(encoding="utf-8"))
+    assert len(rows) == 2
+    assert rows[0]["failure_category"] == "unexpected_error"
