@@ -16,7 +16,7 @@ from lmola.workflows.catalog import get_workflow_entry, list_workflows
 from lmola.workflows.runner import run_workflow_request
 from lmola.workflows.schemas import WorkflowRequest
 
-RUNTIME_PHASE = "12.3_confirmed_execution"
+RUNTIME_PHASE = "12.4_stdio_compatibility"
 MCP_EXECUTION_ALLOWLIST = {
     "smiles_to_3d_rdkit",
     "smiles_to_conformers_rdkit",
@@ -49,7 +49,61 @@ def _mcp_content(payload: dict[str, Any]) -> dict[str, Any]:
     return {
         "content": [{"type": "text", "text": json.dumps(payload, sort_keys=True)}],
         "structuredContent": payload,
+        "isError": payload.get("status") == "error",
     }
+
+
+def encode_content_length_message(message: dict[str, Any]) -> bytes:
+    body = json.dumps(message, separators=(",", ":"), ensure_ascii=False).encode("utf-8")
+    header = f"Content-Length: {len(body)}\r\n\r\n".encode("ascii")
+    return header + body
+
+
+def decode_content_length_message(data: bytes) -> dict[str, Any]:
+    sep = b"\r\n\r\n"
+    if sep not in data:
+        raise ValueError("Missing header separator")
+    header_blob, body = data.split(sep, 1)
+    headers = header_blob.decode("ascii")
+    length = None
+    for line in headers.split("\r\n"):
+        if line.lower().startswith("content-length:"):
+            length = int(line.split(":", 1)[1].strip())
+            break
+    if length is None:
+        raise ValueError("Missing Content-Length header")
+    payload = body[:length]
+    if len(payload) != length:
+        raise ValueError("Incomplete payload")
+    return json.loads(payload.decode("utf-8"))
+
+
+def read_content_length_message(stdin: Any) -> dict[str, Any] | None:
+    headers: list[bytes] = []
+    while True:
+        line = stdin.readline()
+        if not line:
+            return None
+        if line in {b"\r\n", b"\n"}:
+            break
+        headers.append(line)
+    length = None
+    for raw in headers:
+        text = raw.decode("ascii").strip()
+        if text.lower().startswith("content-length:"):
+            length = int(text.split(":", 1)[1].strip())
+            break
+    if length is None:
+        raise ValueError("Missing Content-Length header")
+    body = stdin.read(length)
+    if not body or len(body) != length:
+        raise ValueError("Incomplete payload")
+    return json.loads(body.decode("utf-8"))
+
+
+def write_content_length_message(stdout: Any, message: dict[str, Any]) -> None:
+    stdout.write(encode_content_length_message(message))
+    stdout.flush()
 
 
 def _canonicalize_workflow(req: WorkflowRequest) -> dict[str, Any]:
@@ -268,12 +322,16 @@ def call_mcp_tool(name: str, arguments: dict[str, Any] | None = None) -> dict[st
 
 
 def handle_jsonrpc_message(message: dict[str, Any]) -> dict[str, Any] | None:
+    if not isinstance(message, dict) or message.get("jsonrpc") != "2.0":
+        return {"jsonrpc": "2.0", "id": None, "error": {"code": -32600, "message": "Invalid request"}}
     req_id = message.get("id")
     method = message.get("method")
     params = message.get("params") or {}
+    if not isinstance(params, dict):
+        return {"jsonrpc": "2.0", "id": req_id, "error": {"code": -32602, "message": "Invalid params", "data": {"reason": "params must be an object"}}}
 
     if method == "initialize":
-        return {"jsonrpc": "2.0", "id": req_id, "result": {"serverInfo": {"name": "lmola-mcp-runtime", "version": RUNTIME_PHASE}, "capabilities": {"tools": {}, "lmola": {"read_only": True, "plan_validate_only": True}}}}
+        return {"jsonrpc": "2.0", "id": req_id, "result": {"protocolVersion": "2024-11-05", "serverInfo": {"name": "lmola", "version": RUNTIME_PHASE}, "capabilities": {"tools": {}}, "_meta": {"lmola": {"runtime_phase": RUNTIME_PHASE, "execution_policy": "confirmed_allowlisted_execution", "low_level_tools_direct_call": False}}}}
     if method == "ping":
         return {"jsonrpc": "2.0", "id": req_id, "result": {"status": "ok"}}
     if method == "tools/list":
@@ -283,23 +341,24 @@ def handle_jsonrpc_message(message: dict[str, Any]) -> dict[str, Any] | None:
         arguments = params.get("arguments") or {}
         if not isinstance(tool_name, str):
             return {"jsonrpc": "2.0", "id": req_id, "error": {"code": -32602, "message": "Invalid params", "data": {"reason": "name is required"}}}
-        return {"jsonrpc": "2.0", "id": req_id, "result": _mcp_content(call_mcp_tool(tool_name, arguments))}
+        if tool_name not in RUNTIME_ALLOWED_TOOLS:
+            return {"jsonrpc": "2.0", "id": req_id, "error": {"code": -32601, "message": f"Unknown tool: {tool_name}"}}
+        return {"jsonrpc": "2.0", "id": req_id, "result": _mcp_content(call_mcp_tool(tool_name, arguments if isinstance(arguments, dict) else {}))}
     return {"jsonrpc": "2.0", "id": req_id, "error": {"code": -32601, "message": f"Method not found: {method}"}}
 
 
 def run_mcp_stdio_server() -> None:
-    for raw_line in sys.stdin:
-        line = raw_line.strip()
-        if not line:
-            continue
+    stdin = sys.stdin.buffer
+    stdout = sys.stdout.buffer
+    while True:
         try:
-            msg = json.loads(line)
+            msg = read_content_length_message(stdin)
+            if msg is None:
+                return
         except Exception as exc:  # noqa: BLE001
             err = {"jsonrpc": "2.0", "id": None, "error": {"code": -32700, "message": "Parse error", "data": {"detail": str(exc)}}}
-            sys.stdout.write(json.dumps(err) + "\n")
-            sys.stdout.flush()
+            write_content_length_message(stdout, err)
             continue
         response = handle_jsonrpc_message(msg)
         if response is not None:
-            sys.stdout.write(json.dumps(response) + "\n")
-            sys.stdout.flush()
+            write_content_length_message(stdout, response)
