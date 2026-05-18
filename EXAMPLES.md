@@ -239,3 +239,19 @@ Notes:
 - No MCP server or JSON-RPC runtime is started.
 - Tool descriptor core fields follow MCP tools/list-style: `name`, `description`, `inputSchema`.
 - LMolA-specific metadata is under `_meta.lmola`.
+
+
+## Phase 12.1 MCP plan/validate runtime
+
+- `runtime-tools` is the actual callable runtime tools list for the current phase.
+- `preview-tools` is static and may include future/non-runtime tools.
+- `lmola.plan_workflow` is dry-run only (`executed=false`, `batch_dir=null`).
+- `lmola.validate_workflow` canonicalizes only; no execution.
+- `lmola.run_workflow` remains disabled in MCP runtime.
+
+```bash
+lmola mcp runtime-tools --format json
+lmola mcp call-tool lmola.plan_workflow --args-json '{"request":"Generate structures from examples/smiles_list.csv and relax them with xTB."}'
+lmola mcp call-tool lmola.validate_workflow --args-json '{"workflow_id":"smiles_to_xtb_relax","input":{"type":"smiles_csv","path":"examples/smiles_list.csv"},"columns":{"id":"id","smiles":"smiles"}}'
+lmola mcp call-tool lmola.run_workflow --args-json '{"workflow_id":"smiles_to_xtb_relax","input":{"type":"smiles_csv","path":"examples/smiles_list.csv"}}'
+```

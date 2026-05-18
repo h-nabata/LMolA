@@ -6,12 +6,13 @@ from typing import Any
 
 from pydantic import ValidationError
 
+from lmola.agent.workflow_planner import plan_workflow_request
 from lmola.mcp_preview import export_mcp_tools_preview
 from lmola.schema_export import export_all_schemas, export_planner_schema_bundle, export_tool_registry_schema, export_workflow_catalog_schema
 from lmola.workflows.catalog import get_workflow_entry, list_workflows
 from lmola.workflows.schemas import WorkflowRequest
 
-RUNTIME_PHASE = "12.0_readonly"
+RUNTIME_PHASE = "12.1_plan_validate"
 RUNTIME_ALLOWED_TOOLS = {
     "lmola.list_workflows",
     "lmola.inspect_workflow",
@@ -20,6 +21,7 @@ RUNTIME_ALLOWED_TOOLS = {
     "lmola.get_workflow_catalog",
     "lmola.get_planner_context",
     "lmola.validate_workflow",
+    "lmola.plan_workflow",
 }
 
 
@@ -62,6 +64,7 @@ def list_mcp_tools_runtime() -> list[dict[str, Any]]:
         "lmola.get_workflow_catalog": {"description": "Return exported LMolA workflow catalog.", "inputSchema": {"type": "object", "properties": {"compact": {"type": "boolean"}}, "additionalProperties": False}},
         "lmola.get_planner_context": {"description": "Return compact planner context export.", "inputSchema": {"type": "object", "properties": {}, "additionalProperties": False}},
         "lmola.validate_workflow": {"description": "Validate and canonicalize an LMolA WorkflowRequest without executing chemistry tools.", "inputSchema": WorkflowRequest.model_json_schema()},
+        "lmola.plan_workflow": {"description": "Convert a natural-language request into a validated LMolA WorkflowRequest plan without executing chemistry tools.", "inputSchema": {"type": "object", "additionalProperties": False, "properties": {"request": {"type": "string"}, "write_artifacts": {"type": "boolean", "default": False}}, "required": ["request"]}},
     }
     runtime_tools: list[dict[str, Any]] = []
     for name in sorted(RUNTIME_ALLOWED_TOOLS):
@@ -75,6 +78,13 @@ def list_mcp_tools_runtime() -> list[dict[str, Any]]:
         meta["runtime_phase"] = RUNTIME_PHASE
         meta.setdefault("dry_run_only", True)
         meta.setdefault("side_effects", False)
+        meta.setdefault("executes_workflow", False)
+        meta.setdefault("writes_batch_artifacts", False)
+        if name == "lmola.plan_workflow":
+            meta["source"] = "planner_context"
+            writes_plan_artifacts = False
+            meta["writes_plan_artifacts"] = writes_plan_artifacts
+            meta["side_effects"] = "plan_artifacts_only" if writes_plan_artifacts else False
         runtime_tools.append(base)
     return runtime_tools
 
@@ -82,7 +92,7 @@ def list_mcp_tools_runtime() -> list[dict[str, Any]]:
 def call_mcp_tool(name: str, arguments: dict[str, Any] | None = None) -> dict[str, Any]:
     args = arguments or {}
     if name not in RUNTIME_ALLOWED_TOOLS:
-        return _runtime_error("tool_not_allowed", "Tool is not enabled in Phase 12.0 read-only MCP runtime.", tool=name, runtime_phase=RUNTIME_PHASE)
+        return _runtime_error("tool_not_allowed", "Tool is not enabled in Phase 12.1 plan/validate MCP runtime.", tool=name, runtime_phase=RUNTIME_PHASE)
 
     try:
         if name == "lmola.list_workflows":
@@ -107,6 +117,22 @@ def call_mcp_tool(name: str, arguments: dict[str, Any] | None = None) -> dict[st
         if name == "lmola.validate_workflow":
             req = WorkflowRequest.model_validate(args)
             return {"status": "ok", "canonical_workflow_json": _canonicalize_workflow(req)}
+        if name == "lmola.plan_workflow":
+            request_text = args.get("request")
+            if not isinstance(request_text, str) or not request_text.strip():
+                return _runtime_error("invalid_arguments", "request must be a non-empty string.")
+            write_artifacts = bool(args.get("write_artifacts", False))
+            planning = plan_workflow_request(request_text.strip(), write_artifacts=write_artifacts)
+            planning_payload = planning.model_dump()
+            if planning.status == "error" and planning.parsed_workflow and planning.parsed_workflow.get("status") == "unsupported":
+                planning_payload["actual_status"] = planning.status
+                planning_payload["normalized_status"] = "unsupported"
+                return {"status": "ok", "planning_result": planning_payload}
+            planning_payload["actual_status"] = planning.status
+            planning_payload["normalized_status"] = "ok" if planning.status == "ok" else "error"
+            if planning.status == "ok":
+                return {"status": "ok", "planning_result": planning_payload}
+            return _runtime_error("planning_error", planning.message, planning_result=planning_payload)
     except KeyError as exc:
         return _runtime_error("not_found", str(exc))
     except ValidationError as exc:
@@ -123,11 +149,11 @@ def handle_jsonrpc_message(message: dict[str, Any]) -> dict[str, Any] | None:
     params = message.get("params") or {}
 
     if method == "initialize":
-        return {"jsonrpc": "2.0", "id": req_id, "result": {"serverInfo": {"name": "lmola-mcp-runtime", "version": RUNTIME_PHASE}, "capabilities": {"tools": {}}}}
+        return {"jsonrpc": "2.0", "id": req_id, "result": {"serverInfo": {"name": "lmola-mcp-runtime", "version": RUNTIME_PHASE}, "capabilities": {"tools": {}, "lmola": {"read_only": True, "plan_validate_only": True}}}}
     if method == "ping":
         return {"jsonrpc": "2.0", "id": req_id, "result": {"status": "ok"}}
     if method == "tools/list":
-        return {"jsonrpc": "2.0", "id": req_id, "result": {"tools": list_mcp_tools_runtime()}}
+        return {"jsonrpc": "2.0", "id": req_id, "result": {"runtime_phase": RUNTIME_PHASE, "server_runtime": True, "jsonrpc": True, "transport": "stdio", "tools": list_mcp_tools_runtime()}}
     if method == "tools/call":
         tool_name = params.get("name")
         arguments = params.get("arguments") or {}
