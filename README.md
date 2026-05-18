@@ -478,3 +478,23 @@ Commands:
 - `lmola mcp serve-readonly`
 
 Execution-capable MCP workflow calls remain deferred to a later phase with explicit safety policy and confirmation controls.
+
+
+## Phase 12.1 MCP plan/validate runtime
+
+LMolA MCP runtime now supports **planning + validation only** in runtime phase `12.1_plan_validate`.
+
+- `lmola mcp runtime-tools` is the actual callable `tools/list` equivalent for current runtime phase.
+- `lmola mcp preview-tools` remains a static descriptor preview and may include future candidates (for example `lmola.run_workflow`).
+- Runtime-enabled tools now include `lmola.plan_workflow` and `lmola.validate_workflow` (both dry-run only).
+- `lmola.plan_workflow` converts natural language to validated workflow JSON, returns `executed=false`, `batch_dir=null`, and does not execute chemistry tools.
+- `lmola.validate_workflow` canonicalizes a supplied `WorkflowRequest` without execution.
+- `lmola.run_workflow` and low-level chemistry tools remain disabled at runtime (`tool_not_allowed`).
+- `actual_status` vs `normalized_status`: unsupported planning requests can report `actual_status=error` with `normalized_status=unsupported` for safer evaluation/debugging.
+- `write_artifacts` defaults to false for MCP planning; if enabled, plan artifacts are planner debug artifacts only (not workflow execution artifacts).
+
+Commands:
+- `lmola mcp runtime-tools --format json`
+- `lmola mcp call-tool lmola.plan_workflow --args-json '{"request":"Generate structures from examples/smiles_list.csv and relax them with xTB."}'`
+- `lmola mcp call-tool lmola.validate_workflow --args-json '{"workflow_id":"smiles_to_xtb_relax","input":{"type":"smiles_csv","path":"examples/smiles_list.csv"},"columns":{"id":"id","smiles":"smiles"}}'`
+- `lmola mcp call-tool lmola.run_workflow --args-json '{"workflow_id":"smiles_to_xtb_relax","input":{"type":"smiles_csv","path":"examples/smiles_list.csv"}}'`

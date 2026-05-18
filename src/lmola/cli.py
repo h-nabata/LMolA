@@ -93,7 +93,7 @@ def mcp_validate_preview(path: str) -> None:
 
 @mcp_app.command("runtime-tools")
 def mcp_runtime_tools(fmt: str = typer.Option("json", "--format")) -> None:
-    typer.echo(render_preview({"tools": list_mcp_tools_runtime()}, fmt))
+    typer.echo(render_preview({"runtime_phase": "12.1_plan_validate", "server_runtime": True, "jsonrpc": False, "transport": "none/test_helper", "tools": list_mcp_tools_runtime()}, fmt))
 
 
 @mcp_app.command("call-tool")
