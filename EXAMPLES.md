@@ -224,3 +224,18 @@ Contract notes:
 - The model must output exactly one JSON object (supported `WorkflowRequest` or unsupported payload).
 - Planning is backend-agnostic; no cloud LLM provider dependency is introduced.
 - Debug artifacts under `outputs/plan_*` include `planner_context_compact.json` and `planner_prompt.txt`.
+
+## MCP-compatible descriptor preview
+
+```bash
+lmola mcp preview-tools --format json
+lmola mcp preview-tools --format yaml
+lmola mcp preview --out outputs/mcp_preview_manual_test
+lmola mcp validate-preview outputs/mcp_preview_manual_test/mcp_preview_bundle.json
+```
+
+Notes:
+- Descriptor export is static and deterministic.
+- No MCP server or JSON-RPC runtime is started.
+- Tool descriptor core fields follow MCP tools/list-style: `name`, `description`, `inputSchema`.
+- LMolA-specific metadata is under `_meta.lmola`.
