@@ -246,6 +246,7 @@ Notes:
 - `runtime-tools` is the actual callable runtime tools list for the current phase.
 - `serve-stdio` runs a local MCP-style stdio adapter (Content-Length framed JSON-RPC).
 - Supported methods are `initialize`, `tools/list`, and `tools/call`.
+- `tools/list` reports runtime-callable tools for the current phase; `preview-tools` remains static descriptor preview.
 - `lmola.run_workflow` is runtime-exposed but defaults to dry-run and does not execute.
 - To execute, set `dry_run=false`, `allow_execution=true`, and `confirm=true`.
 - Only allowlisted workflow IDs are executable through MCP runtime.
@@ -266,3 +267,5 @@ lmola mcp call-tool lmola.validate_workflow --args-json '{"workflow_id":"smiles_
 lmola mcp call-tool lmola.run_workflow --args-json '{"workflow_id":"smiles_to_xtb_relax","input":{"type":"smiles_csv","path":"examples/smiles_list.csv"}}'
 find outputs/mcp_runs -maxdepth 1 -type d -name "batch_*"
 ```
+
+`lmola mcp jsonrpc --request-json ...` is a helper for one-request local checks, not a replacement for persistent stdio client integration.

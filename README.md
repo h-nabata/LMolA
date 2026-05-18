@@ -488,6 +488,7 @@ LMolA MCP runtime now supports a **minimal JSON-RPC stdio adapter** in runtime p
 - Runtime now includes `lmola.run_workflow` with strict confirmation + allowlist policy.
 - `lmola mcp serve-stdio` provides local stdio transport using Content-Length framed JSON-RPC messages (`initialize`, `tools/list`, `tools/call`).
 - No network listener is opened and no TCP ports are bound.
+- `tools/list` reflects runtime-callable tools for the active phase (not static preview-only candidates).
 - Execution is disabled by default (`dry_run=true`).
 - Real execution requires all of: `dry_run=false`, `allow_execution=true`, `confirm=true`.
 - Only allowlisted workflows can execute via MCP runtime.
@@ -512,3 +513,5 @@ Commands:
 - `lmola mcp call-tool lmola.validate_workflow --args-json '{"workflow_id":"smiles_to_xtb_relax","input":{"type":"smiles_csv","path":"examples/smiles_list.csv"},"columns":{"id":"id","smiles":"smiles"}}'`
 - `lmola mcp call-tool lmola.run_workflow --args-json '{"workflow_id":"smiles_to_xtb_relax","input":{"type":"smiles_csv","path":"examples/smiles_list.csv"}}'`
 - `before=$(find outputs/mcp_runs -maxdepth 1 -type d -name "batch_*" | wc -l); lmola mcp call-tool lmola.run_workflow --args-json '{"workflow_id":"smiles_to_xtb_relax","input":{"type":"smiles_csv","path":"examples/smiles_list.csv"},"columns":{"id":"id","smiles":"smiles"},"dry_run":false,"allow_execution":true,"confirm":true}'; after=$(find outputs/mcp_runs -maxdepth 1 -type d -name "batch_*" | wc -l); echo "before=$before after=$after"`
+
+`lmola mcp jsonrpc --request-json ...` is a one-shot helper for local testing; `serve-stdio` is the persistent stdio adapter entrypoint.
