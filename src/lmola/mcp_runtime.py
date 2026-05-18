@@ -16,7 +16,7 @@ from lmola.workflows.catalog import get_workflow_entry, list_workflows
 from lmola.workflows.runner import run_workflow_request
 from lmola.workflows.schemas import WorkflowRequest
 
-RUNTIME_PHASE = "12.4_stdio_compatibility"
+RUNTIME_PHASE = "12.5_external_client_smoke"
 MCP_EXECUTION_ALLOWLIST = {
     "smiles_to_3d_rdkit",
     "smiles_to_conformers_rdkit",

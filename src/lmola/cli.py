@@ -24,6 +24,7 @@ from lmola.mcp_preview import (
     validate_mcp_preview_bundle,
     write_mcp_preview,
 )
+from lmola.mcp_client_smoke import render_smoke_result, run_mcp_client_smoke
 from lmola.mcp_runtime import RUNTIME_PHASE, call_mcp_tool, handle_jsonrpc_message, list_mcp_tools_runtime, run_mcp_stdio_server
 from lmola.relaxation import get_relaxation_calculator, select_relaxed_structure, write_relaxation_request
 from lmola.tools.llm_client import make_llm_client
@@ -118,6 +119,14 @@ def mcp_serve_readonly() -> None:
 def mcp_jsonrpc(request_json: str = typer.Option(..., "--request-json")) -> None:
     response = handle_jsonrpc_message(json.loads(request_json))
     typer.echo(json.dumps(response, indent=2, sort_keys=True))
+
+
+@mcp_app.command("client-smoke")
+def mcp_client_smoke(fmt: str = typer.Option("json", "--format"), timeout_seconds: float = typer.Option(10.0, "--timeout-seconds")) -> None:
+    result = run_mcp_client_smoke(timeout_seconds=timeout_seconds)
+    typer.echo(render_smoke_result(result, fmt))
+    if result.get("status") != "ok":
+        raise typer.Exit(code=1)
 
 @schema_app.command("export")
 def schema_export(fmt: str = typer.Option("json", "--format"), out: str = typer.Option("", "--out")) -> None:
