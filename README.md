@@ -421,3 +421,11 @@ Roadmap:
 - Phase 11.1: schema-driven planner prompts.
 - Phase 11.5: MCP-compatible descriptor preview.
 - Phase 12: MCP adapter.
+
+## Schema-driven planner prompt (Phase 11.1)
+- Planner prompts are generated from LMolA schema/catalog context (`planner_context_compact`) and are LLM-engine independent.
+- The planner asks the LLM to return JSON only: either a supported `WorkflowRequest` object or `{"status":"unsupported","reason":"..."}`.
+- LMolA parses, validates, and canonicalizes planner output; LLM output is never executed directly.
+- Ollama/qwen2.5-coder:14b is a tested local backend, not a schema dependency.
+- `lmola workflow plan` stores debug artifacts: `planner_context_compact.json` and `planner_prompt.txt` in `plan_dir`.
+- Full MCP descriptor generation remains Phase 11.5, and MCP server/runtime remains Phase 12.

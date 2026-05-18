@@ -30,6 +30,7 @@ from lmola.schema_export import (
     export_tool_registry_schema,
     export_workflow_catalog_schema,
     write_schema_artifacts,
+    export_planner_schema_bundle,
 )
 
 app = typer.Typer(help="LMolA CLI (pre-alpha)")
@@ -75,6 +76,11 @@ def tools_export_schema(fmt: str = typer.Option("json", "--format")) -> None:
 @workflow_app.command("export-catalog")
 def workflow_export_catalog(fmt: str = typer.Option("json", "--format")) -> None:
     _emit_schema(export_workflow_catalog_schema(compact=False), fmt)
+
+
+@workflow_app.command("planner-context")
+def workflow_planner_context(fmt: str = typer.Option("json", "--format")) -> None:
+    _emit_schema(export_planner_schema_bundle(), fmt)
 @workflow_app.command("list")
 def workflow_list() -> None:
     payload = [w.model_dump() for w in list_workflows()]
