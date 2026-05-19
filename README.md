@@ -563,3 +563,11 @@ Artifacts are written under `outputs/agent_smoke_*/`, including:
 - `tool_selection_parsed.json`
 - `mcp_tool_call_response.json`
 - `result_analysis_parsed.json`
+
+## Ollama tool-call schema enforcement
+
+LMolA validates LLM tool calls before MCP execution. Ollama `format=json` only guarantees JSON-like output, not LMolA schema validity. Unknown workflow IDs and forbidden keys (`inputs`, `settings`, `parameters`) are rejected. LMolA performs a single repair attempt and only executes schema-valid safe dry-run calls by default. Confirmed execution remains opt-in and still requires `dry_run=false`, `allow_execution=true`, and `confirm=true`.
+
+Troubleshooting: if a model returns `workflow_id=generate_and_relax_structures`, it invented a semantic name. LMolA repair guidance maps to catalog ID `smiles_to_xtb_relax`.
+
+Environment note: dry-run smoke does not require RDKit/Open Babel/xTB; confirmed execution does. Verify with `which python`, `which lmola`, `python -c "import rdkit"`, `which obabel`, `lmola doctor`.
