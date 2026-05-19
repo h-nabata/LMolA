@@ -38,6 +38,19 @@ def _read_text_excerpt(path: Path, max_text_chars: int) -> str | None:
     return text[:max_text_chars]
 
 
+def _canonical_tools_and_warnings(canonical: Any) -> tuple[list[str], list[str]]:
+    warnings: list[str] = []
+    raw_steps = canonical.get("steps") if isinstance(canonical, dict) else []
+    if raw_steps is None or not isinstance(raw_steps, list):
+        if isinstance(canonical, dict):
+            warnings.append("canonical workflow steps are missing or null")
+        steps: list[Any] = []
+    else:
+        steps = raw_steps
+    tools = [s.get("tool") for s in steps if isinstance(s, dict) and s.get("tool")]
+    return tools, warnings
+
+
 def detect_artifact_kind(path: str | Path) -> str:
     p = Path(path)
     if p.is_dir() and p.name.startswith("batch_"):
@@ -67,7 +80,7 @@ def summarize_mcp_audit(audit_path: str | Path, *, max_text_chars: int = 4000) -
     if not isinstance(payload, dict):
         return _err("invalid_artifact", "Invalid MCP audit JSON.", p)
     canonical = payload.get("canonical_workflow_json") or {}
-    tools = [s.get("tool") for s in canonical.get("steps", []) if isinstance(s, dict) and s.get("tool")]
+    tools, warnings = _canonical_tools_and_warnings(canonical)
     out = {
         "status": "ok",
         "artifact_kind": "mcp_audit",
@@ -85,7 +98,7 @@ def summarize_mcp_audit(audit_path: str | Path, *, max_text_chars: int = 4000) -
         "canonical_tools": tools,
         "error_type": payload.get("error_type"),
         "message": payload.get("message"),
-        "warnings": [],
+        "warnings": warnings,
         "next_recommended_actions": [],
     }
     if out["dry_run"]:
@@ -100,7 +113,7 @@ def summarize_batch_dir(batch_dir: str | Path, *, max_items: int = 20, max_text_
     summary_json = _read_json(p / "summary.json")
     workflow_result = _read_json(p / "workflow_result.json")
     canonical = _read_json(p / "canonical_workflow.json") or _read_json(p / "normalized_workflow.json") or {}
-    tools = [s.get("tool") for s in canonical.get("steps", []) if isinstance(s, dict) and s.get("tool")] if isinstance(canonical, dict) else []
+    tools, canonical_warnings = _canonical_tools_and_warnings(canonical)
     items: list[dict[str, Any]] = []
     if isinstance(summary_json, dict) and isinstance(summary_json.get("items"), list):
         items = [i for i in summary_json["items"] if isinstance(i, dict)]
@@ -126,7 +139,7 @@ def summarize_batch_dir(batch_dir: str | Path, *, max_items: int = 20, max_text_
         "items": truncated,
         "failed_items": failed,
         "artifact_files": sorted([x.name for x in p.iterdir()]) if p.exists() else [],
-        "warnings": ["items_truncated" if len(items) > max_items else ""],
+        "warnings": ([w for w in canonical_warnings] + (["items_truncated"] if len(items) > max_items else [])),
         "next_recommended_actions": ["Inspect failed_items and run.log excerpt for triage."],
         "run_log_excerpt": _read_text_excerpt(p / "run.log", max_text_chars),
     }
@@ -139,7 +152,7 @@ def summarize_agent_smoke_dir(agent_smoke_dir: str | Path, *, max_text_chars: in
     analysis = _read_json(p / "result_analysis_parsed.json") or {}
     response = _read_json(p / "mcp_tool_call_response.json") or {}
     canonical = response.get("result", {}).get("structuredContent", {}).get("canonical_workflow_json", {}) if isinstance(response, dict) else {}
-    tools = [s.get("tool") for s in canonical.get("steps", []) if isinstance(s, dict) and s.get("tool")] if isinstance(canonical, dict) else []
+    tools, warnings = _canonical_tools_and_warnings(canonical)
     return {
         "status": "ok",
         "artifact_kind": "agent_smoke_dir",
@@ -157,7 +170,7 @@ def summarize_agent_smoke_dir(agent_smoke_dir: str | Path, *, max_text_chars: in
         "checks": result.get("checks", {}),
         "canonical_tools": tools or analysis.get("canonical_tools", []),
         "analysis": analysis if isinstance(analysis, dict) else {},
-        "warnings": [],
+        "warnings": warnings,
         "next_recommended_actions": ["Review mcp_tool_call_response and audit_path summary before confirmed execution."],
         "raw_response_excerpt": _read_text_excerpt(p / "tool_selection_raw_response.txt", max_text_chars),
     }
@@ -167,7 +180,7 @@ def summarize_plan_dir(plan_dir: str | Path, *, max_text_chars: int = 4000) -> d
     p = Path(plan_dir)
     planning = _read_json(p / "planning_result.json") or {}
     canonical = _read_json(p / "canonical_workflow.json") or {}
-    tools = [s.get("tool") for s in canonical.get("steps", []) if isinstance(s, dict) and s.get("tool")] if isinstance(canonical, dict) else []
+    tools, warnings = _canonical_tools_and_warnings(canonical)
     return {
         "status": "ok",
         "artifact_kind": "plan_dir",
@@ -177,7 +190,7 @@ def summarize_plan_dir(plan_dir: str | Path, *, max_text_chars: int = 4000) -> d
         "validation_errors": planning.get("validation_errors", []),
         "canonical_tools": tools,
         "executed": False,
-        "warnings": [],
+        "warnings": warnings,
         "next_recommended_actions": ["Validate canonical workflow and run dry-run execution first."],
         "planner_prompt_excerpt": _read_text_excerpt(p / "planner_prompt.txt", max_text_chars),
     }

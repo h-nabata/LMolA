@@ -36,6 +36,21 @@ def test_summarize_batch_and_truncation() -> None:
     assert len(s["run_log_excerpt"]) <= 20
 
 
+def test_summarize_batch_with_null_steps_and_mcp_tool() -> None:
+    b = Path("outputs/batch_null_steps")
+    b.mkdir(parents=True, exist_ok=True)
+    (b / "summary.csv").write_text("item_id,status\n1,ok\n", encoding="utf-8")
+    (b / "normalized_workflow.json").write_text(json.dumps({"workflow_id": "smiles_to_xtb_relax", "steps": None}), encoding="utf-8")
+    payload = summarize_artifact_path(b)
+    assert payload["status"] == "ok"
+    assert payload["artifact_kind"] == "batch_dir"
+    assert payload["canonical_tools"] == []
+    assert any("missing or null" in w for w in payload["warnings"])
+    mcp_payload = call_mcp_tool("lmola.summarize_artifacts", {"path": str(b)})
+    assert mcp_payload["status"] == "ok"
+    assert mcp_payload["canonical_tools"] == []
+
+
 def test_cli_and_mcp_tool() -> None:
     d = Path("outputs/agent_smoke_test")
     d.mkdir(parents=True, exist_ok=True)
