@@ -27,6 +27,7 @@ from lmola.mcp_preview import (
 from lmola.mcp_agent_smoke import run_mcp_agent_smoke
 from lmola.mcp_client_smoke import render_smoke_result, run_mcp_client_smoke
 from lmola.mcp_runtime import RUNTIME_PHASE, call_mcp_tool, handle_jsonrpc_message, list_mcp_tools_runtime, run_mcp_stdio_server
+from lmola.artifact_summary import summarize_artifact_path
 from lmola.relaxation import get_relaxation_calculator, select_relaxed_structure, write_relaxation_request
 from lmola.tools.llm_client import make_llm_client
 from lmola.tools.molsimplify_tool import detect_molsimplify_cli, detect_molsimplify_import, run_generation
@@ -57,6 +58,8 @@ app.add_typer(schema_app, name="schema")
 
 mcp_app = typer.Typer(help="MCP-compatible descriptor preview (static)")
 app.add_typer(mcp_app, name="mcp")
+artifacts_app = typer.Typer(help="Read-only LMolA artifact summarization")
+app.add_typer(artifacts_app, name="artifacts")
 
 
 
@@ -120,6 +123,16 @@ def mcp_serve_readonly() -> None:
 def mcp_jsonrpc(request_json: str = typer.Option(..., "--request-json")) -> None:
     response = handle_jsonrpc_message(json.loads(request_json))
     typer.echo(json.dumps(response, indent=2, sort_keys=True))
+
+
+@artifacts_app.command("summarize")
+def artifacts_summarize(path: str, fmt: str = typer.Option("json", "--format"), max_items: int = typer.Option(20, "--max-items"), max_text_chars: int = typer.Option(4000, "--max-text-chars")) -> None:
+    payload = summarize_artifact_path(path, max_items=max_items, max_text_chars=max_text_chars)
+    if fmt != "json":
+        raise typer.BadParameter("Only --format json is currently supported.")
+    typer.echo(json.dumps(payload, indent=2, sort_keys=True))
+    if payload.get("status") == "error":
+        raise typer.Exit(code=1)
 
 
 
