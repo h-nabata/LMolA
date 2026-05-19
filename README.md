@@ -571,3 +571,26 @@ LMolA validates LLM tool calls before MCP execution. Ollama `format=json` only g
 Troubleshooting: if a model returns `workflow_id=generate_and_relax_structures`, it invented a semantic name. LMolA repair guidance maps to catalog ID `smiles_to_xtb_relax`.
 
 Environment note: dry-run smoke does not require RDKit/Open Babel/xTB; confirmed execution does. Verify with `which python`, `which lmola`, `python -c "import rdkit"`, `which obabel`, `lmola doctor`.
+
+## Artifact summarization
+
+LMolA provides a read-only artifact summarizer for LLM-oriented inspection of generated artifacts (`batch_*`, MCP audit logs, `agent_smoke_*`, and `plan_*`).
+
+- It produces compact structured JSON.
+- It does **not** execute chemistry tools or workflows.
+- It does **not** validate chemical correctness.
+- It summarizes status, canonical tools, failed items, artifact paths, and next recommended actions.
+- It enforces safe path policy and rejects unsafe paths.
+
+Examples:
+
+- `lmola artifacts summarize outputs/agent_smoke_... --format json`
+- `lmola artifacts summarize outputs/mcp_audit/mcp_run_...json --format json`
+- `lmola artifacts summarize outputs/mcp_runs/batch_... --format json`
+- `lmola mcp call-tool lmola.summarize_artifacts --args-json '{"path":"outputs/agent_smoke_..."}'`
+
+Notes:
+
+- Dry-run does not create molecule outputs, but audit/canonical workflow artifacts can still be summarized.
+- Confirmed execution writes batch artifacts under `outputs/mcp_runs/`.
+- Confirmed execution requires a correctly activated backend environment; if RDKit/Open Babel/xTB are unavailable, execution may fail, but resulting failure artifacts can still be summarized.

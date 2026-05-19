@@ -7,7 +7,7 @@ import subprocess
 import urllib.error
 import urllib.request
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 from uuid import uuid4
@@ -16,6 +16,7 @@ from pydantic import BaseModel
 
 from lmola.mcp_client_smoke import DEFAULT_SERVER_COMMAND
 from lmola.mcp_runtime import encode_content_length_message, read_content_length_message
+from lmola.artifact_summary import summarize_artifact_path
 from lmola.workflows.catalog import WORKFLOW_CATALOG
 
 DEFAULT_TASK = "Generate structures from examples/smiles_list.csv and relax them with xTB. Use dry-run only."
@@ -194,7 +195,7 @@ def validate_agent_tool_call(*, tool_call: dict[str, Any], runtime_tools: set[st
 
 def run_mcp_agent_smoke(*, task: str = DEFAULT_TASK, backend: str = "mock", model: str = "", base_url: str = "http://127.0.0.1:11434", timeout_seconds: float = 20.0, temperature: float = 0.0, max_tokens: int = 800, out_dir: str = "", allow_confirmed_execution: bool = False, confirm_execution: bool = False) -> dict[str, Any]:
     cfg = AgentCallConfig(backend=backend, model=model, base_url=base_url, timeout_seconds=timeout_seconds, temperature=temperature, max_tokens=max_tokens)
-    smoke_dir = Path(out_dir) if out_dir else Path("outputs") / f"agent_smoke_{datetime.utcnow().strftime('%Y%m%d_%H%M%S')}_{uuid4().hex[:6]}"
+    smoke_dir = Path(out_dir) if out_dir else Path("outputs") / f"agent_smoke_{datetime.now(UTC).strftime('%Y%m%d_%H%M%S')}_{uuid4().hex[:6]}"
     smoke_dir.mkdir(parents=True, exist_ok=True)
     checks = {k: False for k in ["initialize_ok", "tools_list_ok", "low_level_tools_absent", "tool_selection_initial_parse_ok", "tool_selection_initial_valid", "tool_selection_repair_attempted", "tool_selection_repair_successful", "tool_selection_final_valid", "tool_selection_safe", "mcp_tool_call_ok", "run_workflow_dry_run_safe", "analysis_parse_ok", "analysis_schema_ok", "analysis_status_ok", "mcp_runs_unchanged"]}
     transcript: dict[str, Any] = {"backend": backend, "task": task}
@@ -269,7 +270,9 @@ def run_mcp_agent_smoke(*, task: str = DEFAULT_TASK, backend: str = "mock", mode
     final = transcript.get("tool_selection_final", {})
     analysis = transcript.get("result_analysis_parsed", {})
     required = ["initialize_ok", "tools_list_ok", "low_level_tools_absent", "tool_selection_initial_parse_ok", "tool_selection_final_valid", "tool_selection_safe", "mcp_tool_call_ok", "run_workflow_dry_run_safe", "analysis_parse_ok", "analysis_schema_ok", "analysis_status_ok", "mcp_runs_unchanged"]
-    result = {"status": "ok" if all(checks[k] for k in required) else "error", "agent_smoke_phase": "12.6.1_tool_call_schema_enforcement", "backend": backend, "model": model, "task": task, "agent_smoke_dir": str(smoke_dir), "initial_selected_tool_name": transcript.get("tool_selection_parsed", {}).get("tool_name", ""), "initial_selected_workflow_id": transcript.get("tool_selection_parsed", {}).get("arguments", {}).get("workflow_id", ""), "selected_tool_name": final.get("tool_name", ""), "selected_workflow_id": final.get("arguments", {}).get("workflow_id", ""), "tool_selection_repaired": repair_successful, "tool_selection_validation_errors": validation_errors, "repair_attempted": repair_attempted, "repair_successful": repair_successful, "mcp_tool_call_executed": True, "rejected_before_mcp_call": False, "execution_mode": analysis.get("execution_mode", "unknown"), "executed": bool(analysis.get("executed", False)), "checks": checks, "mcp_runs_before": before, "mcp_runs_after": after, "python_executable": shutil.which("python"), "lmola_executable": shutil.which("lmola"), "ollama_model": model, "ollama_reachable": True}
+    audit_path = tool_call_resp.get("result", {}).get("structuredContent", {}).get("audit_path")
+    artifact_summary = summarize_artifact_path(audit_path) if isinstance(audit_path, str) and audit_path else None
+    result = {"status": "ok" if all(checks[k] for k in required) else "error", "agent_smoke_phase": "12.6.1_tool_call_schema_enforcement", "backend": backend, "model": model, "task": task, "agent_smoke_dir": str(smoke_dir), "initial_selected_tool_name": transcript.get("tool_selection_parsed", {}).get("tool_name", ""), "initial_selected_workflow_id": transcript.get("tool_selection_parsed", {}).get("arguments", {}).get("workflow_id", ""), "selected_tool_name": final.get("tool_name", ""), "selected_workflow_id": final.get("arguments", {}).get("workflow_id", ""), "tool_selection_repaired": repair_successful, "tool_selection_validation_errors": validation_errors, "repair_attempted": repair_attempted, "repair_successful": repair_successful, "mcp_tool_call_executed": True, "rejected_before_mcp_call": False, "execution_mode": analysis.get("execution_mode", "unknown"), "executed": bool(analysis.get("executed", False)), "checks": checks, "mcp_runs_before": before, "mcp_runs_after": after, "python_executable": shutil.which("python"), "lmola_executable": shutil.which("lmola"), "ollama_model": model, "ollama_reachable": True, "artifact_summary": artifact_summary}
     write_agent_smoke_artifacts(smoke_dir=smoke_dir, transcript=transcript, result=result, tools_list=transcript["mcp"][1]["response"].get("result", {}), tool_call_req=tool_call_req, tool_call_resp=tool_call_resp)
     return result
 
