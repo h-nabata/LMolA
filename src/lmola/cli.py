@@ -24,6 +24,7 @@ from lmola.mcp_preview import (
     validate_mcp_preview_bundle,
     write_mcp_preview,
 )
+from lmola.mcp_agent_smoke import run_mcp_agent_smoke
 from lmola.mcp_client_smoke import render_smoke_result, run_mcp_client_smoke
 from lmola.mcp_runtime import RUNTIME_PHASE, call_mcp_tool, handle_jsonrpc_message, list_mcp_tools_runtime, run_mcp_stdio_server
 from lmola.relaxation import get_relaxation_calculator, select_relaxed_structure, write_relaxation_request
@@ -120,6 +121,37 @@ def mcp_jsonrpc(request_json: str = typer.Option(..., "--request-json")) -> None
     response = handle_jsonrpc_message(json.loads(request_json))
     typer.echo(json.dumps(response, indent=2, sort_keys=True))
 
+
+
+@mcp_app.command("agent-smoke")
+def mcp_agent_smoke(
+    backend: str = typer.Option("mock", "--backend"),
+    model: str = typer.Option("", "--model"),
+    base_url: str = typer.Option("http://127.0.0.1:11434", "--base-url"),
+    task: str = typer.Option("Generate structures from examples/smiles_list.csv and relax them with xTB. Use dry-run only.", "--task"),
+    fmt: str = typer.Option("json", "--format"),
+    timeout_seconds: float = typer.Option(20.0, "--timeout-seconds"),
+    temperature: float = typer.Option(0.0, "--temperature"),
+    max_tokens: int = typer.Option(800, "--max-tokens"),
+    out_dir: str = typer.Option("", "--out-dir"),
+    allow_confirmed_execution: bool = typer.Option(False, "--allow-confirmed-execution"),
+    confirm_execution: bool = typer.Option(False, "--confirm-execution"),
+) -> None:
+    result = run_mcp_agent_smoke(
+        task=task,
+        backend=backend,
+        model=model,
+        base_url=base_url,
+        timeout_seconds=timeout_seconds,
+        temperature=temperature,
+        max_tokens=max_tokens,
+        out_dir=out_dir,
+        allow_confirmed_execution=allow_confirmed_execution,
+        confirm_execution=confirm_execution,
+    )
+    typer.echo(render_smoke_result(result, fmt))
+    if result.get("status") != "ok":
+        raise typer.Exit(code=1)
 
 @mcp_app.command("client-smoke")
 def mcp_client_smoke(fmt: str = typer.Option("json", "--format"), timeout_seconds: float = typer.Option(10.0, "--timeout-seconds")) -> None:

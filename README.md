@@ -538,3 +538,28 @@ See:
 
 - `docs/mcp/claude_desktop_config.example.json`
 - `docs/mcp/lmola_mcp_client_notes.md`
+
+## Ollama-in-the-loop MCP agent smoke (Phase 12.6)
+
+LMolA now includes an end-to-end MCP **agent-smoke** that keeps MCP runtime protections in place while adding an LLM-in-the-loop tool-selection/analysis pass.
+
+- Default backend is deterministic `mock` (no Ollama required).
+- Optional backend `ollama` can use `qwen2.5-coder:14b` (or another local model).
+- The LLM is treated as a structured tool selector and summarizer, not as a chemistry executor.
+- Tool calls are validated before MCP execution.
+- Default mode remains dry-run only.
+- Confirmed execution remains explicit opt-in and requires both flags.
+- Low-level chemistry tools remain unavailable as direct MCP runtime tools.
+
+Commands:
+
+- `lmola mcp agent-smoke --backend mock --format json`
+- `lmola mcp agent-smoke --backend ollama --base-url http://127.0.0.1:11434 --model qwen2.5-coder:14b --task "Generate structures from examples/smiles_list.csv and relax them with xTB. Use dry-run only." --format json`
+
+Artifacts are written under `outputs/agent_smoke_*/`, including:
+
+- `agent_smoke_result.json`
+- `agent_smoke_transcript.json`
+- `tool_selection_parsed.json`
+- `mcp_tool_call_response.json`
+- `result_analysis_parsed.json`
