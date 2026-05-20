@@ -12,6 +12,7 @@ from lmola.agent.workflow_planner import plan_workflow_request
 from lmola.agent.planner_eval import compare_planner_evals, run_planner_eval
 from lmola.agent.prompts import SYSTEM_PROMPT
 from lmola.backends.registry import list_backend_statuses
+from lmola.backends.capabilities import list_backend_capabilities, resolve_backend_capability
 from lmola.config import load_app_config, load_request_yaml, redacted_llm_config
 from lmola.io.converters import dump_json
 from lmola.io.files import create_run_dir
@@ -36,6 +37,7 @@ from lmola.tools.openbabel_tool import run_openbabel_conversion
 from lmola.validation.geometry_checks import validate_xyz
 from lmola.tools.registry import get_tool, get_tool_availability, list_tools
 from lmola.workflows import get_workflow_entry, list_workflows, run_workflow_yaml
+from lmola.workflows.catalog import check_workflow_backend_readiness
 from lmola.schema_export import (
     export_all_schemas,
     export_model_schemas,
@@ -50,6 +52,8 @@ app = typer.Typer(help="LMolA CLI (pre-alpha)")
 
 tools_app = typer.Typer(help="Typed tool registry introspection")
 app.add_typer(tools_app, name="tools")
+backends_app = typer.Typer(help="Backend capability registry")
+app.add_typer(backends_app, name="backends")
 
 workflow_app = typer.Typer(help="Deterministic workflow catalog and runner")
 app.add_typer(workflow_app, name="workflow")
@@ -224,6 +228,22 @@ def workflow_export_catalog(fmt: str = typer.Option("json", "--format")) -> None
 @workflow_app.command("planner-context")
 def workflow_planner_context(fmt: str = typer.Option("json", "--format")) -> None:
     _emit_schema(export_planner_schema_bundle(), fmt)
+
+@backends_app.command("list")
+def backends_list(fmt: str = typer.Option("json", "--format")) -> None:
+    payload = {k: v.model_dump() for k, v in list_backend_capabilities().items()}
+    _emit_schema(payload, fmt)
+
+
+@backends_app.command("inspect")
+def backends_inspect(backend_id: str, fmt: str = typer.Option("json", "--format")) -> None:
+    cap = resolve_backend_capability(backend_id)
+    if cap is None:
+        typer.echo(json.dumps({"status": "error", "error_type": "unknown_backend", "backend_id": backend_id, "known_backend_ids": sorted(list_backend_capabilities().keys())}, indent=2, sort_keys=True))
+        raise typer.Exit(code=1)
+    _emit_schema(cap.model_dump(), fmt)
+
+
 @workflow_app.command("list")
 def workflow_list() -> None:
     payload = [w.model_dump() for w in list_workflows()]
@@ -236,9 +256,16 @@ def workflow_inspect(workflow_id: str) -> None:
         entry = get_workflow_entry(workflow_id)
     except KeyError as exc:
         raise typer.BadParameter(str(exc)) from exc
-    print(json.dumps(entry.model_dump(), indent=2))
+    payload = entry.model_dump()
+    payload["readiness"] = check_workflow_backend_readiness(workflow_id)
+    print(json.dumps(payload, indent=2))
 
 
+
+
+@workflow_app.command("readiness")
+def workflow_readiness(workflow_id: str, fmt: str = typer.Option("json", "--format")) -> None:
+    _emit_schema(check_workflow_backend_readiness(workflow_id), fmt)
 
 
 @workflow_app.command("plan")
@@ -343,6 +370,7 @@ def doctor() -> None:
         "gpu_cuda_detected": python_cuda_detected,
         "gpu_detection_scope": "python_environment",
         "backends": {name: status.__dict__ for name, status in backend_statuses.items()},
+        "backend_capabilities": {k: v.model_dump() for k, v in list_backend_capabilities().items()},
     }
     if report["gpu_cuda_detected"] is not None:
         report["gpu_cuda_detected_deprecated"] = report["gpu_cuda_detected"]

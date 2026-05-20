@@ -1,24 +1,8 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-import importlib.util
-from importlib import metadata
-import os
-import shutil
-import re
-import subprocess
 
-from lmola.tools.openbabel_tool import detect_openbabel_cli, get_openbabel_version
-
-
-@dataclass(frozen=True)
-class BackendCapability:
-    name: str
-    category: str
-    module_name: str | None = None
-    executable: str | None = None
-    optional_extra: str | None = None
-    notes: str = ""
+from lmola.backends.capabilities import list_backend_capabilities, resolve_backend_capability
 
 
 @dataclass(frozen=True)
@@ -33,93 +17,26 @@ class BackendStatus:
     optional_extra: str | None
 
 
-_BACKENDS: tuple[BackendCapability, ...] = (
-    BackendCapability("ase", "validation", module_name="ase", notes="Core parser/validation dependency."),
-    BackendCapability("rdkit", "structure_generation", module_name="rdkit", optional_extra="rdkit"),
-    BackendCapability("openbabel", "conversion", module_name="openbabel", optional_extra="openbabel", notes="CLI obabel is the primary integration path."),
-    BackendCapability("molsimplify", "structure_generation", module_name="molSimplify", executable="molsimplify", optional_extra="molsimplify"),
-    BackendCapability("xtb", "relaxation", module_name="xtb", executable="xtb", notes="Python module optional; xtb CLI is primary."),
-    BackendCapability("local_llm", "llm", notes="Configured via LMOLA_LLM_* or .lmola/config.yaml (ollama/openai_compatible_local)."),
-    BackendCapability("mock_llm", "llm", notes="Always available for tests and offline fallback."),
-)
+BackendCapability = BackendStatus
 
 
-def _importable(module_name: str) -> bool:
-    return importlib.util.find_spec(module_name) is not None
-
-
-def _version_for_module(module_name: str) -> str | None:
-    try:
-        return metadata.version(module_name)
-    except metadata.PackageNotFoundError:
+def _to_status(backend_id: str) -> BackendStatus | None:
+    cap = resolve_backend_capability(backend_id)
+    if not cap:
         return None
-
-
-def _parse_xtb_version(output: str) -> str | None:
-    for raw_line in output.splitlines():
-        line = raw_line.strip()
-        if not line or set(line) <= {"-", "=", "_"}:
-            continue
-        match = re.search(r"\b(\d+\.\d+(?:\.\d+)*)\b", line)
-        if match:
-            return match.group(1)
-    return None
-
-
-def _xtb_version(executable: str | None) -> str | None:
-    if not executable:
-        return None
-    try:
-        completed = subprocess.run([executable, "--version"], capture_output=True, text=True, check=False)
-    except Exception:
-        return None
-    combined = "\n".join([completed.stdout or "", completed.stderr or ""]).strip()
-    return _parse_xtb_version(combined)
-
-
-def _status(cap: BackendCapability) -> BackendStatus:
-    importable = _importable(cap.module_name) if cap.module_name else None
-    executable = shutil.which(cap.executable) if cap.executable else None
-    if cap.name == "openbabel":
-        override = os.environ.get("LMOLA_OBABEL_EXECUTABLE")
-        if override:
-            executable = detect_openbabel_cli()
-        else:
-            executable = detect_openbabel_cli()
-    version = None
-
-    if cap.name == "xtb":
-        version = _xtb_version(executable)
-    elif cap.name == "openbabel":
-        version = get_openbabel_version(executable)
-    elif cap.module_name and importable:
-        version = _version_for_module(cap.module_name)
-
-    if cap.name == "local_llm":
-        available = True
-    elif cap.name == "mock_llm":
-        available = True
-    else:
-        available = bool(importable) or bool(executable)
-
-    return BackendStatus(
-        name=cap.name,
-        category=cap.category,
-        available=available,
-        importable=importable,
-        executable=executable,
-        version=version,
-        notes=cap.notes,
-        optional_extra=cap.optional_extra,
-    )
+    importable = None if not cap.python_modules else (cap.status == "available" and any(cap.python_modules))
+    executable = next((v for v in cap.executable_paths.values() if v), None) if cap.executable_paths else None
+    return BackendStatus(name=cap.backend_id, category=cap.category, available=cap.status == "available", importable=importable, executable=executable, version=cap.version, notes=cap.notes or "", optional_extra=cap.optional_extra)
 
 
 def list_backend_statuses() -> dict[str, BackendStatus]:
-    return {cap.name: _status(cap) for cap in _BACKENDS}
+    return {k: _to_status(k) for k in list_backend_capabilities()}
 
 
 def get_backend_status(name: str) -> BackendStatus | None:
-    for cap in _BACKENDS:
-        if cap.name == name:
-            return _status(cap)
-    return None
+    return _to_status(name)
+
+
+def _parse_xtb_version(output: str) -> str | None:
+    from lmola.backends.capabilities import _parse_xtb_version as _inner
+    return _inner(output)

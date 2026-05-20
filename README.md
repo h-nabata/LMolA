@@ -633,3 +633,17 @@ Examples:
 - `lmola artifacts triage outputs/mcp_audit/mcp_run_...json --format json`
 - `lmola artifacts triage outputs/agent_smoke_... --format json`
 - `lmola mcp call-tool lmola.triage_artifacts --args-json '{"path":"outputs/agent_smoke_..."}'`
+
+## Backend capability registry (Phase 13)
+LMolA now exposes a read-only backend capability registry that describes backend availability, supported tasks, input/output contracts, and safety metadata. This registry does **not** execute chemistry tools.
+
+- Capabilities are data-driven and shared across doctor/schema/MCP/runtime layers.
+- Workflows declare `required_backends` in the workflow catalog.
+- Future backend additions should first add registry descriptors before execution plumbing.
+
+Commands:
+- `lmola backends list --format json`
+- `lmola backends inspect rdkit --format json`
+- `lmola workflow inspect smiles_to_xtb_relax`
+- `lmola workflow readiness smiles_to_xtb_relax --format json`
+- `lmola mcp call-tool lmola.get_backend_capabilities --args-json '{"backend_id":"xtb"}'`
