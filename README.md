@@ -647,3 +647,39 @@ Commands:
 - `lmola workflow inspect smiles_to_xtb_relax`
 - `lmola workflow readiness smiles_to_xtb_relax --format json`
 - `lmola mcp call-tool lmola.get_backend_capabilities --args-json '{"backend_id":"xtb"}'`
+
+## Backend-aware planning and LLM selection benchmark
+
+Planner context now includes workflow `required_backends`, per-workflow `readiness`, and compact backend capability visibility so workflow selection can enforce backend constraints during planning.
+
+- Planner should select only implemented, ready workflows.
+- Requests needing unavailable backends should return `backend_unavailable` or `unsupported` (not an executable workflow).
+- Default CI remains mock/local and does **not** require Ollama/GPU/network.
+
+Commands:
+
+```bash
+lmola workflow eval-planner examples/planner_backend_eval_cases.yaml
+lmola backends list --format json
+lmola workflow readiness smiles_to_xtb_relax --format json
+lmola mcp call-tool lmola.get_planner_context --args-json '{}'
+lmola mcp call-tool lmola.get_backend_capabilities --args-json '{"backend_id":"xtb"}'
+```
+
+Optional Ollama/Qwen benchmark:
+
+```bash
+cat > .lmola/config.yaml <<'EOF_CFG'
+llm:
+  enabled: true
+  backend: ollama
+  base_url: http://127.0.0.1:11434
+  model: qwen2.5-coder:14b
+  temperature: 0
+  timeout_seconds: 180
+  max_tokens: 2048
+EOF_CFG
+
+lmola workflow eval-planner examples/planner_backend_eval_cases.yaml
+LMOLA_RUN_OLLAMA_TESTS=1 pytest -m ollama -q
+```
