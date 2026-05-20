@@ -14,6 +14,7 @@ from lmola.mcp_preview import export_mcp_tools_preview
 from lmola.artifact_summary import summarize_artifact_path
 from lmola.artifact_triage import triage_artifact_path
 from lmola.schema_export import export_all_schemas, export_planner_schema_bundle, export_tool_registry_schema, export_workflow_catalog_schema
+from lmola.backends.capabilities import list_backend_capabilities, resolve_backend_capability
 from lmola.workflows.catalog import get_workflow_entry, list_workflows
 from lmola.workflows.runner import run_workflow_request
 from lmola.workflows.schemas import WorkflowRequest
@@ -39,6 +40,7 @@ RUNTIME_ALLOWED_TOOLS = {
     "lmola.run_workflow",
     "lmola.summarize_artifacts",
     "lmola.triage_artifacts",
+    "lmola.get_backend_capabilities",
 }
 
 
@@ -158,6 +160,7 @@ def list_mcp_tools_runtime() -> list[dict[str, Any]]:
         "lmola.run_workflow": {"description": "Run a validated, allowlisted LMolA workflow request after explicit confirmation and write batch artifacts.", "inputSchema": {"type": "object", "additionalProperties": False, "properties": {"workflow_id": {"type": "string"}, "input": {"type": "object"}, "columns": {"type": ["object", "null"]}, "outputs": {"type": ["object", "null"]}, "metadata": {"type": ["object", "null"]}, "dry_run": {"type": "boolean", "default": True}, "allow_execution": {"type": "boolean", "default": False}, "confirm": {"type": "boolean", "default": False}, "confirmation_text": {"type": ["string", "null"]}, "output_root": {"type": ["string", "null"]}, "reason": {"type": ["string", "null"]}}, "required": ["workflow_id", "input"]}},
         "lmola.summarize_artifacts": {"description": "Summarize LMolA output artifacts into compact structured JSON for LLM interpretation.", "inputSchema": {"type": "object", "additionalProperties": False, "properties": {"path": {"type": "string"}, "max_items": {"type": "integer", "default": 20, "minimum": 1, "maximum": 200}, "max_text_chars": {"type": "integer", "default": 4000, "minimum": 100, "maximum": 20000}}, "required": ["path"]}},
         "lmola.triage_artifacts": {"description": "Diagnose LMolA output artifacts and produce read-only failure triage JSON.", "inputSchema": {"type": "object", "additionalProperties": False, "properties": {"path": {"type": "string"}, "max_items": {"type": "integer", "default": 20, "minimum": 1, "maximum": 200}, "max_text_chars": {"type": "integer", "default": 4000, "minimum": 100, "maximum": 20000}}, "required": ["path"]}},
+        "lmola.get_backend_capabilities": {"description": "Return backend capability registry metadata without executing tools.", "inputSchema": {"type": "object", "additionalProperties": False, "properties": {"backend_id": {"type": ["string", "null"]}, "compact": {"type": "boolean", "default": False}}}},
     }
     runtime_tools: list[dict[str, Any]] = []
     for name in sorted(RUNTIME_ALLOWED_TOOLS):
@@ -169,7 +172,7 @@ def list_mcp_tools_runtime() -> list[dict[str, Any]]:
         meta = base.setdefault("_meta", {}).setdefault("lmola", {})
         meta["runtime_enabled"] = True
         meta["runtime_phase"] = RUNTIME_PHASE
-        meta["runtime_features"] = ["12.7_artifact_summarizer", "12.8_artifact_aware_agent_analysis"]
+        meta["runtime_features"] = ["12.7_artifact_summarizer", "12.8_artifact_aware_agent_analysis", "12.9_artifact_triage", "13_backend_capability_registry"]
         meta.setdefault("dry_run_only", True)
         meta.setdefault("side_effects", False)
         meta.setdefault("executes_workflow", False)
@@ -244,6 +247,16 @@ def call_mcp_tool(name: str, arguments: dict[str, Any] | None = None) -> dict[st
             return {"status": "ok", "workflow_catalog": export_workflow_catalog_schema(compact=bool(args.get("compact", False)))}
         if name == "lmola.get_planner_context":
             return {"status": "ok", "planner_context": export_planner_schema_bundle()}
+        if name == "lmola.get_backend_capabilities":
+            backend_id = args.get("backend_id")
+            if backend_id is None:
+                return {"status": "ok", "backend_capabilities": {k: v.model_dump() for k, v in list_backend_capabilities().items()}}
+            if not isinstance(backend_id, str):
+                return _runtime_error("invalid_arguments", "backend_id must be string or null.")
+            cap = resolve_backend_capability(backend_id)
+            if cap is None:
+                return _runtime_error("unknown_backend", "Unknown backend_id.", backend_id=backend_id)
+            return {"status": "ok", "backend_capability": cap.model_dump()}
         if name == "lmola.validate_workflow":
             req = WorkflowRequest.model_validate(args)
             return {"status": "ok", "canonical_workflow_json": _canonicalize_workflow(req)}

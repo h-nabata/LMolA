@@ -6,6 +6,7 @@ from pathlib import Path
 from typing import Any
 
 from lmola.artifact_summary import summarize_artifact_path
+from lmola.workflows.catalog import get_workflow_entry
 
 BACKEND_HINT_TOKENS = ("backend", "import", "executable", "not found", "unavailable", "missing")
 FAILURE_LIKE = {"error", "failed", "fail"}
@@ -183,6 +184,14 @@ def triage_batch_dir(batch_dir: str | Path, *, max_items: int = 20, max_text_cha
         )
 
     out["summary"] = f"Batch has failures; classified as {out['failure_category']}."
+    wr = batch_path / "workflow_result.json"
+    if wr.exists():
+        try:
+            workflow_id = json.loads(wr.read_text(encoding="utf-8")).get("workflow_id")
+            if isinstance(workflow_id, str) and workflow_id:
+                out["required_backends"] = get_workflow_entry(workflow_id).required_backends
+        except Exception:
+            pass
     out["safe_next_actions"] = ["Inspect failed items and run.log excerpts.", "Review validation reports and workflow_result.json details."]
     out["not_recommended_actions"].append("Do not infer chemical correctness beyond artifact status fields.")
     return out

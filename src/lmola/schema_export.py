@@ -8,6 +8,7 @@ import yaml
 from lmola.agent.planner_eval import PlannerEvalCase, PlannerEvalSuite
 from lmola.schemas import BuildOptions, MoleculeBuildRequest, ToolCallRecord, ToolResult
 from lmola.tools.registry import RelaxXtbRequest, ValidateStructureRequest, list_tools
+from lmola.backends.capabilities import backend_capability_schema, list_backend_capabilities
 from lmola.workflows import list_workflows
 from lmola.workflows.schemas import WorkflowInput, WorkflowOutputs, WorkflowRequest, WorkflowStep
 
@@ -127,6 +128,8 @@ def export_all_schemas() -> dict:
             "workflow_catalog": export_workflow_catalog_schema(compact=False),
             "workflow_catalog_compact": export_workflow_catalog_schema(compact=True),
             "planner_context_compact": export_planner_schema_bundle(),
+            "backend_capability_schema": backend_capability_schema(),
+            "backend_capabilities": {k: v.model_dump() for k, v in list_backend_capabilities().items()},
         }
     )
 
