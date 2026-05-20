@@ -3,6 +3,7 @@ from __future__ import annotations
 from pathlib import Path
 
 from lmola.workflows.schemas import WorkflowExecutionResult, WorkflowSummary
+from lmola.agent.workflow_planner import WorkflowPlanningResult
 from lmola.mcp_runtime import (
     MCP_EXECUTION_ALLOWLIST,
     call_mcp_tool,
@@ -127,6 +128,21 @@ def test_runtime_plan_validate_do_not_create_batch_dirs(monkeypatch) -> None:
     )
     after = len(list(outputs.glob("batch_*"))) if outputs.exists() else 0
     assert after == before
+
+
+def test_mcp_plan_normalizes_known_unavailable_backend(monkeypatch) -> None:
+    def _fake_plan(_request: str, write_artifacts: bool = False) -> WorkflowPlanningResult:  # noqa: ARG001
+        return WorkflowPlanningResult(
+            status="error",
+            message="molSimplify is not supported in the allowed workflows.",
+            natural_language_request="Generate an octahedral iron complex using molSimplify.",
+            parsed_workflow={"status": "unsupported", "reason": "molSimplify is not supported in the allowed workflows."},
+        )
+
+    monkeypatch.setattr("lmola.mcp_runtime.plan_workflow_request", _fake_plan)
+    out = call_mcp_tool("lmola.plan_workflow", {"request": "Generate an octahedral iron complex using molSimplify."})
+    assert out["status"] == "ok"
+    assert out["planning_result"]["normalized_status"] == "backend_unavailable"
 
 
 def test_run_workflow_dryrun_and_denied_do_not_create_mcp_runs() -> None:

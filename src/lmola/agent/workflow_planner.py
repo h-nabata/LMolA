@@ -84,6 +84,7 @@ def build_schema_driven_planner_prompt(context: dict) -> str:
         "Prefer ready workflows when multiple workflows match the request.\\n"
         "Do not select workflows where readiness.ready is false or missing_backends is non-empty.\\n"
         "If request explicitly requires unavailable backend, return backend_unavailable with missing_backends.\\n"
+        "If a known backend in backend_capabilities is unavailable, do not return generic unsupported; return backend_unavailable.\\n"
         "Do not turn unavailable workflows into executable plans.\\n"
         "Check each workflow's input_types before selecting a workflow.\\n"
         "For XYZ inputs, do not select SMILES-only workflows.\\n"

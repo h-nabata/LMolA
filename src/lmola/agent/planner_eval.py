@@ -10,6 +10,7 @@ import yaml
 from pydantic import BaseModel, Field
 
 from lmola.agent.workflow_planner import plan_workflow_request
+from lmola.backends.capabilities import list_backend_capabilities
 from lmola.config import load_app_config
 from lmola.io.converters import dump_json
 from lmola.io.run_artifacts import collect_environment
@@ -104,6 +105,28 @@ def _canonical_tools_from_result(planning_result: dict) -> list[str] | None:
     return tools
 
 
+def _normalize_token(text: str) -> str:
+    return "".join(ch for ch in text.lower() if ch.isalnum())
+
+
+def _backend_aliases(backend_id: str, display_name: str) -> set[str]:
+    aliases = {_normalize_token(backend_id), _normalize_token(display_name)}
+    if backend_id == "molsimplify":
+        aliases.update({_normalize_token("mol simplify"), _normalize_token("molSimplify"), _normalize_token("MolSimplify")})
+    return aliases
+
+
+def _infer_unavailable_backend(texts: list[str]) -> str | None:
+    caps = list_backend_capabilities()
+    normalized_haystack = " ".join(_normalize_token(t) for t in texts if t)
+    for backend_id, cap in caps.items():
+        if cap.status != "unavailable":
+            continue
+        if any(alias and alias in normalized_haystack for alias in _backend_aliases(backend_id, cap.display_name)):
+            return backend_id
+    return None
+
+
 def run_planner_eval(eval_cases_yaml: str) -> PlannerEvalRunResult:
     cfg = load_app_config()
     suite = load_eval_suite(eval_cases_yaml)
@@ -193,7 +216,12 @@ def run_planner_eval(eval_cases_yaml: str) -> PlannerEvalRunResult:
             unsupported_handled = planning.status == "error" and not canonicalization_ok and selected_workflow_id is None
         if parsed_status == "backend_unavailable":
             backend_unavailable_handled = planning.status == "error" and selected_workflow_id is None
-        if parsed_status in {"unsupported", "backend_unavailable"}:
+        inferred_unavailable = _infer_unavailable_backend([case.request, str((planning_payload.get("parsed_workflow") or {}).get("reason") or ""), planning.message or ""])
+        if planning.status != "ok" and inferred_unavailable and parsed_status in {None, "unsupported", "backend_unavailable"}:
+            normalized_status = "backend_unavailable"
+            backend_unavailable_handled = planning.status == "error" and selected_workflow_id is None
+            unsupported_handled = False
+        elif parsed_status in {"unsupported", "backend_unavailable"}:
             normalized_status = parsed_status
         elif unsupported_handled:
             normalized_status = "unsupported"

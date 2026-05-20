@@ -5,6 +5,7 @@ import csv
 from typer.testing import CliRunner
 
 from lmola.agent.planner_eval import load_eval_suite, run_planner_eval
+from lmola.agent.planner_eval import _infer_unavailable_backend
 from lmola.cli import app
 
 runner = CliRunner()
@@ -179,3 +180,14 @@ def test_backend_eval_cases_with_mock(monkeypatch) -> None:
     assert by_case["molsimplify_unavailable"]["normalized_status"] == "backend_unavailable"
     for case_id in ["rdkit_3d", "openbabel_3d", "rdkit_conformers", "xtb_relax_smiles_csv", "xtb_relax_xyz", "validate_xyz_only"]:
         assert "selected_readiness_ready" in by_case[case_id]
+
+
+def test_unavailable_backend_inference_aliases() -> None:
+    assert _infer_unavailable_backend(["Generate with molSimplify."]) == "molsimplify"
+    assert _infer_unavailable_backend(["Generate with mol simplify backend."]) == "molsimplify"
+    assert _infer_unavailable_backend(["MolSimplify is not supported in the allowed workflows."]) == "molsimplify"
+
+
+def test_unavailable_backend_inference_preserves_unsupported() -> None:
+    assert _infer_unavailable_backend(["Run CREST conformer search from xyz."]) is None
+    assert _infer_unavailable_backend(["Find transition state using DFT and NEB."]) is None
