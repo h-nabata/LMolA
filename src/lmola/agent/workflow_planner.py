@@ -69,6 +69,7 @@ def build_schema_driven_planner_prompt(context: dict) -> str:
     }
     supported_value_example = {"input": {"type": "smiles", "value": "CCO"}}
     unsupported_example = {"status": "unsupported", "reason": "short reason"}
+    backend_unavailable_example = {"status": "backend_unavailable", "reason": "xTB backend is unavailable", "missing_backends": ["xtb"]}
     return (
         "You are LMolA local workflow planner.\\n"
         "You are the LMolA schema-driven workflow planner.\\n"
@@ -76,8 +77,15 @@ def build_schema_driven_planner_prompt(context: dict) -> str:
         "Do not output Markdown, prose, code fences, comments, shell commands, tool command lines, or Python code.\\n"
         "Never execute tools. Never execute shell commands. Never claim execution happened.\\n"
         "Do not invent workflow IDs or tool names.\\n"
+        "Do not invent backend IDs.\\n"
         "Use only workflows from allowed_workflow_ids and input types from allowed_input_types.\\n"
         "The selected workflow_id must support the selected input.type.\\n"
+        "Choose only implemented workflows in catalog entries.\\n"
+        "Prefer ready workflows when multiple workflows match the request.\\n"
+        "Do not select workflows where readiness.ready is false or missing_backends is non-empty.\\n"
+        "If request explicitly requires unavailable backend, return backend_unavailable with missing_backends.\\n"
+        "If a known backend in backend_capabilities is unavailable, do not return generic unsupported; return backend_unavailable.\\n"
+        "Do not turn unavailable workflows into executable plans.\\n"
         "Check each workflow's input_types before selecting a workflow.\\n"
         "For XYZ inputs, do not select SMILES-only workflows.\\n"
         "For CREST/DFT/TS/NEB tasks not in catalog, return unsupported.\\n"
@@ -94,6 +102,7 @@ def build_schema_driven_planner_prompt(context: dict) -> str:
         f"Supported task output example: {json.dumps(supported_example)}\\n"
         f"Value input example: {json.dumps(supported_value_example)}\\n"
         f"Unsupported task output example: {json.dumps(unsupported_example)}"
+        f"Backend unavailable output example: {json.dumps(backend_unavailable_example)}"
     )
 
 
@@ -191,7 +200,7 @@ def plan_workflow_request(request_text: str, write_artifacts: bool = True) -> Wo
             dump_json(plan_dir / "planning_result.json", result.model_dump())
         return result
 
-    if parsed.get("status") == "unsupported":
+    if parsed.get("status") in {"unsupported", "backend_unavailable"}:
         result = WorkflowPlanningResult(status="error", message=parsed.get("reason", "Requested task is not supported by the current workflow catalog."), natural_language_request=request_text, raw_llm_response=raw, parsed_workflow=parsed, plan_dir=str(plan_dir) if plan_dir else None, config_redacted=redacted_llm_config(cfg.llm), planner_prompt_mode="schema_driven", planner_context_schema_version=context.get("schema_version"), planner_context_workflow_count=len(context.get("workflows", [])), planner_context_allowed_workflow_ids=context.get("allowed_workflow_ids", []))
         if plan_dir:
             dump_json(plan_dir / "planning_result.json", result.model_dump())

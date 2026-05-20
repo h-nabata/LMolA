@@ -132,6 +132,12 @@ def _mock_workflow_plan(request: str) -> dict:
         return {"workflow_id": "smiles_to_xtb_relax", "input": {"type": "smiles_csv", "path": "examples/smiles_list.csv"}, "columns": {"id": "id", "smiles": "smiles"}, "outputs": {"summary_csv": True, "summary_json": True}}
     if key == "Generate conformers from examples/smiles_list.csv using RDKit.":
         return {"workflow_id": "smiles_to_conformers_rdkit", "input": {"type": "smiles_csv", "path": "examples/smiles_list.csv"}, "columns": {"id": "id", "smiles": "smiles"}, "outputs": {"summary_csv": True, "summary_json": True}}
+    if key == "Generate 3D structures from examples/smiles_list.csv using Open Babel.":
+        return {"workflow_id": "smiles_to_3d_openbabel", "input": {"type": "smiles_csv", "path": "examples/smiles_list.csv"}, "columns": {"id": "id", "smiles": "smiles"}, "outputs": {"summary_csv": True, "summary_json": True}}
+    if key == "Validate examples/example.xyz and relax it with xTB.":
+        return {"workflow_id": "xyz_to_xtb_relax", "input": {"type": "xyz", "path": "examples/example.xyz"}, "outputs": {"summary_csv": True, "summary_json": True}}
     if key == "Validate examples/example.xyz.":
         return {"workflow_id": "validate_xyz", "input": {"type": "xyz", "path": "examples/example.xyz"}, "outputs": {"summary_csv": True, "summary_json": True}}
+    if key == "Generate an octahedral iron complex using molSimplify.":
+        return {"status": "backend_unavailable", "reason": "molsimplify backend is unavailable in this environment.", "missing_backends": ["molsimplify"]}
     return {"status": "unsupported", "reason": "Requested task is not supported by the current workflow catalog.", "suggested_supported_workflows": ["smiles_to_3d_rdkit", "smiles_to_xtb_relax"]}

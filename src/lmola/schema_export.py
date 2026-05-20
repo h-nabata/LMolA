@@ -9,7 +9,7 @@ from lmola.agent.planner_eval import PlannerEvalCase, PlannerEvalSuite
 from lmola.schemas import BuildOptions, MoleculeBuildRequest, ToolCallRecord, ToolResult
 from lmola.tools.registry import RelaxXtbRequest, ValidateStructureRequest, list_tools
 from lmola.backends.capabilities import backend_capability_schema, list_backend_capabilities
-from lmola.workflows import list_workflows
+from lmola.workflows import check_workflow_backend_readiness, list_workflows
 from lmola.workflows.schemas import WorkflowInput, WorkflowOutputs, WorkflowRequest, WorkflowStep
 
 MODEL_REGISTRY = {
@@ -67,6 +67,7 @@ def export_workflow_catalog_schema(*, compact: bool = False) -> dict:
     for entry in list_workflows():
         canonical_steps = [{"tool": t} for t in entry.tools]
         backends = sorted({b for name in entry.tools for b in tool_map.get(name).required_backends})
+        readiness = check_workflow_backend_readiness(entry.workflow_id)
         payload = {
             "workflow_id": entry.workflow_id,
             "task_type": entry.task_type,
@@ -75,6 +76,7 @@ def export_workflow_catalog_schema(*, compact: bool = False) -> dict:
             "description": entry.description,
             "canonical_steps": canonical_steps,
             "required_backends": backends,
+            "readiness": readiness,
             "supported": True,
             "notes": "",
         }
@@ -85,6 +87,11 @@ def export_workflow_catalog_schema(*, compact: bool = False) -> dict:
                 "input_types": entry.input_types,
                 "tools": entry.tools,
                 "description": entry.description,
+                "required_backends": backends,
+                "readiness": {
+                    "ready": readiness["ready"],
+                    "missing_backends": readiness["missing_backends"],
+                },
             }
         workflows.append(payload)
     return _canonicalize({"schema_version": "lmola.workflow_catalog.v1", "workflows": workflows, "workflow_ids": [w["workflow_id"] for w in workflows]})
@@ -92,6 +99,8 @@ def export_workflow_catalog_schema(*, compact: bool = False) -> dict:
 
 def export_planner_schema_bundle() -> dict:
     full = export_workflow_catalog_schema(compact=False)
+    backend_capabilities = {k: v.model_dump() for k, v in list_backend_capabilities().items()}
+    unavailable = [k for k, v in backend_capabilities.items() if v.get("status") != "available"]
     return _canonicalize(
         {
             "schema_version": "lmola.planner_context.v1",
@@ -108,8 +117,15 @@ def export_planner_schema_bundle() -> dict:
                     "input_types": wf["input_types"],
                     "canonical_tools": wf["tools"],
                     "description": wf["description"],
+                    "required_backends": wf.get("required_backends", []),
+                    "readiness": wf.get("readiness", {}),
                 }
                 for wf in full["workflows"]
+            ],
+            "backend_capabilities": backend_capabilities,
+            "unavailable_backend_notes": [
+                f"Backend {backend_id} is currently unavailable and workflows requiring it must not be selected."
+                for backend_id in unavailable
             ],
             "unsupported_task_policy": "Return status='unsupported' with a short reason when no catalog workflow matches the user request.",
         }

@@ -10,6 +10,7 @@ import yaml
 from pydantic import BaseModel, Field
 
 from lmola.agent.workflow_planner import plan_workflow_request
+from lmola.backends.capabilities import list_backend_capabilities
 from lmola.config import load_app_config
 from lmola.io.converters import dump_json
 from lmola.io.run_artifacts import collect_environment
@@ -21,6 +22,8 @@ class PlannerEvalCase(BaseModel):
     expected_status: str = "ok"
     expected_workflow_id: str | None = None
     expected_tools: list[str] | None = None
+    expected_required_backends: list[str] | None = None
+    expected_normalized_status: str | None = None
     notes: str | None = None
 
 
@@ -100,6 +103,28 @@ def _canonical_tools_from_result(planning_result: dict) -> list[str] | None:
         if isinstance(step, dict) and isinstance(step.get("tool"), str):
             tools.append(step["tool"])
     return tools
+
+
+def _normalize_token(text: str) -> str:
+    return "".join(ch for ch in text.lower() if ch.isalnum())
+
+
+def _backend_aliases(backend_id: str, display_name: str) -> set[str]:
+    aliases = {_normalize_token(backend_id), _normalize_token(display_name)}
+    if backend_id == "molsimplify":
+        aliases.update({_normalize_token("mol simplify"), _normalize_token("molSimplify"), _normalize_token("MolSimplify")})
+    return aliases
+
+
+def _infer_unavailable_backend(texts: list[str]) -> str | None:
+    caps = list_backend_capabilities()
+    normalized_haystack = " ".join(_normalize_token(t) for t in texts if t)
+    for backend_id, cap in caps.items():
+        if cap.status != "unavailable":
+            continue
+        if any(alias and alias in normalized_haystack for alias in _backend_aliases(backend_id, cap.display_name)):
+            return backend_id
+    return None
 
 
 def run_planner_eval(eval_cases_yaml: str) -> PlannerEvalRunResult:
@@ -184,17 +209,49 @@ def run_planner_eval(eval_cases_yaml: str) -> PlannerEvalRunResult:
         if case.expected_tools is not None:
             tools_match = canonical_tools == case.expected_tools
 
+        parsed_status = (planning_payload.get("parsed_workflow") or {}).get("status")
         unsupported_handled = False
+        backend_unavailable_handled = False
         if case.expected_status == "unsupported":
             unsupported_handled = planning.status == "error" and not canonicalization_ok and selected_workflow_id is None
-        normalized_status = "unsupported" if unsupported_handled else actual_status
+        if parsed_status == "backend_unavailable":
+            backend_unavailable_handled = planning.status == "error" and selected_workflow_id is None
+        inferred_unavailable = _infer_unavailable_backend([case.request, str((planning_payload.get("parsed_workflow") or {}).get("reason") or ""), planning.message or ""])
+        if planning.status != "ok" and inferred_unavailable and parsed_status in {None, "unsupported", "backend_unavailable"}:
+            normalized_status = "backend_unavailable"
+            backend_unavailable_handled = planning.status == "error" and selected_workflow_id is None
+            unsupported_handled = False
+        elif parsed_status in {"unsupported", "backend_unavailable"}:
+            normalized_status = parsed_status
+        elif unsupported_handled:
+            normalized_status = "unsupported"
+        else:
+            normalized_status = actual_status
+        expected_normalized_status = case.expected_normalized_status or case.expected_status
+        selected_required_backends = (planning_payload.get("canonical_workflow_json") or {}).get("steps")
+        selected_required_backends = None
+        selected_readiness_ready = None
+        selected_missing_backends = None
+        if selected_workflow_id:
+            from lmola.workflows.catalog import check_workflow_backend_readiness, get_workflow_entry
+            selected_required_backends = get_workflow_entry(selected_workflow_id).required_backends
+            readiness = check_workflow_backend_readiness(selected_workflow_id)
+            selected_readiness_ready = readiness.get("ready")
+            selected_missing_backends = readiness.get("missing_backends")
+        required_backends_match = True if case.expected_required_backends is None else (selected_required_backends == case.expected_required_backends)
+        backend_readiness_ok = selected_readiness_ready is True if normalized_status == "ok" and selected_workflow_id else True
+        unavailable_backend_selected = bool(selected_workflow_id and selected_missing_backends)
+        hallucinated_workflow_id = bool(selected_workflow_id and selected_workflow_id not in planning_payload.get("planner_context_allowed_workflow_ids", []))
+        backend_constraint_violated = bool(normalized_status == "ok" and unavailable_backend_selected)
 
         if case.expected_status == "ok":
             case_passed = planning.status == "ok" and workflow_match and tools_match
-        elif case.expected_status == "unsupported":
-            case_passed = unsupported_handled
+        elif case.expected_status in {"unsupported", "backend_unavailable"}:
+            case_passed = normalized_status == case.expected_status
         else:
             case_passed = planning.status == "error"
+        if case.expected_normalized_status is not None:
+            case_passed = case_passed and normalized_status == case.expected_normalized_status
 
         if case_passed:
             passed += 1
@@ -210,17 +267,28 @@ def run_planner_eval(eval_cases_yaml: str) -> PlannerEvalRunResult:
             "selected_workflow_id": selected_workflow_id,
             "workflow_match": workflow_match,
             "expected_tools": case.expected_tools,
+            "expected_required_backends": case.expected_required_backends,
             "canonical_tools": canonical_tools,
+            "selected_required_backends": selected_required_backends,
+            "required_backends_match": required_backends_match,
+            "selected_readiness_ready": selected_readiness_ready,
+            "selected_missing_backends": selected_missing_backends,
+            "backend_readiness_ok": backend_readiness_ok,
             "tools_match": tools_match,
             "parse_ok": parse_ok,
             "validation_ok": validation_ok,
             "canonicalization_ok": canonicalization_ok,
             "unsupported_handled": unsupported_handled,
+            "backend_unavailable_handled": backend_unavailable_handled,
+            "expected_normalized_status": expected_normalized_status,
             "executed": planning_payload.get("executed", False),
             "plan_dir": planning_payload.get("plan_dir"),
             "case_dir": str(case_dir),
             "error_message": None if planning.status == "ok" else planning.message,
             "elapsed_seconds": elapsed,
+            "hallucinated_workflow_id": hallucinated_workflow_id,
+            "unavailable_backend_selected": unavailable_backend_selected,
+            "backend_constraint_violated": backend_constraint_violated,
             "passed": case_passed,
         }
         row["failure_category"] = _classify_failure(row)
@@ -231,7 +299,8 @@ def run_planner_eval(eval_cases_yaml: str) -> PlannerEvalRunResult:
     summary_csv = eval_dir / "eval_summary.csv"
     dump_json(summary_json, rows)
     with summary_csv.open("w", newline="", encoding="utf-8") as fh:
-        writer = csv.DictWriter(fh, fieldnames=list(rows[0].keys()) if rows else ["suite_id", "case_id"])
+        fieldnames = sorted({k for row in rows for k in row.keys()}) if rows else ["suite_id", "case_id"]
+        writer = csv.DictWriter(fh, fieldnames=fieldnames)
         writer.writeheader()
         for row in rows:
             writer.writerow(row)

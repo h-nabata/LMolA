@@ -5,6 +5,7 @@ import csv
 from typer.testing import CliRunner
 
 from lmola.agent.planner_eval import load_eval_suite, run_planner_eval
+from lmola.agent.planner_eval import _infer_unavailable_backend
 from lmola.cli import app
 
 runner = CliRunner()
@@ -19,6 +20,12 @@ def test_eval_suite_schema_parses_example() -> None:
     suite = load_eval_suite("examples/planner_eval_cases.yaml")
     assert suite.suite_id == "planner_eval_phase_10_5"
     assert len(suite.cases) >= 6
+
+
+def test_backend_eval_suite_schema_parses_example() -> None:
+    suite = load_eval_suite("examples/planner_backend_eval_cases.yaml")
+    assert suite.suite_id == "planner_backend_eval_v1"
+    assert len(suite.cases) == 9
 
 
 def test_eval_planner_cli_with_mock(monkeypatch) -> None:
@@ -160,3 +167,27 @@ def test_eval_continues_on_unexpected_exception(monkeypatch, tmp_path) -> None:
     rows = json.loads((eval_dir / "eval_summary.json").read_text(encoding="utf-8"))
     assert len(rows) == 2
     assert rows[0]["failure_category"] == "unexpected_error"
+
+
+def test_backend_eval_cases_with_mock(monkeypatch) -> None:
+    _enable_mock(monkeypatch)
+    result = run_planner_eval("examples/planner_backend_eval_cases.yaml")
+    assert result.failed_cases == 0
+    rows = json.loads(Path(result.summary_json).read_text(encoding="utf-8"))
+    by_case = {r["case_id"]: r for r in rows}
+    assert by_case["openbabel_3d"]["selected_workflow_id"] == "smiles_to_3d_openbabel"
+    assert by_case["rdkit_conformers"]["selected_workflow_id"] == "smiles_to_conformers_rdkit"
+    assert by_case["molsimplify_unavailable"]["normalized_status"] == "backend_unavailable"
+    for case_id in ["rdkit_3d", "openbabel_3d", "rdkit_conformers", "xtb_relax_smiles_csv", "xtb_relax_xyz", "validate_xyz_only"]:
+        assert "selected_readiness_ready" in by_case[case_id]
+
+
+def test_unavailable_backend_inference_aliases() -> None:
+    assert _infer_unavailable_backend(["Generate with molSimplify."]) == "molsimplify"
+    assert _infer_unavailable_backend(["Generate with mol simplify backend."]) == "molsimplify"
+    assert _infer_unavailable_backend(["MolSimplify is not supported in the allowed workflows."]) == "molsimplify"
+
+
+def test_unavailable_backend_inference_preserves_unsupported() -> None:
+    assert _infer_unavailable_backend(["Run CREST conformer search from xyz."]) is None
+    assert _infer_unavailable_backend(["Find transition state using DFT and NEB."]) is None

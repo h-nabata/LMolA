@@ -9,6 +9,7 @@ from uuid import uuid4
 
 from pydantic import ValidationError
 
+from lmola.agent.planner_eval import _infer_unavailable_backend
 from lmola.agent.workflow_planner import plan_workflow_request
 from lmola.mcp_preview import export_mcp_tools_preview
 from lmola.artifact_summary import summarize_artifact_path
@@ -267,12 +268,28 @@ def call_mcp_tool(name: str, arguments: dict[str, Any] | None = None) -> dict[st
             write_artifacts = bool(args.get("write_artifacts", False))
             planning = plan_workflow_request(request_text.strip(), write_artifacts=write_artifacts)
             planning_payload = planning.model_dump()
-            if planning.status == "error" and planning.parsed_workflow and planning.parsed_workflow.get("status") == "unsupported":
-                planning_payload["actual_status"] = planning.status
-                planning_payload["normalized_status"] = "unsupported"
-                return {"status": "ok", "planning_result": planning_payload}
             planning_payload["actual_status"] = planning.status
-            planning_payload["normalized_status"] = "ok" if planning.status == "ok" else "error"
+            if planning.status == "ok":
+                planning_payload["normalized_status"] = "ok"
+            else:
+                parsed_status = (planning.parsed_workflow or {}).get("status")
+                inferred = _infer_unavailable_backend(
+                    [
+                        request_text,
+                        str((planning.parsed_workflow or {}).get("reason") or ""),
+                        planning.message or "",
+                    ]
+                )
+                if inferred and parsed_status in {None, "unsupported", "backend_unavailable"}:
+                    planning_payload["normalized_status"] = "backend_unavailable"
+                elif parsed_status == "backend_unavailable":
+                    planning_payload["normalized_status"] = "backend_unavailable"
+                elif parsed_status == "unsupported":
+                    planning_payload["normalized_status"] = "unsupported"
+                else:
+                    planning_payload["normalized_status"] = "error"
+                if planning_payload["normalized_status"] in {"unsupported", "backend_unavailable"}:
+                    return {"status": "ok", "planning_result": planning_payload}
             if planning.status == "ok":
                 return {"status": "ok", "planning_result": planning_payload}
             return _runtime_error("planning_error", planning.message, planning_result=planning_payload)
