@@ -18,6 +18,12 @@ def test_agent_smoke_mock_end_to_end() -> None:
     assert result["checks"]["mcp_runs_unchanged"] is True
     smoke_dir = Path(result["agent_smoke_dir"])
     assert (smoke_dir / "tool_selection_validation_errors.json").exists()
+    assert (smoke_dir / "artifact_summary_response.json").exists()
+    assert (smoke_dir / "artifact_summary_parsed.json").exists()
+    assert (smoke_dir / "artifact_aware_analysis_parsed.json").exists()
+    assert result["artifact_summary_kind"] == "mcp_audit"
+    assert result["artifact_summary_status"] == "ok"
+    assert "generate_small_molecule_rdkit" in result["artifact_summary_canonical_tools"]
 
 
 def test_agent_smoke_cli_mock_json() -> None:
@@ -25,6 +31,12 @@ def test_agent_smoke_cli_mock_json() -> None:
     assert res.exit_code == 0
     payload = json.loads(res.stdout)
     assert payload["selected_workflow_id"] == "smiles_to_xtb_relax"
+
+
+def test_agent_smoke_mock_no_artifact_summary() -> None:
+    result = run_mcp_agent_smoke(backend="mock", use_artifact_summary=False)
+    assert result["status"] == "ok"
+    assert result["artifact_summary_mode"] == "none"
 
 
 def test_validation_rejects_observed_bad_ollama_json() -> None:

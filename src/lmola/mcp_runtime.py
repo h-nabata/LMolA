@@ -166,6 +166,7 @@ def list_mcp_tools_runtime() -> list[dict[str, Any]]:
         meta = base.setdefault("_meta", {}).setdefault("lmola", {})
         meta["runtime_enabled"] = True
         meta["runtime_phase"] = RUNTIME_PHASE
+        meta["runtime_features"] = ["12.7_artifact_summarizer", "12.8_artifact_aware_agent_analysis"]
         meta.setdefault("dry_run_only", True)
         meta.setdefault("side_effects", False)
         meta.setdefault("executes_workflow", False)
