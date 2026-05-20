@@ -44,11 +44,24 @@ def test_summarize_batch_with_null_steps_and_mcp_tool() -> None:
     payload = summarize_artifact_path(b)
     assert payload["status"] == "ok"
     assert payload["artifact_kind"] == "batch_dir"
-    assert payload["canonical_tools"] == []
-    assert any("missing or null" in w for w in payload["warnings"])
+    assert payload["canonical_tools"] == ["generate_small_molecule_rdkit", "validate_structure_ase", "relax_structure_xtb"]
+    assert any("inferred from workflow catalog" in w for w in payload["warnings"])
     mcp_payload = call_mcp_tool("lmola.summarize_artifacts", {"path": str(b)})
     assert mcp_payload["status"] == "ok"
-    assert mcp_payload["canonical_tools"] == []
+    assert mcp_payload["canonical_tools"] == ["generate_small_molecule_rdkit", "validate_structure_ase", "relax_structure_xtb"]
+
+
+def test_batch_next_actions_success_vs_error() -> None:
+    ok = Path("outputs/batch_next_ok")
+    ok.mkdir(parents=True, exist_ok=True)
+    (ok / "summary.csv").write_text("item_id,status\n1,ok\n", encoding="utf-8")
+    ok_payload = summarize_artifact_path(ok)
+    assert "summary.csv" in " ".join(ok_payload["next_recommended_actions"])
+    err = Path("outputs/batch_next_error")
+    err.mkdir(parents=True, exist_ok=True)
+    (err / "summary.csv").write_text("item_id,status\n1,error\n", encoding="utf-8")
+    err_payload = summarize_artifact_path(err)
+    assert "failed_items" in " ".join(err_payload["next_recommended_actions"])
 
 
 def test_cli_and_mcp_tool() -> None:

@@ -555,6 +555,7 @@ Commands:
 
 - `lmola mcp agent-smoke --backend mock --format json`
 - `lmola mcp agent-smoke --backend ollama --base-url http://127.0.0.1:11434 --model qwen2.5-coder:14b --task "Generate structures from examples/smiles_list.csv and relax them with xTB. Use dry-run only." --format json`
+- `lmola mcp agent-smoke --backend mock --format json --use-artifact-summary`
 
 Artifacts are written under `outputs/agent_smoke_*/`, including:
 
@@ -563,6 +564,34 @@ Artifacts are written under `outputs/agent_smoke_*/`, including:
 - `tool_selection_parsed.json`
 - `mcp_tool_call_response.json`
 - `result_analysis_parsed.json`
+
+## Artifact-aware agent analysis (Phase 12.8)
+
+Agent-smoke now performs an artifact-aware analysis loop by default:
+
+1. Calls `lmola.run_workflow` in dry-run mode.
+2. Extracts a trusted artifact path from tool response fields (for example `audit_path`).
+3. Calls `lmola.summarize_artifacts` (MCP mode by default).
+4. Provides the structured artifact summary to the analysis LLM prompt.
+5. Produces a final JSON report from structured summaries (not raw logs).
+
+Defaults:
+
+- `--use-artifact-summary` enabled
+- `--artifact-summary-mode mcp`
+- `--summarize-after-tool-call` enabled
+
+New artifact files in `outputs/agent_smoke_*/`:
+
+- `artifact_summary_response.json`
+- `artifact_summary_parsed.json`
+- `artifact_aware_analysis_parsed.json`
+
+Safety model:
+
+- Artifact summarization is read-only and safe-path constrained.
+- No low-level chemistry runtime tool exposure is added.
+- Confirmed execution policy is unchanged and remains explicit opt-in.
 
 ## Ollama tool-call schema enforcement
 

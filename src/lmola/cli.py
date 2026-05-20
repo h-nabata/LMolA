@@ -149,6 +149,11 @@ def mcp_agent_smoke(
     out_dir: str = typer.Option("", "--out-dir"),
     allow_confirmed_execution: bool = typer.Option(False, "--allow-confirmed-execution"),
     confirm_execution: bool = typer.Option(False, "--confirm-execution"),
+    use_artifact_summary: bool = typer.Option(True, "--use-artifact-summary/--no-artifact-summary"),
+    artifact_summary_mode: str = typer.Option("mcp", "--artifact-summary-mode"),
+    summarize_after_tool_call: bool = typer.Option(True, "--summarize-after-tool-call"),
+    max_artifact_items: int = typer.Option(20, "--max-artifact-items"),
+    max_artifact_text_chars: int = typer.Option(4000, "--max-artifact-text-chars"),
 ) -> None:
     result = run_mcp_agent_smoke(
         task=task,
@@ -161,6 +166,11 @@ def mcp_agent_smoke(
         out_dir=out_dir,
         allow_confirmed_execution=allow_confirmed_execution,
         confirm_execution=confirm_execution,
+        use_artifact_summary=use_artifact_summary,
+        artifact_summary_mode=artifact_summary_mode,
+        summarize_after_tool_call=summarize_after_tool_call,
+        max_artifact_items=max_artifact_items,
+        max_artifact_text_chars=max_artifact_text_chars,
     )
     typer.echo(render_smoke_result(result, fmt))
     if result.get("status") != "ok":

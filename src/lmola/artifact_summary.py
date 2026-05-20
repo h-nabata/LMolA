@@ -4,6 +4,7 @@ import csv
 import json
 from pathlib import Path
 from typing import Any
+from lmola.workflows.catalog import get_workflow_entry
 
 MAX_FILE_BYTES = 2_000_000
 
@@ -49,6 +50,15 @@ def _canonical_tools_and_warnings(canonical: Any) -> tuple[list[str], list[str]]
         steps = raw_steps
     tools = [s.get("tool") for s in steps if isinstance(s, dict) and s.get("tool")]
     return tools, warnings
+
+
+def _catalog_tools_for_workflow_id(workflow_id: Any) -> list[str]:
+    if not isinstance(workflow_id, str) or not workflow_id:
+        return []
+    try:
+        return list(get_workflow_entry(workflow_id).tools)
+    except Exception:  # noqa: BLE001
+        return []
 
 
 def detect_artifact_kind(path: str | Path) -> str:
@@ -114,6 +124,12 @@ def summarize_batch_dir(batch_dir: str | Path, *, max_items: int = 20, max_text_
     workflow_result = _read_json(p / "workflow_result.json")
     canonical = _read_json(p / "canonical_workflow.json") or _read_json(p / "normalized_workflow.json") or {}
     tools, canonical_warnings = _canonical_tools_and_warnings(canonical)
+    workflow_id = (workflow_result or {}).get("workflow_id") if isinstance(workflow_result, dict) else None
+    if not tools:
+        fallback_tools = _catalog_tools_for_workflow_id((canonical or {}).get("workflow_id") if isinstance(canonical, dict) else workflow_id)
+        if fallback_tools:
+            tools = fallback_tools
+            canonical_warnings.append("canonical workflow steps were missing or null; canonical_tools inferred from workflow catalog.")
     items: list[dict[str, Any]] = []
     if isinstance(summary_json, dict) and isinstance(summary_json.get("items"), list):
         items = [i for i in summary_json["items"] if isinstance(i, dict)]
@@ -122,15 +138,24 @@ def summarize_batch_dir(batch_dir: str | Path, *, max_items: int = 20, max_text_
             items = [dict(r) for r in csv.DictReader(fh)]
     truncated = items[:max_items]
     failed = [i for i in truncated if str(i.get("status", i.get("relax_status", ""))).lower() not in {"ok", "success", ""}]
+    error_count = sum(1 for i in items if str(i.get("status", i.get("relax_status", ""))).lower() not in {"ok", "success", ""})
+    next_actions = (
+        [
+            "Inspect summary.csv, relaxed structures, and representative item artifacts.",
+            "Review canonical workflow before confirmed execution of related tasks.",
+        ]
+        if error_count == 0
+        else ["Inspect failed_items, run.log, and validation reports for triage."]
+    )
     return {
         "status": "ok",
         "artifact_kind": "batch_dir",
         "path": str(p),
         "batch_id": p.name,
-        "workflow_id": (workflow_result or {}).get("workflow_id") if isinstance(workflow_result, dict) else None,
+        "workflow_id": workflow_id,
         "item_count": len(items),
         "ok_count": sum(1 for i in items if str(i.get("status", i.get("relax_status", ""))).lower() in {"ok", "success"}),
-        "error_count": sum(1 for i in items if str(i.get("status", i.get("relax_status", ""))).lower() not in {"ok", "success", ""}),
+        "error_count": error_count,
         "success_rate": (sum(1 for i in items if str(i.get("status", i.get("relax_status", ""))).lower() in {"ok", "success"}) / len(items)) if items else None,
         "summary_csv": str(p / "summary.csv") if (p / "summary.csv").exists() else None,
         "summary_json": str(p / "summary.json") if (p / "summary.json").exists() else None,
@@ -140,7 +165,7 @@ def summarize_batch_dir(batch_dir: str | Path, *, max_items: int = 20, max_text_
         "failed_items": failed,
         "artifact_files": sorted([x.name for x in p.iterdir()]) if p.exists() else [],
         "warnings": ([w for w in canonical_warnings] + (["items_truncated"] if len(items) > max_items else [])),
-        "next_recommended_actions": ["Inspect failed_items and run.log excerpt for triage."],
+        "next_recommended_actions": next_actions,
         "run_log_excerpt": _read_text_excerpt(p / "run.log", max_text_chars),
     }
 

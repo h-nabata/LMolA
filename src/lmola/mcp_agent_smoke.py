@@ -119,12 +119,14 @@ def build_repair_prompt(*, task: str, invalid_call: dict[str, Any], errors: list
     )
 
 
-def build_agent_result_analysis_prompt(*, task: str, selected_tool_name: str, tool_response: dict[str, Any]) -> str:
+def build_agent_result_analysis_prompt(*, task: str, selected_tool_name: str, selected_workflow_id: str, tool_response: dict[str, Any], artifact_summary: dict[str, Any] | None) -> str:
     return (
-        "Return JSON only. Analyze MCP tool response for LMolA smoke.\n"
-        f"Task: {task}\nSelected tool: {selected_tool_name}\nTool response JSON: {json.dumps(tool_response, sort_keys=True)}\n"
-        "If tool result has error, status may be error and include next corrective action.\n"
-        "Schema: {\"status\":\"ok|error\",\"task_interpretation\":string,\"selected_tool_name\":string,\"selected_workflow_id\":string,\"execution_mode\":\"dry_run|plan_only|confirmed_execution|unknown\",\"executed\":bool,\"canonical_tools\":list,\"artifacts_to_inspect\":list,\"warnings\":list,\"next_recommended_action\":string}"
+        "Return JSON only. Analyze LMolA MCP dry-run/tool response using structured summaries only.\n"
+        f"Original task: {task}\nSelected tool: {selected_tool_name}\nSelected workflow: {selected_workflow_id}\n"
+        f"MCP tool response JSON: {json.dumps(tool_response, sort_keys=True)}\n"
+        f"Artifact summary JSON: {json.dumps(artifact_summary or {}, sort_keys=True)}\n"
+        "Do not infer chemical correctness. Report execution status, artifact status, and the next safe action.\n"
+        "Schema: {\"status\":\"ok|error\",\"task_interpretation\":\"...\",\"selected_tool_name\":\"...\",\"selected_workflow_id\":\"...\",\"execution_mode\":\"dry_run|plan_only|confirmed_execution|unknown\",\"executed\":false,\"artifact_summary_kind\":\"mcp_audit|batch_dir|agent_smoke_dir|plan_dir|unknown\",\"canonical_tools\":[],\"artifact_status\":\"ok|error\",\"summary\":\"...\",\"warnings\":[],\"next_recommended_actions\":[]}"
     )
 
 
@@ -133,7 +135,7 @@ def call_mock_agent_llm(*, phase: str) -> str:
         return json.dumps({"tool_name": "lmola.run_workflow", "arguments": {"workflow_id": "smiles_to_xtb_relax", "input": {"type": "smiles_csv", "path": "examples/smiles_list.csv"}, "columns": {"id": "id", "smiles": "smiles"}, "dry_run": True}})
     if phase == "repair":
         return call_mock_agent_llm(phase="selection")
-    return json.dumps({"status": "ok", "task_interpretation": "Generate structures from a SMILES CSV and relax them with xTB.", "selected_tool_name": "lmola.run_workflow", "selected_workflow_id": "smiles_to_xtb_relax", "execution_mode": "dry_run", "executed": False, "canonical_tools": ["generate_small_molecule_rdkit", "validate_structure_ase", "relax_structure_xtb"], "artifacts_to_inspect": ["canonical_workflow_json", "audit_path"], "warnings": [], "next_recommended_action": "Run confirmed execution only after reviewing the canonical workflow."})
+    return json.dumps({"status": "ok", "task_interpretation": "Generate structures from a SMILES CSV and relax them with xTB.", "selected_tool_name": "lmola.run_workflow", "selected_workflow_id": "smiles_to_xtb_relax", "execution_mode": "dry_run", "executed": False, "artifact_summary_kind": "mcp_audit", "canonical_tools": ["generate_small_molecule_rdkit", "validate_structure_ase", "relax_structure_xtb"], "artifact_status": "ok", "summary": "Dry-run completed and produced audit artifacts without execution.", "warnings": [], "next_recommended_actions": ["Review canonical workflow before confirmed execution."]})
 
 
 def call_ollama_agent_llm(*, prompt: str, config: AgentCallConfig) -> str:
@@ -193,11 +195,11 @@ def validate_agent_tool_call(*, tool_call: dict[str, Any], runtime_tools: set[st
     return ValidationResult(valid=not errors, errors=errors, warnings=warnings, normalized_tool_call=normalized if not errors else None, safe_to_execute=not errors)
 
 
-def run_mcp_agent_smoke(*, task: str = DEFAULT_TASK, backend: str = "mock", model: str = "", base_url: str = "http://127.0.0.1:11434", timeout_seconds: float = 20.0, temperature: float = 0.0, max_tokens: int = 800, out_dir: str = "", allow_confirmed_execution: bool = False, confirm_execution: bool = False) -> dict[str, Any]:
+def run_mcp_agent_smoke(*, task: str = DEFAULT_TASK, backend: str = "mock", model: str = "", base_url: str = "http://127.0.0.1:11434", timeout_seconds: float = 20.0, temperature: float = 0.0, max_tokens: int = 800, out_dir: str = "", allow_confirmed_execution: bool = False, confirm_execution: bool = False, use_artifact_summary: bool = True, artifact_summary_mode: str = "mcp", summarize_after_tool_call: bool = True, max_artifact_items: int = 20, max_artifact_text_chars: int = 4000) -> dict[str, Any]:
     cfg = AgentCallConfig(backend=backend, model=model, base_url=base_url, timeout_seconds=timeout_seconds, temperature=temperature, max_tokens=max_tokens)
     smoke_dir = Path(out_dir) if out_dir else Path("outputs") / f"agent_smoke_{datetime.now(UTC).strftime('%Y%m%d_%H%M%S')}_{uuid4().hex[:6]}"
     smoke_dir.mkdir(parents=True, exist_ok=True)
-    checks = {k: False for k in ["initialize_ok", "tools_list_ok", "low_level_tools_absent", "tool_selection_initial_parse_ok", "tool_selection_initial_valid", "tool_selection_repair_attempted", "tool_selection_repair_successful", "tool_selection_final_valid", "tool_selection_safe", "mcp_tool_call_ok", "run_workflow_dry_run_safe", "analysis_parse_ok", "analysis_schema_ok", "analysis_status_ok", "mcp_runs_unchanged"]}
+    checks = {k: False for k in ["initialize_ok", "tools_list_ok", "low_level_tools_absent", "tool_selection_initial_parse_ok", "tool_selection_initial_valid", "tool_selection_repair_attempted", "tool_selection_repair_successful", "tool_selection_final_valid", "tool_selection_safe", "mcp_tool_call_ok", "run_workflow_dry_run_safe", "artifact_summary_requested", "artifact_summary_ok", "artifact_summary_read_only", "artifact_aware_analysis_parse_ok", "artifact_aware_analysis_status_ok", "analysis_parse_ok", "analysis_schema_ok", "analysis_status_ok", "mcp_runs_unchanged"]}
     transcript: dict[str, Any] = {"backend": backend, "task": task}
     before = _count_mcp_run_batches()
     tool_call_req = None
@@ -205,6 +207,9 @@ def run_mcp_agent_smoke(*, task: str = DEFAULT_TASK, backend: str = "mock", mode
     repair_attempted = False
     repair_successful = False
     validation_errors: list[dict[str, Any]] = []
+    artifact_summary_req: dict[str, Any] = {}
+    artifact_summary_resp: dict[str, Any] = {}
+    artifact_summary_parsed: dict[str, Any] | None = None
     try:
         env = os.environ.copy()
         env["PYTHONPATH"] = str(Path(__file__).resolve().parents[2] / "src")
@@ -252,13 +257,36 @@ def run_mcp_agent_smoke(*, task: str = DEFAULT_TASK, backend: str = "mock", mode
         checks["mcp_tool_call_ok"] = "result" in tool_call_resp and "error" not in tool_call_resp
         sc = tool_call_resp.get("result", {}).get("structuredContent", {})
         checks["run_workflow_dry_run_safe"] = sc.get("executed") is False and sc.get("batch_dir") is None
-        analysis_prompt = build_agent_result_analysis_prompt(task=task, selected_tool_name=final_call.get("tool_name", ""), tool_response=tool_call_resp)
+        sc = tool_call_resp.get("result", {}).get("structuredContent", {})
+        if use_artifact_summary:
+            checks["artifact_summary_requested"] = True
+            if summarize_after_tool_call:
+                artifact_path = next((sc.get(k) for k in ("audit_path", "batch_dir", "agent_smoke_dir", "plan_dir") if isinstance(sc.get(k), str) and sc.get(k)), None)
+                if artifact_path:
+                    if artifact_summary_mode == "internal":
+                        artifact_summary_req = {"name": "internal.summarize_artifacts", "arguments": {"path": artifact_path, "max_items": max_artifact_items, "max_text_chars": max_artifact_text_chars}}
+                        artifact_summary_parsed = summarize_artifact_path(artifact_path, max_items=max_artifact_items, max_text_chars=max_artifact_text_chars)
+                        artifact_summary_resp = {"result": {"structuredContent": artifact_summary_parsed}}
+                    else:
+                        artifact_summary_req = _rpc(4, "tools/call", {"name": "lmola.summarize_artifacts", "arguments": {"path": artifact_path, "max_items": max_artifact_items, "max_text_chars": max_artifact_text_chars}})
+                        proc.stdin.write(encode_content_length_message(artifact_summary_req))
+                        proc.stdin.flush()
+                        artifact_summary_resp = read_content_length_message(proc.stdout) or {}
+                        artifact_summary_parsed = artifact_summary_resp.get("result", {}).get("structuredContent") if isinstance(artifact_summary_resp, dict) else None
+                    checks["artifact_summary_ok"] = isinstance(artifact_summary_parsed, dict) and artifact_summary_parsed.get("status") == "ok"
+                    checks["artifact_summary_read_only"] = bool(isinstance(artifact_summary_parsed, dict) and artifact_summary_parsed.get("executed") in {False, None})
+                else:
+                    artifact_summary_parsed = None
+                    transcript.setdefault("warnings", []).append("No summarizable artifact path found in tool result fields.")
+        analysis_prompt = build_agent_result_analysis_prompt(task=task, selected_tool_name=final_call.get("tool_name", ""), selected_workflow_id=final_call.get("arguments", {}).get("workflow_id", ""), tool_response=tool_call_resp, artifact_summary=artifact_summary_parsed)
         raw_a = call_mock_agent_llm(phase="analysis") if backend == "mock" else call_ollama_agent_llm(prompt=analysis_prompt, config=cfg)
         parsed_a = _extract_json_object(raw_a)
         checks["analysis_parse_ok"] = True
+        checks["artifact_aware_analysis_parse_ok"] = True
         checks["analysis_schema_ok"] = all(k in parsed_a for k in ["status", "selected_tool_name", "selected_workflow_id"])
         checks["analysis_status_ok"] = parsed_a.get("status") in {"ok", "error"} if checks["analysis_schema_ok"] else False
-        transcript.update({"result_analysis_prompt": analysis_prompt, "result_analysis_raw_response": raw_a, "result_analysis_parsed": parsed_a})
+        checks["artifact_aware_analysis_status_ok"] = parsed_a.get("status") in {"ok", "error"}
+        transcript.update({"artifact_summary_request": artifact_summary_req, "artifact_summary_response": artifact_summary_resp, "artifact_summary_parsed": artifact_summary_parsed or {}, "artifact_aware_analysis_prompt": analysis_prompt, "artifact_aware_analysis_raw_response": raw_a, "artifact_aware_analysis_parsed": parsed_a, "result_analysis_prompt": analysis_prompt, "result_analysis_raw_response": raw_a, "result_analysis_parsed": parsed_a})
     except Exception as exc:  # noqa: BLE001
         after = _count_mcp_run_batches()
         checks["mcp_runs_unchanged"] = before == after
@@ -270,9 +298,8 @@ def run_mcp_agent_smoke(*, task: str = DEFAULT_TASK, backend: str = "mock", mode
     final = transcript.get("tool_selection_final", {})
     analysis = transcript.get("result_analysis_parsed", {})
     required = ["initialize_ok", "tools_list_ok", "low_level_tools_absent", "tool_selection_initial_parse_ok", "tool_selection_final_valid", "tool_selection_safe", "mcp_tool_call_ok", "run_workflow_dry_run_safe", "analysis_parse_ok", "analysis_schema_ok", "analysis_status_ok", "mcp_runs_unchanged"]
-    audit_path = tool_call_resp.get("result", {}).get("structuredContent", {}).get("audit_path")
-    artifact_summary = summarize_artifact_path(audit_path) if isinstance(audit_path, str) and audit_path else None
-    result = {"status": "ok" if all(checks[k] for k in required) else "error", "agent_smoke_phase": "12.6.1_tool_call_schema_enforcement", "backend": backend, "model": model, "task": task, "agent_smoke_dir": str(smoke_dir), "initial_selected_tool_name": transcript.get("tool_selection_parsed", {}).get("tool_name", ""), "initial_selected_workflow_id": transcript.get("tool_selection_parsed", {}).get("arguments", {}).get("workflow_id", ""), "selected_tool_name": final.get("tool_name", ""), "selected_workflow_id": final.get("arguments", {}).get("workflow_id", ""), "tool_selection_repaired": repair_successful, "tool_selection_validation_errors": validation_errors, "repair_attempted": repair_attempted, "repair_successful": repair_successful, "mcp_tool_call_executed": True, "rejected_before_mcp_call": False, "execution_mode": analysis.get("execution_mode", "unknown"), "executed": bool(analysis.get("executed", False)), "checks": checks, "mcp_runs_before": before, "mcp_runs_after": after, "python_executable": shutil.which("python"), "lmola_executable": shutil.which("lmola"), "ollama_model": model, "ollama_reachable": True, "artifact_summary": artifact_summary}
+    artifact_summary = transcript.get("artifact_summary_parsed") if isinstance(transcript.get("artifact_summary_parsed"), dict) else None
+    result = {"status": "ok" if all(checks[k] for k in required) else "error", "agent_smoke_phase": "12.8_artifact_aware_agent_analysis", "backend": backend, "model": model, "task": task, "agent_smoke_dir": str(smoke_dir), "initial_selected_tool_name": transcript.get("tool_selection_parsed", {}).get("tool_name", ""), "initial_selected_workflow_id": transcript.get("tool_selection_parsed", {}).get("arguments", {}).get("workflow_id", ""), "selected_tool_name": final.get("tool_name", ""), "selected_workflow_id": final.get("arguments", {}).get("workflow_id", ""), "tool_selection_repaired": repair_successful, "tool_selection_validation_errors": validation_errors, "repair_attempted": repair_attempted, "repair_successful": repair_successful, "mcp_tool_call_executed": True, "rejected_before_mcp_call": False, "execution_mode": analysis.get("execution_mode", "unknown"), "executed": bool(analysis.get("executed", False)), "artifact_summary_enabled": use_artifact_summary, "artifact_summary_mode": artifact_summary_mode if use_artifact_summary else "none", "artifact_summary_path": (artifact_summary or {}).get("path"), "artifact_summary_kind": (artifact_summary or {}).get("artifact_kind"), "artifact_summary_status": (artifact_summary or {}).get("status"), "artifact_summary_canonical_tools": (artifact_summary or {}).get("canonical_tools", []), "artifact_summary_executed": (artifact_summary or {}).get("executed"), "final_report": analysis if isinstance(analysis, dict) else None, "checks": checks, "mcp_runs_before": before, "mcp_runs_after": after, "python_executable": shutil.which("python"), "lmola_executable": shutil.which("lmola"), "ollama_model": model, "ollama_reachable": True, "artifact_summary": artifact_summary}
     write_agent_smoke_artifacts(smoke_dir=smoke_dir, transcript=transcript, result=result, tools_list=transcript["mcp"][1]["response"].get("result", {}), tool_call_req=tool_call_req, tool_call_resp=tool_call_resp)
     return result
 
@@ -287,6 +314,10 @@ def write_agent_smoke_artifacts(*, smoke_dir: Path, transcript: dict[str, Any], 
         "tool_selection_validation_errors.json": transcript.get("tool_selection_validation_errors", []),
         "mcp_tool_call_request.json": tool_call_req or {},
         "mcp_tool_call_response.json": tool_call_resp,
+        "artifact_summary_request.json": transcript.get("artifact_summary_request", {}),
+        "artifact_summary_response.json": transcript.get("artifact_summary_response", {}),
+        "artifact_summary_parsed.json": transcript.get("artifact_summary_parsed", {}),
+        "artifact_aware_analysis_parsed.json": transcript.get("artifact_aware_analysis_parsed", {}),
         "result_analysis_parsed.json": transcript.get("result_analysis_parsed", {}),
     }
     for n, payload in files.items():
@@ -298,6 +329,8 @@ def write_agent_smoke_artifacts(*, smoke_dir: Path, transcript: dict[str, Any], 
         "tool_selection_repair_raw_response.txt": transcript.get("tool_selection_repair_raw_response", ""),
         "result_analysis_prompt.txt": transcript.get("result_analysis_prompt", ""),
         "result_analysis_raw_response.txt": transcript.get("result_analysis_raw_response", ""),
+        "artifact_aware_analysis_prompt.txt": transcript.get("artifact_aware_analysis_prompt", ""),
+        "artifact_aware_analysis_raw_response.txt": transcript.get("artifact_aware_analysis_raw_response", ""),
     }
     for n, txt in text_files.items():
         (smoke_dir / n).write_text(txt, encoding="utf-8")
