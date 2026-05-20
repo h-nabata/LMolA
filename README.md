@@ -623,3 +623,13 @@ Notes:
 - Dry-run does not create molecule outputs, but audit/canonical workflow artifacts can still be summarized.
 - Confirmed execution writes batch artifacts under `outputs/mcp_runs/`.
 - Confirmed execution requires a correctly activated backend environment; if RDKit/Open Babel/xTB are unavailable, execution may fail, but resulting failure artifacts can still be summarized.
+
+## Failure triage
+
+`lmola artifacts triage` reads existing LMolA artifacts and returns read-only diagnostic JSON. It does not execute workflows/tools, does not assess chemical correctness, and does not auto-retry; it classifies likely failure category and suggests safe next actions.
+
+Examples:
+- `lmola artifacts triage outputs/mcp_runs/batch_... --format json`
+- `lmola artifacts triage outputs/mcp_audit/mcp_run_...json --format json`
+- `lmola artifacts triage outputs/agent_smoke_... --format json`
+- `lmola mcp call-tool lmola.triage_artifacts --args-json '{"path":"outputs/agent_smoke_..."}'`

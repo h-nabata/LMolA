@@ -195,7 +195,7 @@ def validate_agent_tool_call(*, tool_call: dict[str, Any], runtime_tools: set[st
     return ValidationResult(valid=not errors, errors=errors, warnings=warnings, normalized_tool_call=normalized if not errors else None, safe_to_execute=not errors)
 
 
-def run_mcp_agent_smoke(*, task: str = DEFAULT_TASK, backend: str = "mock", model: str = "", base_url: str = "http://127.0.0.1:11434", timeout_seconds: float = 20.0, temperature: float = 0.0, max_tokens: int = 800, out_dir: str = "", allow_confirmed_execution: bool = False, confirm_execution: bool = False, use_artifact_summary: bool = True, artifact_summary_mode: str = "mcp", summarize_after_tool_call: bool = True, max_artifact_items: int = 20, max_artifact_text_chars: int = 4000) -> dict[str, Any]:
+def run_mcp_agent_smoke(*, task: str = DEFAULT_TASK, backend: str = "mock", model: str = "", base_url: str = "http://127.0.0.1:11434", timeout_seconds: float = 20.0, temperature: float = 0.0, max_tokens: int = 800, out_dir: str = "", allow_confirmed_execution: bool = False, confirm_execution: bool = False, use_artifact_summary: bool = True, artifact_summary_mode: str = "mcp", summarize_after_tool_call: bool = True, max_artifact_items: int = 20, max_artifact_text_chars: int = 4000, use_artifact_triage: bool = False) -> dict[str, Any]:
     cfg = AgentCallConfig(backend=backend, model=model, base_url=base_url, timeout_seconds=timeout_seconds, temperature=temperature, max_tokens=max_tokens)
     smoke_dir = Path(out_dir) if out_dir else Path("outputs") / f"agent_smoke_{datetime.now(UTC).strftime('%Y%m%d_%H%M%S')}_{uuid4().hex[:6]}"
     smoke_dir.mkdir(parents=True, exist_ok=True)
@@ -210,6 +210,9 @@ def run_mcp_agent_smoke(*, task: str = DEFAULT_TASK, backend: str = "mock", mode
     artifact_summary_req: dict[str, Any] = {}
     artifact_summary_resp: dict[str, Any] = {}
     artifact_summary_parsed: dict[str, Any] | None = None
+    artifact_triage_req: dict[str, Any] = {}
+    artifact_triage_resp: dict[str, Any] = {}
+    artifact_triage_parsed: dict[str, Any] | None = None
     try:
         env = os.environ.copy()
         env["PYTHONPATH"] = str(Path(__file__).resolve().parents[2] / "src")
@@ -275,10 +278,17 @@ def run_mcp_agent_smoke(*, task: str = DEFAULT_TASK, backend: str = "mock", mode
                         artifact_summary_parsed = artifact_summary_resp.get("result", {}).get("structuredContent") if isinstance(artifact_summary_resp, dict) else None
                     checks["artifact_summary_ok"] = isinstance(artifact_summary_parsed, dict) and artifact_summary_parsed.get("status") == "ok"
                     checks["artifact_summary_read_only"] = bool(isinstance(artifact_summary_parsed, dict) and artifact_summary_parsed.get("executed") in {False, None})
+                    if use_artifact_triage:
+                        artifact_triage_req = _rpc(5, "tools/call", {"name": "lmola.triage_artifacts", "arguments": {"path": artifact_path, "max_items": max_artifact_items, "max_text_chars": max_artifact_text_chars}})
+                        proc.stdin.write(encode_content_length_message(artifact_triage_req))
+                        proc.stdin.flush()
+                        artifact_triage_resp = read_content_length_message(proc.stdout) or {}
+                        artifact_triage_parsed = artifact_triage_resp.get("result", {}).get("structuredContent") if isinstance(artifact_triage_resp, dict) else None
+                        checks["artifact_triage_ok"] = isinstance(artifact_triage_parsed, dict) and artifact_triage_parsed.get("status") == "ok"
                 else:
                     artifact_summary_parsed = None
                     transcript.setdefault("warnings", []).append("No summarizable artifact path found in tool result fields.")
-        analysis_prompt = build_agent_result_analysis_prompt(task=task, selected_tool_name=final_call.get("tool_name", ""), selected_workflow_id=final_call.get("arguments", {}).get("workflow_id", ""), tool_response=tool_call_resp, artifact_summary=artifact_summary_parsed)
+        analysis_prompt = build_agent_result_analysis_prompt(task=task, selected_tool_name=final_call.get("tool_name", ""), selected_workflow_id=final_call.get("arguments", {}).get("workflow_id", ""), tool_response=tool_call_resp, artifact_summary=artifact_summary_parsed or artifact_triage_parsed)
         raw_a = call_mock_agent_llm(phase="analysis") if backend == "mock" else call_ollama_agent_llm(prompt=analysis_prompt, config=cfg)
         parsed_a = _extract_json_object(raw_a)
         checks["analysis_parse_ok"] = True
@@ -286,7 +296,7 @@ def run_mcp_agent_smoke(*, task: str = DEFAULT_TASK, backend: str = "mock", mode
         checks["analysis_schema_ok"] = all(k in parsed_a for k in ["status", "selected_tool_name", "selected_workflow_id"])
         checks["analysis_status_ok"] = parsed_a.get("status") in {"ok", "error"} if checks["analysis_schema_ok"] else False
         checks["artifact_aware_analysis_status_ok"] = parsed_a.get("status") in {"ok", "error"}
-        transcript.update({"artifact_summary_request": artifact_summary_req, "artifact_summary_response": artifact_summary_resp, "artifact_summary_parsed": artifact_summary_parsed or {}, "artifact_aware_analysis_prompt": analysis_prompt, "artifact_aware_analysis_raw_response": raw_a, "artifact_aware_analysis_parsed": parsed_a, "result_analysis_prompt": analysis_prompt, "result_analysis_raw_response": raw_a, "result_analysis_parsed": parsed_a})
+        transcript.update({"artifact_summary_request": artifact_summary_req, "artifact_summary_response": artifact_summary_resp, "artifact_summary_parsed": artifact_summary_parsed or {}, "artifact_triage_request": artifact_triage_req, "artifact_triage_response": artifact_triage_resp, "artifact_triage_parsed": artifact_triage_parsed or {}, "artifact_aware_analysis_prompt": analysis_prompt, "artifact_aware_analysis_raw_response": raw_a, "artifact_aware_analysis_parsed": parsed_a, "result_analysis_prompt": analysis_prompt, "result_analysis_raw_response": raw_a, "result_analysis_parsed": parsed_a})
     except Exception as exc:  # noqa: BLE001
         after = _count_mcp_run_batches()
         checks["mcp_runs_unchanged"] = before == after
@@ -317,6 +327,9 @@ def write_agent_smoke_artifacts(*, smoke_dir: Path, transcript: dict[str, Any], 
         "artifact_summary_request.json": transcript.get("artifact_summary_request", {}),
         "artifact_summary_response.json": transcript.get("artifact_summary_response", {}),
         "artifact_summary_parsed.json": transcript.get("artifact_summary_parsed", {}),
+        "artifact_triage_request.json": transcript.get("artifact_triage_request", {}),
+        "artifact_triage_response.json": transcript.get("artifact_triage_response", {}),
+        "artifact_triage_parsed.json": transcript.get("artifact_triage_parsed", {}),
         "artifact_aware_analysis_parsed.json": transcript.get("artifact_aware_analysis_parsed", {}),
         "result_analysis_parsed.json": transcript.get("result_analysis_parsed", {}),
     }

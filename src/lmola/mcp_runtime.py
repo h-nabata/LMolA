@@ -12,6 +12,7 @@ from pydantic import ValidationError
 from lmola.agent.workflow_planner import plan_workflow_request
 from lmola.mcp_preview import export_mcp_tools_preview
 from lmola.artifact_summary import summarize_artifact_path
+from lmola.artifact_triage import triage_artifact_path
 from lmola.schema_export import export_all_schemas, export_planner_schema_bundle, export_tool_registry_schema, export_workflow_catalog_schema
 from lmola.workflows.catalog import get_workflow_entry, list_workflows
 from lmola.workflows.runner import run_workflow_request
@@ -37,6 +38,7 @@ RUNTIME_ALLOWED_TOOLS = {
     "lmola.plan_workflow",
     "lmola.run_workflow",
     "lmola.summarize_artifacts",
+    "lmola.triage_artifacts",
 }
 
 
@@ -155,6 +157,7 @@ def list_mcp_tools_runtime() -> list[dict[str, Any]]:
         "lmola.plan_workflow": {"description": "Convert a natural-language request into a validated LMolA WorkflowRequest plan without executing chemistry tools.", "inputSchema": {"type": "object", "additionalProperties": False, "properties": {"request": {"type": "string"}, "write_artifacts": {"type": "boolean", "default": False}}, "required": ["request"]}},
         "lmola.run_workflow": {"description": "Run a validated, allowlisted LMolA workflow request after explicit confirmation and write batch artifacts.", "inputSchema": {"type": "object", "additionalProperties": False, "properties": {"workflow_id": {"type": "string"}, "input": {"type": "object"}, "columns": {"type": ["object", "null"]}, "outputs": {"type": ["object", "null"]}, "metadata": {"type": ["object", "null"]}, "dry_run": {"type": "boolean", "default": True}, "allow_execution": {"type": "boolean", "default": False}, "confirm": {"type": "boolean", "default": False}, "confirmation_text": {"type": ["string", "null"]}, "output_root": {"type": ["string", "null"]}, "reason": {"type": ["string", "null"]}}, "required": ["workflow_id", "input"]}},
         "lmola.summarize_artifacts": {"description": "Summarize LMolA output artifacts into compact structured JSON for LLM interpretation.", "inputSchema": {"type": "object", "additionalProperties": False, "properties": {"path": {"type": "string"}, "max_items": {"type": "integer", "default": 20, "minimum": 1, "maximum": 200}, "max_text_chars": {"type": "integer", "default": 4000, "minimum": 100, "maximum": 20000}}, "required": ["path"]}},
+        "lmola.triage_artifacts": {"description": "Diagnose LMolA output artifacts and produce read-only failure triage JSON.", "inputSchema": {"type": "object", "additionalProperties": False, "properties": {"path": {"type": "string"}, "max_items": {"type": "integer", "default": 20, "minimum": 1, "maximum": 200}, "max_text_chars": {"type": "integer", "default": 4000, "minimum": 100, "maximum": 20000}}, "required": ["path"]}},
     }
     runtime_tools: list[dict[str, Any]] = []
     for name in sorted(RUNTIME_ALLOWED_TOOLS):
@@ -188,6 +191,22 @@ def list_mcp_tools_runtime() -> list[dict[str, Any]]:
             meta["allowlisted_only"] = True
             meta["mcp_execution_allowlist"] = sorted(MCP_EXECUTION_ALLOWLIST)
             meta["safe_execution_notes"] = "MCP runtime execution is enabled only for allowlisted workflows and requires dry_run=false, allow_execution=true, and confirm=true. Low-level chemistry tools remain unavailable as direct MCP runtime tools."
+        if name == "lmola.summarize_artifacts":
+            meta["runtime_phase"] = "12.7_artifact_summarizer"
+            meta["level"] = "artifact_inspection"
+            meta["source"] = "artifact_summary"
+            meta["side_effects"] = False
+            meta["executes_workflow"] = False
+            meta["writes_batch_artifacts"] = False
+            meta["dry_run_only"] = True
+        if name == "lmola.triage_artifacts":
+            meta["runtime_phase"] = "12.9_artifact_triage"
+            meta["level"] = "artifact_inspection"
+            meta["source"] = "artifact_triage"
+            meta["side_effects"] = False
+            meta["executes_workflow"] = False
+            meta["writes_batch_artifacts"] = False
+            meta["dry_run_only"] = True
         if name == "lmola.summarize_artifacts":
             meta["runtime_phase"] = "12.7_artifact_summarizer"
             meta["level"] = "artifact_inspection"
@@ -328,6 +347,11 @@ def call_mcp_tool(name: str, arguments: dict[str, Any] | None = None) -> dict[st
             if not isinstance(p, str) or not p.strip():
                 return _runtime_error("invalid_arguments", "path is required.")
             return summarize_artifact_path(p, max_items=int(args.get("max_items", 20)), max_text_chars=int(args.get("max_text_chars", 4000)))
+        if name == "lmola.triage_artifacts":
+            p = args.get("path")
+            if not isinstance(p, str) or not p.strip():
+                return _runtime_error("invalid_arguments", "path is required.")
+            return triage_artifact_path(p, max_items=int(args.get("max_items", 20)), max_text_chars=int(args.get("max_text_chars", 4000)))
     except KeyError as exc:
         return _runtime_error("not_found", str(exc))
     except ValidationError as exc:
