@@ -212,6 +212,7 @@ def summarize_plan_dir(plan_dir: str | Path, *, max_text_chars: int = 4000) -> d
         "path": str(p),
         "natural_language_request": planning.get("request"),
         "selected_workflow_id": (planning.get("parsed_workflow") or {}).get("workflow_id"),
+        "parsed_workflow": planning.get("parsed_workflow", {}),
         "validation_errors": planning.get("validation_errors", []),
         "canonical_tools": tools,
         "executed": False,
