@@ -1,0 +1,59 @@
+suite_id: planner_backend_eval_v1
+description: Backend-aware workflow selection and unsupported handling.
+cases:
+  - id: rdkit_3d
+    request: Generate 3D structures from examples/smiles_list.csv using RDKit.
+    expected_status: ok
+    expected_normalized_status: ok
+    expected_workflow_id: smiles_to_3d_rdkit
+    expected_required_backends: [rdkit, ase]
+
+  - id: openbabel_3d
+    request: Generate 3D structures from examples/smiles_list.csv using Open Babel.
+    expected_status: ok
+    expected_normalized_status: ok
+    expected_workflow_id: smiles_to_3d_openbabel
+    expected_required_backends: [openbabel, ase]
+
+  - id: rdkit_conformers
+    request: Generate conformers from examples/smiles_list.csv using RDKit.
+    expected_status: ok
+    expected_normalized_status: ok
+    expected_workflow_id: smiles_to_conformers_rdkit
+    expected_required_backends: [rdkit, ase]
+
+  - id: xtb_relax_smiles_csv
+    request: Generate structures from examples/smiles_list.csv and relax them with xTB.
+    expected_status: ok
+    expected_normalized_status: ok
+    expected_workflow_id: smiles_to_xtb_relax
+    expected_required_backends: [rdkit, ase, xtb]
+
+  - id: xtb_relax_xyz
+    request: Validate examples/example.xyz and relax it with xTB.
+    expected_status: ok
+    expected_normalized_status: ok
+    expected_workflow_id: xyz_to_xtb_relax
+    expected_required_backends: [ase, xtb]
+
+  - id: validate_xyz_only
+    request: Validate examples/example.xyz.
+    expected_status: ok
+    expected_normalized_status: ok
+    expected_workflow_id: validate_xyz
+    expected_required_backends: [ase]
+
+  - id: molsimplify_unavailable
+    request: Generate an octahedral iron complex using molSimplify.
+    expected_status: backend_unavailable
+    expected_normalized_status: backend_unavailable
+
+  - id: crest_unsupported
+    request: Run CREST conformer search from this XYZ file.
+    expected_status: unsupported
+    expected_normalized_status: unsupported
+
+  - id: dft_ts_unsupported
+    request: Find a transition state using DFT and run a reaction path search.
+    expected_status: unsupported
+    expected_normalized_status: unsupported
