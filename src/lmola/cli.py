@@ -27,6 +27,7 @@ from lmola.mcp_preview import (
 )
 from lmola.mcp_agent_smoke import run_mcp_agent_smoke
 from lmola.mcp_client_smoke import render_smoke_result, run_mcp_client_smoke
+from lmola.mcp_confirmed_execution_smoke import run_mcp_confirmed_execution_smoke
 from lmola.mcp_runtime import RUNTIME_PHASE, call_mcp_tool, handle_jsonrpc_message, list_mcp_tools_runtime, run_mcp_stdio_server
 from lmola.artifact_summary import summarize_artifact_path
 from lmola.artifact_triage import triage_artifact_path
@@ -198,6 +199,13 @@ def mcp_agent_smoke(
 @mcp_app.command("client-smoke")
 def mcp_client_smoke(fmt: str = typer.Option("json", "--format"), timeout_seconds: float = typer.Option(10.0, "--timeout-seconds")) -> None:
     result = run_mcp_client_smoke(timeout_seconds=timeout_seconds)
+    typer.echo(render_smoke_result(result, fmt))
+    if result.get("status") != "ok":
+        raise typer.Exit(code=1)
+
+@mcp_app.command("confirmed-execution-smoke")
+def mcp_confirmed_execution_smoke(fmt: str = typer.Option("json", "--format"), timeout_seconds: float = typer.Option(20.0, "--timeout-seconds")) -> None:
+    result = run_mcp_confirmed_execution_smoke(timeout_seconds=timeout_seconds)
     typer.echo(render_smoke_result(result, fmt))
     if result.get("status") != "ok":
         raise typer.Exit(code=1)
