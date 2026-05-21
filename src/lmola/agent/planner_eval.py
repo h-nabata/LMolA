@@ -458,9 +458,11 @@ def run_planner_benchmark(eval_cases_yaml: str, backend: str | None = None, mode
             row_with_repeat = dict(r)
             row_with_repeat.update({"pass_count": pass_count, "fail_count": fail_count, "stability": stability})
             case_results.append(row_with_repeat)
+        failed_case_ids = [r.get("case_id") for r in case_results if not r.get("passed")]
         out = {
             "status": "ok" if passed == total else "error",
             "benchmark_id": bench_id,
+            "repeat": max(1, repeat),
             "suite_id": suite.suite_id,
             "backend": backend or load_app_config().llm.backend,
             "model": model or load_app_config().llm.model,
@@ -468,6 +470,7 @@ def run_planner_benchmark(eval_cases_yaml: str, backend: str | None = None, mode
             "total_cases": total,
             "passed_cases": passed,
             "failed_cases": total - passed,
+            "failed_case_ids": failed_case_ids,
             "pass_rate": passed / total if total else 0.0,
             "workflow_selection_accuracy": workflow_selection_accuracy,
             "schema_valid_rate": schema_valid_rate,
@@ -520,6 +523,42 @@ def run_planner_benchmark(eval_cases_yaml: str, backend: str | None = None, mode
                     (target_dir / name).write_text("", encoding="utf-8")
                 elif name.endswith(".json"):
                     dump_json(target_dir / name, {} if name != "json_candidates.json" else [])
+        workflow_counts: dict[str, int] = {}
+        for row in case_results:
+            wid = str(row.get("selected_workflow_id") or "null")
+            workflow_counts[wid] = workflow_counts.get(wid, 0) + 1
+        lines = [
+            "# Planner Benchmark Report",
+            "",
+            f"- benchmark_id: `{bench_id}`",
+            f"- suite_id: `{suite.suite_id}`",
+            f"- backend/model: `{out['backend']}` / `{out['model']}`",
+            f"- total/pass/fail: **{total}/{passed}/{total - passed}**",
+            "",
+            "## Aggregate Metrics",
+            f"- pass_rate: {out['pass_rate']:.4f}",
+            f"- workflow_selection_accuracy: {out['workflow_selection_accuracy']:.4f}",
+            f"- parse_success_rate: {out['parse_success_rate']:.4f}",
+            f"- schema_valid_rate: {out['schema_valid_rate']:.4f}",
+            f"- hallucination_rate: {out['hallucination_rate']:.4f}",
+            f"- backend_constraint_violation_rate: {out['backend_constraint_violation_rate']:.4f}",
+            f"- unavailable_backend_selection_rate: {out['unavailable_backend_selection_rate']:.4f}",
+            "",
+            "## Failed Cases",
+            "",
+            "| case_id | normalized_status | selected_workflow_id | failure_category |",
+            "|---|---|---|---|",
+        ]
+        for r in case_results:
+            if r.get("passed"):
+                continue
+            lines.append(f"| {r.get('case_id')} | {r.get('normalized_status')} | {r.get('selected_workflow_id')} | {r.get('failure_category')} |")
+        if len(lines) == 20:
+            lines.append("| (none) | ok | - | - |")
+        lines.extend(["", "## Selected Workflow Distribution", ""])
+        for wid, count in sorted(workflow_counts.items(), key=lambda kv: (-kv[1], kv[0])):
+            lines.append(f"- `{wid}`: {count}")
+        (bench_dir / "benchmark_report.md").write_text("\n".join(lines) + "\n", encoding="utf-8")
         return out
     finally:
         for k, v in old_env.items():

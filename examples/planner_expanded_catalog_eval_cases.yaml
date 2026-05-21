@@ -1,0 +1,116 @@
+suite_id: planner_expanded_catalog_v1
+description: Expanded catalog planner evaluation including descriptor/geometry additions.
+cases:
+  - id: rdkit_3d_generation
+    request: Generate 3D structures from examples/smiles_list.csv using RDKit.
+    expected_status: ok
+    expected_normalized_status: ok
+    expected_workflow_id: smiles_to_3d_rdkit
+    expected_required_backends: [rdkit, ase]
+    case_type: selection
+    difficulty: easy
+    expected_failure_modes: []
+  - id: openbabel_3d_generation
+    request: Generate 3D structures from examples/smiles_list.csv using Open Babel.
+    expected_status: ok
+    expected_normalized_status: ok
+    expected_workflow_id: smiles_to_3d_openbabel
+    expected_required_backends: [openbabel, ase]
+    case_type: selection
+    difficulty: easy
+    expected_failure_modes: []
+  - id: rdkit_conformer_generation
+    request: Generate conformers from examples/smiles_list.csv using RDKit.
+    expected_status: ok
+    expected_normalized_status: ok
+    expected_workflow_id: smiles_to_conformers_rdkit
+    expected_required_backends: [rdkit, ase]
+    case_type: selection
+    difficulty: easy
+    expected_failure_modes: []
+  - id: smiles_csv_xtb_relax
+    request: Generate structures from examples/smiles_list.csv and relax them with xTB.
+    expected_status: ok
+    expected_normalized_status: ok
+    expected_workflow_id: smiles_to_xtb_relax
+    expected_required_backends: [rdkit, ase, xtb]
+    case_type: selection
+    difficulty: medium
+    expected_failure_modes: []
+  - id: xyz_xtb_relax
+    request: Validate examples/example.xyz and relax it with xTB.
+    expected_status: ok
+    expected_normalized_status: ok
+    expected_workflow_id: xyz_to_xtb_relax
+    expected_required_backends: [ase, xtb]
+    case_type: selection
+    difficulty: easy
+    expected_failure_modes: []
+  - id: xyz_validation
+    request: Validate examples/example.xyz.
+    expected_status: ok
+    expected_normalized_status: ok
+    expected_workflow_id: validate_xyz
+    expected_required_backends: [ase]
+    case_type: validation
+    difficulty: easy
+    expected_failure_modes: []
+  - id: smiles_csv_rdkit_descriptors
+    request: Compute RDKit molecular descriptors for examples/smiles_list.csv.
+    expected_status: ok
+    expected_normalized_status: ok
+    expected_workflow_id: smiles_to_rdkit_descriptors
+    expected_required_backends: [rdkit]
+    case_type: selection
+    difficulty: medium
+    expected_failure_modes: []
+  - id: smiles_single_rdkit_descriptors
+    request: Compute basic molecular descriptors for ethanol SMILES CCO.
+    expected_status: ok
+    expected_normalized_status: ok
+    expected_workflow_id: smiles_to_rdkit_descriptors
+    case_type: selection
+    difficulty: easy
+    expected_failure_modes: []
+  - id: xyz_geometry_analysis
+    request: Analyze the geometry of examples/example.xyz and report suspicious short contacts.
+    expected_status: ok
+    expected_normalized_status: ok
+    expected_workflow_id: xyz_to_geometry_analysis
+    expected_required_backends: [ase]
+    case_type: analysis
+    difficulty: medium
+    expected_failure_modes: []
+  - id: dont_confuse_relax_with_geometry
+    request: Analyze the geometry of examples/example.xyz and do not run xTB relaxation.
+    expected_status: ok
+    expected_normalized_status: ok
+    expected_workflow_id: xyz_to_geometry_analysis
+    expected_required_backends: [ase]
+    case_type: disambiguation
+    difficulty: medium
+    expected_failure_modes: [workflow_confusion]
+  - id: molsimplify_unavailable
+    request: Generate an octahedral iron complex using molSimplify.
+    expected_status: backend_unavailable
+    expected_normalized_status: backend_unavailable
+    expected_workflow_id: null
+    case_type: unavailable_backend
+    difficulty: medium
+    expected_failure_modes: []
+  - id: crest_unsupported
+    request: Run CREST conformer search from this XYZ file.
+    expected_status: unsupported
+    expected_normalized_status: unsupported
+    expected_workflow_id: null
+    case_type: unsupported
+    difficulty: medium
+    expected_failure_modes: []
+  - id: dft_ts_unsupported
+    request: Find a transition state using DFT and run a reaction path search.
+    expected_status: unsupported
+    expected_normalized_status: unsupported
+    expected_workflow_id: null
+    case_type: unsupported
+    difficulty: hard
+    expected_failure_modes: []
