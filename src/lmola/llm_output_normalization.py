@@ -8,6 +8,7 @@ import yaml
 
 THINK_RE = re.compile(r"<think>.*?</think>", re.IGNORECASE | re.DOTALL)
 FENCE_RE = re.compile(r"```(?:json)?\s*(\{.*?\})\s*```", re.IGNORECASE | re.DOTALL)
+ALLOWED_STATUSES = {"ok", "unsupported", "backend_unavailable"}
 
 
 @dataclass
@@ -37,6 +38,23 @@ def _first_balanced_object(text: str) -> str | None:
     return None
 
 
+def _all_balanced_objects(text: str) -> list[str]:
+    out: list[str] = []
+    depth = 0
+    start = -1
+    for i, ch in enumerate(text):
+        if ch == "{":
+            if depth == 0:
+                start = i
+            depth += 1
+        elif ch == "}" and depth > 0:
+            depth -= 1
+            if depth == 0 and start >= 0:
+                out.append(text[start : i + 1])
+                start = -1
+    return out
+
+
 def _try_parse(candidate: str) -> dict | None:
     try:
         obj = json.loads(candidate)
@@ -59,8 +77,7 @@ def normalize_planner_output(raw: str) -> NormalizationResult:
         candidates.append(sanitized)
     for m in FENCE_RE.finditer(stripped):
         candidates.append(m.group(1).strip())
-    bal = _first_balanced_object(sanitized or stripped)
-    if bal:
+    for bal in _all_balanced_objects(sanitized or stripped):
         candidates.append(bal.strip())
     uniq: list[str] = []
     seen: set[str] = set()
@@ -72,15 +89,32 @@ def normalize_planner_output(raw: str) -> NormalizationResult:
     repair_attempted = False
     repair_successful = False
     parsed_candidates = [(_try_parse(c), c) for c in uniq]
+    best_score = -1
     for obj, _c in parsed_candidates:
-        if isinstance(obj, dict) and ("workflow_id" in obj or obj.get("status") in {"unsupported", "backend_unavailable", "error"}):
+        if not isinstance(obj, dict):
+            continue
+        status = str(obj.get("status", "")).strip().lower()
+        workflow_id = obj.get("workflow_id")
+        score = 0
+        if "status" in obj:
+            score += 3
+        if "workflow_id" in obj or status in {"unsupported", "backend_unavailable"}:
+            score += 2
+        if status in ALLOWED_STATUSES | {"completed", "success", "done", "pending", "running", "error", "unavailable"}:
+            score += 2
+        if workflow_id is None or isinstance(workflow_id, str):
+            score += 1
+        if status in {"ok", "completed", "success", "done"} and isinstance(obj.get("input"), dict):
+            score += 1
+        if score > best_score:
+            best_score = score
             parsed = obj
-            break
     if parsed is None:
         for obj, _c in parsed_candidates:
             if obj is not None:
                 parsed = obj
                 break
+    bal = _first_balanced_object(sanitized or stripped)
     if parsed is None and bal:
         repair_attempted = True
         parsed = _try_parse(bal.replace("\n", " "))
