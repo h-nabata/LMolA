@@ -462,6 +462,7 @@ def run_planner_benchmark(eval_cases_yaml: str, backend: str | None = None, mode
         out = {
             "status": "ok" if passed == total else "error",
             "benchmark_id": bench_id,
+            "repeat": max(1, repeat),
             "suite_id": suite.suite_id,
             "backend": backend or load_app_config().llm.backend,
             "model": model or load_app_config().llm.model,

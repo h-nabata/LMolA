@@ -83,9 +83,10 @@ cases:
     expected_failure_modes: []
   - id: dont_confuse_relax_with_geometry
     request: Analyze the geometry of examples/example.xyz and do not run xTB relaxation.
-    expected_status: backend_unavailable
-    expected_normalized_status: backend_unavailable
-    expected_workflow_id: null
+    expected_status: ok
+    expected_normalized_status: ok
+    expected_workflow_id: xyz_to_geometry_analysis
+    expected_required_backends: [ase]
     case_type: disambiguation
     difficulty: medium
     expected_failure_modes: [workflow_confusion]
