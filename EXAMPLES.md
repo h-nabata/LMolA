@@ -269,3 +269,8 @@ find outputs/mcp_runs -maxdepth 1 -type d -name "batch_*"
 ```
 
 `lmola mcp jsonrpc --request-json ...` is a helper for one-request local checks, not a replacement for persistent stdio client integration.
+
+## Formal LLM workflow selection benchmark
+Use `lmola workflow benchmark-planner examples/planner_backend_eval_cases.yaml --backend mock --format json`.
+The benchmark scores final structured outputs only; reasoning blocks like `<think>...</think>` are stripped/ignored for parsing/scoring. Raw responses may be saved for debugging. This is planning-only (dry-run) and does not execute chemistry workflows. Low-level chemistry tools remain hidden from MCP runtime.
+

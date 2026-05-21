@@ -9,7 +9,7 @@ from rich import print
 
 from lmola.agent.planner import plan_request
 from lmola.agent.workflow_planner import plan_workflow_request
-from lmola.agent.planner_eval import compare_planner_evals, run_planner_eval
+from lmola.agent.planner_eval import compare_planner_evals, run_planner_benchmark, run_planner_eval
 from lmola.agent.prompts import SYSTEM_PROMPT
 from lmola.backends.registry import list_backend_statuses
 from lmola.backends.capabilities import list_backend_capabilities, resolve_backend_capability
@@ -292,6 +292,27 @@ def workflow_eval_planner(eval_cases_yaml: str) -> None:
     }
     print(json.dumps(payload, indent=2))
     if result.status != "ok":
+        raise typer.Exit(code=1)
+
+
+
+@workflow_app.command("benchmark-planner")
+def workflow_benchmark_planner(
+    eval_cases_yaml: str,
+    backend: str = typer.Option(None, "--backend"),
+    model: str = typer.Option(None, "--model"),
+    base_url: str = typer.Option(None, "--base-url"),
+    temperature: float = typer.Option(None, "--temperature"),
+    timeout_seconds: int = typer.Option(None, "--timeout-seconds"),
+    max_tokens: int = typer.Option(None, "--max-tokens"),
+    repeat: int = typer.Option(1, "--repeat"),
+    case_filter: str = typer.Option(None, "--case-filter"),
+    fmt: str = typer.Option("json", "--format"),
+    save_raw: bool = typer.Option(True, "--save-raw/--no-save-raw"),
+) -> None:
+    result = run_planner_benchmark(eval_cases_yaml, backend=backend, model=model, base_url=base_url, temperature=temperature, timeout_seconds=timeout_seconds, max_tokens=max_tokens, repeat=repeat, case_filter=case_filter, save_raw=save_raw)
+    print(json.dumps(result, indent=2) if fmt == "json" else result)
+    if result.get("status") != "ok":
         raise typer.Exit(code=1)
 
 
