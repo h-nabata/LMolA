@@ -224,3 +224,64 @@ def test_ok_status_paths_exist_in_summary(monkeypatch: pytest.MonkeyPatch, tmp_p
 def test_workflow_catalog_includes_phase_13_3_workflows() -> None:
     assert "smiles_to_rdkit_descriptors" in WORKFLOW_CATALOG
     assert "xyz_to_geometry_analysis" in WORKFLOW_CATALOG
+
+
+def test_descriptors_workflow_single_smiles_writes_artifacts(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    wf = tmp_path / "wf.yaml"
+    wf.write_text("workflow_id: smiles_to_rdkit_descriptors\ninput:\n  type: smiles\n  value: CCO\n", encoding="utf-8")
+
+    def fake_execute(tool: str, payload: dict, run_dir: Path) -> ToolExecutionResult:
+        assert tool == "compute_rdkit_descriptors"
+        return ToolExecutionResult(status="ok", message="ok", tool_name=tool, run_dir=str(run_dir), payload={"item_id": "item_0001", "smiles": payload["smiles"], "formula": "C2H6O", "exact_mol_wt": 46.0, "mol_wt": 46.0, "heavy_atom_count": 3, "atom_count": 3, "formal_charge": 0, "ring_count": 0, "rotatable_bond_count": 0, "hbd_count": 1, "hba_count": 1, "tpsa": 20.0, "logp": -0.3, "status": "ok", "error_message": ""})
+
+    monkeypatch.setattr("lmola.workflows.runner.execute_tool", fake_execute)
+    result = run_workflow_yaml(str(wf))
+    assert result.summary and result.summary.ok_count == 1 and result.summary.error_count == 0
+    batch = Path(result.batch_dir or "")
+    assert (batch / "descriptors.csv").exists()
+    assert (batch / "descriptors.json").exists()
+
+
+def test_descriptors_workflow_csv_partial_error(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    csv_path = tmp_path / "s.csv"
+    csv_path.write_text("id,smiles\na,CCO\nb,invalid\nc,CCC\n", encoding="utf-8")
+    wf = tmp_path / "wf.yaml"
+    wf.write_text(f"workflow_id: smiles_to_rdkit_descriptors\ninput:\n  type: smiles_csv\n  path: {csv_path}\ncolumns:\n  id: id\n  smiles: smiles\n", encoding="utf-8")
+
+    def fake_execute(tool: str, payload: dict, run_dir: Path) -> ToolExecutionResult:
+        if payload["smiles"] == "invalid":
+            return ToolExecutionResult(status="error", message="bad smiles", tool_name=tool, run_dir=str(run_dir), payload={"item_id": "b", "smiles": "invalid", "status": "error", "error_message": "Invalid SMILES"})
+        return ToolExecutionResult(status="ok", message="ok", tool_name=tool, run_dir=str(run_dir), payload={"item_id": payload.get("item_id", ""), "smiles": payload["smiles"], "status": "ok", "error_message": ""})
+
+    monkeypatch.setattr("lmola.workflows.runner.execute_tool", fake_execute)
+    result = run_workflow_yaml(str(wf))
+    assert result.summary and result.summary.item_count == 3
+    assert result.summary.ok_count >= 2
+    assert result.summary.error_count >= 1
+    batch = Path(result.batch_dir or "")
+    rows = json.loads((batch / "descriptors.json").read_text(encoding="utf-8"))
+    assert any(r.get("status") == "error" for r in rows)
+
+
+def test_geometry_analysis_xyz_with_path(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    wf = tmp_path / "wf.yaml"
+    wf.write_text("workflow_id: xyz_to_geometry_analysis\ninput:\n  type: xyz\n  path: examples/example.xyz\n", encoding="utf-8")
+
+    def fake_execute(tool: str, payload: dict, run_dir: Path) -> ToolExecutionResult:
+        return ToolExecutionResult(status="ok", message="ok", tool_name=tool, run_dir=str(run_dir), payload={"atom_count": 3, "elements": ["H", "O"], "formula": "H2O", "center_of_mass": [0.0, 0.0, 0.0], "bounding_box": {"min": [0, 0, 0], "max": [1, 1, 1]}, "min_interatomic_distance": 0.8, "max_interatomic_distance": 1.6, "mean_interatomic_distance": 1.1, "suspicious_short_contact_count": 0, "status": "ok", "error_message": ""})
+
+    monkeypatch.setattr("lmola.workflows.runner.execute_tool", fake_execute)
+    result = run_workflow_yaml(str(wf))
+    assert result.summary and result.summary.ok_count == 1
+    batch = Path(result.batch_dir or "")
+    payload = json.loads((batch / "geometry_analysis.json").read_text(encoding="utf-8"))[0]
+    for k in ["atom_count", "elements", "formula", "center_of_mass", "bounding_box", "min_interatomic_distance", "max_interatomic_distance", "mean_interatomic_distance", "suspicious_short_contact_count"]:
+        assert k in payload
+
+
+def test_workflow_invalid_xyz_missing_value_and_path_returns_structured_error(tmp_path: Path) -> None:
+    wf = tmp_path / "bad_xyz.yaml"
+    wf.write_text("workflow_id: xyz_to_geometry_analysis\ninput:\n  type: xyz\n", encoding="utf-8")
+    result = run_workflow_yaml(str(wf))
+    assert result.status == "error"
+    assert "Workflow input error" in result.message
