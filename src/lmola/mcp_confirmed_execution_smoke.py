@@ -143,6 +143,9 @@ def run_mcp_confirmed_execution_smoke(*, timeout_seconds: float = 20.0, server_c
         for k, v in checks.items():
             writer.writerow([k, str(v).lower()])
 
-    result = {"status": "ok" if all(checks.values()) else "error", "checks": checks, "smoke_dir": str(smoke_dir)}
+    checks["dry_run_no_execution"] = checks["dry_run_safe"]
+    checks["descriptor_confirmed_execution_ok"] = checks["descriptor_exec_ok"]
+    checks["geometry_confirmed_execution_ok"] = checks["geometry_exec_ok"]
+    result = {"status": "ok" if all(v for k,v in checks.items() if k not in {"dry_run_no_execution","descriptor_confirmed_execution_ok","geometry_confirmed_execution_ok"}) else "error", "checks": checks, "smoke_dir": str(smoke_dir)}
     _write_json(smoke_dir / "smoke_result.json", result)
     return result
