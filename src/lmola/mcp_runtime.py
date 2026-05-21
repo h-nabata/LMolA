@@ -28,6 +28,8 @@ MCP_EXECUTION_ALLOWLIST = {
     "smiles_to_xtb_relax",
     "validate_xyz",
     "xyz_to_xtb_relax",
+    "smiles_to_rdkit_descriptors",
+    "xyz_to_geometry_analysis",
 }
 RUNTIME_ALLOWED_TOOLS = {
     "lmola.list_workflows",

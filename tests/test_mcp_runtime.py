@@ -36,6 +36,8 @@ def test_runtime_tools_allowlist_shape() -> None:
     assert run_meta.get("side_effects") is True
     assert run_meta.get("writes_batch_artifacts") is True
     assert sorted(run_meta.get("mcp_execution_allowlist", [])) == sorted(MCP_EXECUTION_ALLOWLIST)
+    assert "smiles_to_rdkit_descriptors" in MCP_EXECUTION_ALLOWLIST
+    assert "xyz_to_geometry_analysis" in MCP_EXECUTION_ALLOWLIST
     notes = run_meta.get("safe_execution_notes", "")
     assert "Phase 11.5" not in notes
     assert "allowlisted workflows" in notes

@@ -82,3 +82,16 @@ def test_cli_and_mcp_tool() -> None:
     assert out["status"] == "ok"
     bad = call_mcp_tool("lmola.summarize_artifacts", {"path": "/etc/passwd"})
     assert bad["status"] == "error"
+
+
+def test_summarize_descriptor_and_geometry_artifacts() -> None:
+    b = Path("outputs/batch_desc_geo")
+    b.mkdir(parents=True, exist_ok=True)
+    (b / "descriptors.json").write_text(json.dumps([{"item_id": "a", "status": "ok"}, {"item_id": "b", "status": "error"}]), encoding="utf-8")
+    (b / "geometry_analysis.csv").write_text("item_id,status\na,ok\nb,error\n", encoding="utf-8")
+    s1 = summarize_artifact_path(b / "descriptors.json")
+    s2 = summarize_artifact_path(b / "geometry_analysis.csv")
+    assert s1["artifact_kind"] == "descriptors_json"
+    assert s1["ok_count"] == 1 and s1["error_count"] == 1
+    assert s2["artifact_kind"] == "geometry_analysis_csv"
+    assert s2["ok_count"] == 1 and s2["error_count"] == 1

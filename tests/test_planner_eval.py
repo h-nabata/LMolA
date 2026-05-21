@@ -201,3 +201,31 @@ def test_benchmark_planner_cli_mock() -> None:
     assert result.exit_code == 0
     assert "benchmark_dir" in result.stdout
 
+
+def test_tool_expansion_eval_cases_with_mock(monkeypatch) -> None:
+    _enable_mock(monkeypatch)
+    result = run_planner_eval("examples/planner_tool_expansion_eval_cases.yaml")
+    rows = json.loads(Path(result.summary_json).read_text(encoding="utf-8"))
+    by_case = {r["case_id"]: r for r in rows}
+    assert by_case["rdkit_descriptors_smiles_csv"]["selected_workflow_id"] == "smiles_to_rdkit_descriptors"
+    assert by_case["xyz_geometry_analysis"]["selected_workflow_id"] == "xyz_to_geometry_analysis"
+
+
+def test_benchmark_case_artifacts_exist(monkeypatch) -> None:
+    _enable_mock(monkeypatch)
+    from lmola.agent.planner_eval import run_planner_benchmark
+
+    out = run_planner_benchmark("examples/planner_backend_eval_cases.yaml", backend="mock", repeat=1)
+    bench_dir = Path(out["benchmark_dir"])
+    for row in out["case_results"]:
+        case_dir = bench_dir / "cases" / row["case_id"]
+        assert case_dir.exists()
+        for name in [
+            "raw_llm_response.txt",
+            "sanitized_llm_response.txt",
+            "json_candidates.json",
+            "parsed_output.json",
+            "normalized_output.json",
+            "case_result.json",
+        ]:
+            assert (case_dir / name).exists()

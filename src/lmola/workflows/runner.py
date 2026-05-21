@@ -37,10 +37,17 @@ def _resolve_artifact_path(run_dir: str | None, artifact: str | None) -> str | N
 
 
 def _load_items(req: WorkflowRequest) -> list[dict[str, str]]:
-    if req.input.type in {"smiles", "xyz"}:
+    if req.input.type == "smiles":
         if not req.input.value:
-            raise ValueError("input.value is required for smiles/xyz input types")
+            raise ValueError("input.value is required for smiles input type")
         return [{"id": "item_0001", "value": req.input.value}]
+    if req.input.type == "xyz":
+        if req.input.value:
+            return [{"id": "item_0001", "value": req.input.value}]
+        if req.input.path:
+            p = Path(req.input.path)
+            return [{"id": p.stem or "item_0001", "value": str(p), "path": str(p)}]
+        raise ValueError("For xyz input type, provide either input.value or input.path")
     if not req.input.path:
         raise ValueError("input.path is required for list/csv input types")
     path = Path(req.input.path)
@@ -81,14 +88,19 @@ def _run_workflow_request(req: WorkflowRequest, *, source_yaml: str | None, outp
         (batch_dir / "workflow.yaml").write_text(source_yaml, encoding="utf-8")
     dump_json(batch_dir / "normalized_workflow.json", req.model_dump())
 
-    item_inputs = _load_items(req)
+    try:
+        item_inputs = _load_items(req)
+    except ValueError as exc:
+        return WorkflowExecutionResult(status="error", message=f"Workflow input error: {exc}")
     results: list[BatchItemResult] = []
+    descriptor_rows: list[dict[str, Any]] = []
+    geometry_rows: list[dict[str, Any]] = []
 
     for idx, item in enumerate(item_inputs, start=1):
         item_dir = items_dir / f"item_{idx:04d}"
         item_dir.mkdir(parents=True, exist_ok=True)
         r = BatchItemResult(batch_id=batch_id, item_index=idx, item_id=item["id"], input_type=req.input.type, input_value=item["value"], workflow_id=req.workflow_id)
-        current_structure_path: str | None = item["value"] if req.input.type in {"xyz", "xyz_list"} else None
+        current_structure_path: str | None = item.get("path") or (item["value"] if req.input.type == "xyz_list" else None)
 
         try:
             for step in steps:
@@ -103,6 +115,11 @@ def _run_workflow_request(req: WorkflowRequest, *, source_yaml: str | None, outp
                 elif step_tool == "relax_structure_xtb":
                     step_params.setdefault("input_structure", current_structure_path)
                     step_params.setdefault("method", "xtb")
+                elif step_tool == "compute_rdkit_descriptors":
+                    step_params.setdefault("smiles", item["value"])
+                    step_params.setdefault("item_id", item["id"])
+                elif step_tool == "analyze_geometry_ase":
+                    step_params.setdefault("structure_path", current_structure_path or item["value"])
 
                 step_run_dir = item_dir / step_tool
                 step_run_dir.mkdir(exist_ok=True)
@@ -121,6 +138,19 @@ def _run_workflow_request(req: WorkflowRequest, *, source_yaml: str | None, outp
                                 r.conformer_ensemble_path = _resolve_artifact_path(out.run_dir, gf_str) or gf_str
                             elif gf_str.endswith(".sdf"):
                                 r.sdf_path = _resolve_artifact_path(out.run_dir, gf_str) or gf_str
+                    if out.status != "ok":
+                        raise RuntimeError(f"{step_tool}: {out.message}")
+                elif step_tool == "compute_rdkit_descriptors":
+                    descriptor_row = dict(out.payload)
+                    descriptor_row.setdefault("item_id", item["id"])
+                    descriptor_row.setdefault("smiles", item["value"])
+                    descriptor_rows.append(descriptor_row)
+                    if out.status != "ok":
+                        raise RuntimeError(f"{step_tool}: {out.message}")
+                elif step_tool == "analyze_geometry_ase":
+                    geo_row = dict(out.payload)
+                    geo_row.setdefault("item_id", item["id"])
+                    geometry_rows.append(geo_row)
                     if out.status != "ok":
                         raise RuntimeError(f"{step_tool}: {out.message}")
 
@@ -173,6 +203,23 @@ def _run_workflow_request(req: WorkflowRequest, *, source_yaml: str | None, outp
             writer.writerows(summary_rows)
     if req.outputs.summary_json:
         dump_json(batch_dir / "summary.json", summary_rows)
+    if descriptor_rows:
+        dump_json(batch_dir / "descriptors.json", descriptor_rows)
+        with (batch_dir / "descriptors.csv").open("w", encoding="utf-8", newline="") as f:
+            fieldnames = sorted({k for row in descriptor_rows for k in row})
+            writer = csv.DictWriter(f, fieldnames=fieldnames)
+            writer.writeheader()
+            for row in descriptor_rows:
+                writer.writerow(row)
+    if geometry_rows:
+        dump_json(batch_dir / "geometry_analysis.json", geometry_rows)
+        if req.input.type in {"xyz_list"}:
+            with (batch_dir / "geometry_analysis.csv").open("w", encoding="utf-8", newline="") as f:
+                fieldnames = sorted({k for row in geometry_rows for k in row})
+                writer = csv.DictWriter(f, fieldnames=fieldnames)
+                writer.writeheader()
+                for row in geometry_rows:
+                    writer.writerow(row)
 
     ok_count = sum(1 for r in results if not r.error_message)
     error_count = len(results) - ok_count

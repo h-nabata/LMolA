@@ -77,6 +77,14 @@ def detect_artifact_kind(path: str | Path) -> str:
         return "summary_csv"
     if p.name == "workflow_result.json":
         return "workflow_result_json"
+    if p.name == "descriptors.json":
+        return "descriptors_json"
+    if p.name == "descriptors.csv":
+        return "descriptors_csv"
+    if p.name == "geometry_analysis.json":
+        return "geometry_analysis_json"
+    if p.name == "geometry_analysis.csv":
+        return "geometry_analysis_csv"
     if p.name == "canonical_workflow.json":
         return "canonical_workflow_json"
     if p.name.endswith("validation_report.json"):
@@ -251,8 +259,20 @@ def summarize_artifact_path(path: str | Path, *, max_items: int = 20, max_text_c
     if kind in {"summary_json", "workflow_result_json", "canonical_workflow_json"}:
         payload = _read_json(p)
         return {"status": "ok", "artifact_kind": kind, "path": str(p), "payload": payload}
+    if kind in {"descriptors_json", "geometry_analysis_json"}:
+        payload = _read_json(p)
+        rows = payload if isinstance(payload, list) else []
+        ok_count = sum(1 for r in rows if isinstance(r, dict) and str(r.get("status", "")).lower() == "ok")
+        error_count = sum(1 for r in rows if isinstance(r, dict) and str(r.get("status", "")).lower() == "error")
+        return {"status": "ok", "artifact_kind": kind, "path": str(p), "item_count": len(rows), "ok_count": ok_count, "error_count": error_count, "items": rows[:max_items]}
     if kind == "summary_csv":
         with p.open(encoding="utf-8") as fh:
             rows = [r for r in csv.DictReader(fh)]
         return {"status": "ok", "artifact_kind": kind, "path": str(p), "item_count": len(rows), "items": rows[:max_items]}
+    if kind in {"descriptors_csv", "geometry_analysis_csv"}:
+        with p.open(encoding="utf-8") as fh:
+            rows = [r for r in csv.DictReader(fh)]
+        ok_count = sum(1 for r in rows if str(r.get("status", "")).lower() == "ok")
+        error_count = sum(1 for r in rows if str(r.get("status", "")).lower() == "error")
+        return {"status": "ok", "artifact_kind": kind, "path": str(p), "item_count": len(rows), "ok_count": ok_count, "error_count": error_count, "items": rows[:max_items]}
     return {"status": "ok", "artifact_kind": "unknown_lmola_artifact", "path": str(p), "message": "Unsupported LMolA artifact path."}

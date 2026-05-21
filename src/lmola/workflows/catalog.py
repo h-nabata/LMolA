@@ -12,6 +12,8 @@ TASK_TAXONOMY: list[str] = [
     "relaxation",
     "batch_processing",
     "summarization",
+    "descriptor_calculation",
+    "geometry_analysis",
 ]
 
 FUTURE_TASK_TYPES: list[str] = [
@@ -82,6 +84,22 @@ WORKFLOW_CATALOG: dict[str, WorkflowCatalogEntry] = {
         tools=["validate_structure_ase"],
         required_backends=["ase"],
         description="Validate XYZ geometry and consistency.",
+    ),
+    "smiles_to_rdkit_descriptors": WorkflowCatalogEntry(
+        workflow_id="smiles_to_rdkit_descriptors",
+        task_type="descriptor_calculation",
+        input_types=["smiles", "smiles_csv"],
+        tools=["compute_rdkit_descriptors"],
+        required_backends=["rdkit"],
+        description="Compute basic molecular descriptors from SMILES using RDKit.",
+    ),
+    "xyz_to_geometry_analysis": WorkflowCatalogEntry(
+        workflow_id="xyz_to_geometry_analysis",
+        task_type="geometry_analysis",
+        input_types=["xyz", "xyz_list"],
+        tools=["analyze_geometry_ase"],
+        required_backends=["ase"],
+        description="Analyze XYZ geometry and interatomic distance statistics using ASE.",
     ),
 }
 
