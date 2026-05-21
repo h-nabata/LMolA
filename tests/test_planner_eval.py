@@ -211,6 +211,17 @@ def test_tool_expansion_eval_cases_with_mock(monkeypatch) -> None:
     assert by_case["xyz_geometry_analysis"]["selected_workflow_id"] == "xyz_to_geometry_analysis"
 
 
+def test_expanded_catalog_eval_cases_with_mock(monkeypatch) -> None:
+    _enable_mock(monkeypatch)
+    result = run_planner_eval("examples/planner_expanded_catalog_eval_cases.yaml")
+    assert result.failed_cases == 0
+    rows = json.loads(Path(result.summary_json).read_text(encoding="utf-8"))
+    by_case = {r["case_id"]: r for r in rows}
+    assert by_case["smiles_csv_rdkit_descriptors"]["selected_workflow_id"] == "smiles_to_rdkit_descriptors"
+    assert by_case["xyz_geometry_analysis"]["selected_workflow_id"] == "xyz_to_geometry_analysis"
+    assert by_case["molsimplify_unavailable"]["normalized_status"] == "backend_unavailable"
+
+
 def test_benchmark_case_artifacts_exist(monkeypatch) -> None:
     _enable_mock(monkeypatch)
     from lmola.agent.planner_eval import run_planner_benchmark
@@ -229,3 +240,16 @@ def test_benchmark_case_artifacts_exist(monkeypatch) -> None:
             "case_result.json",
         ]:
             assert (case_dir / name).exists()
+    assert Path(out["benchmark_dir"]).joinpath("benchmark_report.md").exists()
+
+
+def test_expanded_catalog_benchmark_mock(monkeypatch) -> None:
+    _enable_mock(monkeypatch)
+    from lmola.agent.planner_eval import run_planner_benchmark
+
+    out = run_planner_benchmark("examples/planner_expanded_catalog_eval_cases.yaml", backend="mock", repeat=1)
+    assert out["total_cases"] >= 13
+    assert "failed_case_ids" in out
+    assert Path(out["benchmark_dir"]).joinpath("benchmark_result.json").exists()
+    assert Path(out["benchmark_dir"]).joinpath("benchmark_summary.csv").exists()
+    assert Path(out["benchmark_dir"]).joinpath("benchmark_report.md").exists()
