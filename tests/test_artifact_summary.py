@@ -95,3 +95,50 @@ def test_summarize_descriptor_and_geometry_artifacts() -> None:
     assert s1["ok_count"] == 1 and s1["error_count"] == 1
     assert s2["artifact_kind"] == "geometry_analysis_csv"
     assert s2["ok_count"] == 1 and s2["error_count"] == 1
+
+
+def test_batch_summary_count_consistency_and_hints() -> None:
+    d = Path("outputs/batch_descriptor_consistency")
+    d.mkdir(parents=True, exist_ok=True)
+    (d / "workflow_result.json").write_text(
+        json.dumps(
+            {
+                "workflow_id": "smiles_to_rdkit_descriptors",
+                "summary": {"item_count": 3, "ok_count": 2, "error_count": 1},
+            }
+        ),
+        encoding="utf-8",
+    )
+    (d / "summary.csv").write_text("item_id,status\n1,error\n", encoding="utf-8")
+    (d / "descriptors.csv").write_text("item_id,status\n1,ok\n", encoding="utf-8")
+    payload = summarize_artifact_path(d)
+    assert payload["item_count"] == 3
+    assert payload["ok_count"] == 2
+    assert payload["error_count"] == 1
+    assert payload["success_rate"] == 2 / 3
+    assert payload["workflow_result"]["summary"]["ok_count"] == 2
+    assert payload["artifact_subkind"] == "descriptor_batch"
+    assert "rdkit_descriptors" in payload["artifact_types"]
+
+
+def test_batch_summary_geometry_consistency_and_hints() -> None:
+    d = Path("outputs/batch_geometry_consistency")
+    d.mkdir(parents=True, exist_ok=True)
+    (d / "workflow_result.json").write_text(
+        json.dumps(
+            {
+                "workflow_id": "xyz_to_geometry_analysis",
+                "summary": {"item_count": 1, "ok_count": 1, "error_count": 0},
+            }
+        ),
+        encoding="utf-8",
+    )
+    (d / "geometry_analysis.json").write_text(json.dumps([{"item_id": "i1", "status": "ok"}]), encoding="utf-8")
+    payload = summarize_artifact_path(d)
+    assert payload["item_count"] == 1
+    assert payload["ok_count"] == 1
+    assert payload["error_count"] == 0
+    assert payload["success_rate"] == 1.0
+    assert payload["workflow_result"]["summary"]["ok_count"] == 1
+    assert payload["artifact_subkind"] == "geometry_analysis_batch"
+    assert "geometry_analysis" in payload["artifact_types"]

@@ -146,7 +146,38 @@ def summarize_batch_dir(batch_dir: str | Path, *, max_items: int = 20, max_text_
             items = [dict(r) for r in csv.DictReader(fh)]
     truncated = items[:max_items]
     failed = [i for i in truncated if str(i.get("status", i.get("relax_status", ""))).lower() not in {"ok", "success", ""}]
-    error_count = sum(1 for i in items if str(i.get("status", i.get("relax_status", ""))).lower() not in {"ok", "success", ""})
+
+    workflow_summary = {}
+    if isinstance(workflow_result, dict):
+        maybe_summary = workflow_result.get("summary")
+        if isinstance(maybe_summary, dict):
+            workflow_summary = maybe_summary
+    source_counts = workflow_summary if workflow_summary else (workflow_result if isinstance(workflow_result, dict) else {})
+
+    def _to_int(v: Any) -> int | None:
+        try:
+            return int(v) if v is not None else None
+        except (TypeError, ValueError):
+            return None
+
+    item_count = _to_int(source_counts.get("item_count"))
+    ok_count = _to_int(source_counts.get("ok_count"))
+    error_count = _to_int(source_counts.get("error_count"))
+
+    if item_count is None or ok_count is None or error_count is None:
+        item_count = len(items)
+        ok_count = sum(1 for i in items if str(i.get("status", i.get("relax_status", ""))).lower() in {"ok", "success"})
+        error_count = sum(1 for i in items if str(i.get("status", i.get("relax_status", ""))).lower() not in {"ok", "success", ""})
+
+    artifact_files = sorted([x.name for x in p.iterdir()]) if p.exists() else []
+    artifact_types = []
+    artifact_subkind = None
+    if "descriptors.csv" in artifact_files or "descriptors.json" in artifact_files or workflow_id == "smiles_to_rdkit_descriptors":
+        artifact_subkind = "descriptor_batch"
+        artifact_types.append("rdkit_descriptors")
+    if "geometry_analysis.json" in artifact_files or "geometry_analysis.csv" in artifact_files or workflow_id == "xyz_to_geometry_analysis":
+        artifact_subkind = "geometry_analysis_batch"
+        artifact_types.append("geometry_analysis")
     next_actions = (
         [
             "Inspect summary.csv, relaxed structures, and representative item artifacts.",
@@ -161,17 +192,19 @@ def summarize_batch_dir(batch_dir: str | Path, *, max_items: int = 20, max_text_
         "path": str(p),
         "batch_id": p.name,
         "workflow_id": workflow_id,
-        "item_count": len(items),
-        "ok_count": sum(1 for i in items if str(i.get("status", i.get("relax_status", ""))).lower() in {"ok", "success"}),
+        "item_count": item_count,
+        "ok_count": ok_count,
         "error_count": error_count,
-        "success_rate": (sum(1 for i in items if str(i.get("status", i.get("relax_status", ""))).lower() in {"ok", "success"}) / len(items)) if items else None,
+        "success_rate": (ok_count / item_count) if item_count else None,
+        "artifact_subkind": artifact_subkind,
+        "artifact_types": artifact_types,
         "summary_csv": str(p / "summary.csv") if (p / "summary.csv").exists() else None,
         "summary_json": str(p / "summary.json") if (p / "summary.json").exists() else None,
         "workflow_result": workflow_result if isinstance(workflow_result, dict) else {},
         "canonical_tools": tools,
         "items": truncated,
         "failed_items": failed,
-        "artifact_files": sorted([x.name for x in p.iterdir()]) if p.exists() else [],
+        "artifact_files": artifact_files,
         "warnings": ([w for w in canonical_warnings] + (["items_truncated"] if len(items) > max_items else [])),
         "next_recommended_actions": next_actions,
         "run_log_excerpt": _read_text_excerpt(p / "run.log", max_text_chars),
