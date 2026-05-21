@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import csv
+import os
+import fnmatch
 from datetime import datetime, timezone
 from pathlib import Path
 from time import perf_counter
@@ -25,6 +27,9 @@ class PlannerEvalCase(BaseModel):
     expected_required_backends: list[str] | None = None
     expected_normalized_status: str | None = None
     notes: str | None = None
+    case_type: str | None = None
+    difficulty: str | None = None
+    expected_failure_modes: list[str] | None = None
 
 
 class PlannerEvalSuite(BaseModel):
@@ -381,3 +386,64 @@ def compare_planner_evals(eval_dir_a: str, eval_dir_b: str) -> dict:
         },
         "per_case": per_case,
     }
+
+
+def run_planner_benchmark(eval_cases_yaml: str, backend: str | None = None, model: str | None = None, base_url: str | None = None, temperature: float | None = None, timeout_seconds: int | None = None, max_tokens: int | None = None, repeat: int = 1, case_filter: str | None = None, save_raw: bool = True) -> dict:
+    bench_id = datetime.now(timezone.utc).strftime("benchmark_%Y%m%d_%H%M%S_") + uuid.uuid4().hex[:6]
+    bench_dir = Path("outputs") / "benchmarks" / bench_id
+    bench_dir.mkdir(parents=True, exist_ok=False)
+
+    env_overrides = {}
+    if backend: env_overrides["LMOLA_LLM_BACKEND"] = backend
+    if model: env_overrides["LMOLA_LLM_MODEL"] = model
+    if base_url: env_overrides["LMOLA_LLM_BASE_URL"] = base_url
+    env_overrides["LMOLA_LLM_ENABLED"] = "1"
+    old_env = {k: os.environ.get(k) for k in env_overrides}
+    os.environ.update(env_overrides)
+    try:
+        suite = load_eval_suite(eval_cases_yaml)
+        if case_filter:
+            suite.cases = [c for c in suite.cases if fnmatch.fnmatch(c.id, case_filter) or case_filter in c.id]
+        runs=[]
+        for _ in range(max(1, repeat)):
+            r = run_planner_eval(eval_cases_yaml)
+            rows = r.cases
+            if case_filter:
+                rows=[row for row in rows if fnmatch.fnmatch(row["case_id"], case_filter) or case_filter in row["case_id"]]
+            runs.append(rows)
+        latest = runs[-1]
+        total = len(latest)
+        passed = sum(1 for r in latest if r.get("passed"))
+        parse_success_rate = sum(1 for r in latest if r.get("parse_ok"))/total if total else 0.0
+        schema_valid_rate = sum(1 for r in latest if r.get("validation_ok"))/total if total else 0.0
+        workflow_selection_accuracy = sum(1 for r in latest if r.get("workflow_match"))/total if total else 0.0
+        hallucination_rate = sum(1 for r in latest if r.get("hallucinated_workflow_id"))/total if total else 0.0
+        bcv_rate = sum(1 for r in latest if r.get("backend_constraint_violated"))/total if total else 0.0
+        unavail_sel_rate = sum(1 for r in latest if r.get("unavailable_backend_selected"))/total if total else 0.0
+        mean_elapsed = sum(float(r.get("elapsed_seconds") or 0.0) for r in latest)/total if total else 0.0
+        status_rows=[r for r in latest if r.get("expected_normalized_status") in {"unsupported","backend_unavailable"}]
+        unsupported_rows=[r for r in status_rows if r.get("expected_normalized_status")=="unsupported"]
+        bu_rows=[r for r in status_rows if r.get("expected_normalized_status")=="backend_unavailable"]
+        rep_rates=[sum(1 for r in rr if r.get("passed"))/len(rr) if rr else 0.0 for rr in runs]
+        by_case={}
+        for rr in runs:
+            for r in rr:
+                by_case.setdefault(r['case_id'],[]).append(bool(r.get('passed')) )
+        case_results=[]
+        unstable=[]
+        for r in latest:
+            seq=by_case.get(r['case_id'],[bool(r.get('passed'))])
+            pc=sum(seq); fc=len(seq)-pc; stab=pc/len(seq) if seq else 0.0
+            if len(set(seq))>1: unstable.append(r['case_id'])
+            r2=dict(r); r2.update({'pass_count':pc,'fail_count':fc,'stability':stab}); case_results.append(r2)
+        out={"status":"ok" if passed==total else "error","benchmark_id":bench_id,"suite_id":suite.suite_id,"backend":backend or load_app_config().llm.backend,"model":model or load_app_config().llm.model,"base_url":base_url or load_app_config().llm.base_url,"total_cases":total,"passed_cases":passed,"failed_cases":total-passed,"pass_rate":passed/total if total else 0.0,"workflow_selection_accuracy":workflow_selection_accuracy,"schema_valid_rate":schema_valid_rate,"parse_success_rate":parse_success_rate,"repair_attempt_rate":0.0,"repair_success_rate":0.0,"unsupported_accuracy":(sum(1 for r in unsupported_rows if r.get('normalized_status')=='unsupported')/len(unsupported_rows) if unsupported_rows else 0.0),"backend_unavailable_accuracy":(sum(1 for r in bu_rows if r.get('normalized_status')=='backend_unavailable')/len(bu_rows) if bu_rows else 0.0),"hallucination_rate":hallucination_rate,"backend_constraint_violation_rate":bcv_rate,"unavailable_backend_selection_rate":unavail_sel_rate,"mean_elapsed_seconds":mean_elapsed,"pass_rate_mean":sum(rep_rates)/len(rep_rates) if rep_rates else 0.0,"pass_rate_min":min(rep_rates) if rep_rates else 0.0,"pass_rate_max":max(rep_rates) if rep_rates else 0.0,"unstable_cases":unstable,"case_results":case_results,"summary_csv":str(bench_dir/'benchmark_summary.csv'),"summary_json":str(bench_dir/'benchmark_result.json'),"benchmark_dir":str(bench_dir)}
+        dump_json(bench_dir/'benchmark_result.json', out)
+        dump_json(bench_dir/'benchmark_config_redacted.json', {'llm': load_app_config().llm.model_dump()})
+        dump_json(bench_dir/'model_info.json', {'backend': out['backend'], 'model': out['model'], 'base_url': out['base_url'], 'temperature': temperature, 'timeout_seconds': timeout_seconds, 'max_tokens': max_tokens})
+        with (bench_dir/'benchmark_summary.csv').open('w',newline='',encoding='utf-8') as fh:
+            f=csv.DictWriter(fh, fieldnames=sorted({k for r in case_results for k in r.keys()})); f.writeheader(); [f.writerow(r) for r in case_results]
+        return out
+    finally:
+        for k,v in old_env.items():
+            if v is None: os.environ.pop(k, None)
+            else: os.environ[k]=v

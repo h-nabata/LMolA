@@ -191,3 +191,13 @@ def test_unavailable_backend_inference_aliases() -> None:
 def test_unavailable_backend_inference_preserves_unsupported() -> None:
     assert _infer_unavailable_backend(["Run CREST conformer search from xyz."]) is None
     assert _infer_unavailable_backend(["Find transition state using DFT and NEB."]) is None
+
+
+def test_benchmark_planner_cli_mock() -> None:
+    from typer.testing import CliRunner
+    from lmola.cli import app
+    runner = CliRunner()
+    result = runner.invoke(app, ["workflow", "benchmark-planner", "examples/planner_backend_eval_cases.yaml", "--backend", "mock", "--format", "json"])
+    assert result.exit_code == 0
+    assert "benchmark_dir" in result.stdout
+

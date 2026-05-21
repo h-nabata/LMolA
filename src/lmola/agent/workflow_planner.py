@@ -8,6 +8,8 @@ import uuid
 import yaml
 from pydantic import BaseModel, Field, ValidationError
 
+from lmola.llm_output_normalization import normalize_planner_output
+
 from lmola.config import is_local_llm_url_allowed, load_app_config, redacted_llm_config
 from lmola.io.converters import dump_json
 from lmola.io.run_artifacts import collect_environment
@@ -118,24 +120,11 @@ def _build_planner_prompt(request: str) -> str:
     context = build_schema_driven_planner_context()
     return build_schema_driven_planner_prompt(context) + f"\n\nNatural language request: {request}"
 
-def _strip_code_fences(text: str) -> str:
-    stripped = text.strip()
-    if stripped.startswith("```"):
-        lines = stripped.splitlines()
-        if len(lines) >= 3:
-            stripped = "\n".join(lines[1:-1]).strip()
-    return stripped
-
-
 def _parse_planner_output(raw: str) -> dict:
-    cleaned = _strip_code_fences(raw)
-    try:
-        return json.loads(cleaned)
-    except Exception:
-        parsed = yaml.safe_load(cleaned)
-        if isinstance(parsed, dict):
-            return parsed
+    norm = normalize_planner_output(raw)
+    if norm.parsed is None:
         raise ValueError("Planner output is neither valid JSON nor YAML object.")
+    return norm.parsed
 
 
 def _canonicalize_workflow(req: WorkflowRequest) -> dict:
