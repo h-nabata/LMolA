@@ -1,5 +1,8 @@
 from __future__ import annotations
 
+import json
+from pathlib import Path
+
 from typer.testing import CliRunner
 
 from lmola.cli import app
@@ -16,19 +19,18 @@ def test_llm_execution_smoke_exists() -> None:
     assert "--execute-safe" in res.stdout
 
 
-def test_mock_llm_execution_smoke_dry_run_only() -> None:
-    res = _run("--backend", "mock", "--format", "json")
-    assert res.exit_code == 0
-    assert '"status": "ok"' in res.stdout
-    assert '"executed_case_ids": []' in res.stdout
-
-
-def test_mock_llm_execution_smoke_execute_safe() -> None:
+def test_mock_llm_execution_smoke_execute_safe_and_aliases() -> None:
     res = _run("--backend", "mock", "--execute-safe", "--format", "json")
     assert res.exit_code == 0
-    assert '"status": "ok"' in res.stdout
-    assert "descriptor" in res.stdout and "geometry" in res.stdout
-    assert "xtb_not_confirmed_by_smoke" in res.stdout
+    payload = json.loads(res.stdout)
+    assert payload["status"] == "ok"
+    assert "descriptor" in payload["executed_case_ids"]
+    assert "geometry" in payload["executed_case_ids"]
+    assert payload["case_id_aliases"]["descriptor_request"] == "descriptor"
+    assert payload["case_id_aliases"]["geometry_request"] == "geometry"
+    smoke_dir = Path(payload["smoke_dir"])
+    assert (smoke_dir / "cases" / "descriptor").exists()
+    assert (smoke_dir / "cases" / "geometry").exists()
 
 
 def test_confirmed_execution_smoke_alias_keys_stable() -> None:
