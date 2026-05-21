@@ -220,3 +220,7 @@ def test_ok_status_paths_exist_in_summary(monkeypatch: pytest.MonkeyPatch, tmp_p
     assert row["generate_status"] == "ok" and Path(row["primary_structure_path"]).exists()
     assert row["validation_status"] == "ok" and Path(row["validation_report_path"]).exists()
     assert row["relax_status"] == "ok" and Path(row["relaxed_structure_path"]).exists()
+
+def test_workflow_catalog_includes_phase_13_3_workflows() -> None:
+    assert "smiles_to_rdkit_descriptors" in WORKFLOW_CATALOG
+    assert "xyz_to_geometry_analysis" in WORKFLOW_CATALOG

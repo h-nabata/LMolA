@@ -138,6 +138,12 @@ def _mock_workflow_plan(request: str) -> dict:
         return {"workflow_id": "xyz_to_xtb_relax", "input": {"type": "xyz", "path": "examples/example.xyz"}, "outputs": {"summary_csv": True, "summary_json": True}}
     if key == "Validate examples/example.xyz.":
         return {"workflow_id": "validate_xyz", "input": {"type": "xyz", "path": "examples/example.xyz"}, "outputs": {"summary_csv": True, "summary_json": True}}
+    if key == "Compute RDKit molecular descriptors for examples/smiles_list.csv.":
+        return {"workflow_id": "smiles_to_rdkit_descriptors", "input": {"type": "smiles_csv", "path": "examples/smiles_list.csv"}, "columns": {"id": "id", "smiles": "smiles"}, "outputs": {"summary_csv": True, "summary_json": True}}
+    if key == "Compute basic molecular descriptors for ethanol SMILES CCO.":
+        return {"workflow_id": "smiles_to_rdkit_descriptors", "input": {"type": "smiles", "value": "CCO"}, "outputs": {"summary_csv": True, "summary_json": True}}
+    if key == "Analyze the geometry of examples/example.xyz and report suspicious short contacts.":
+        return {"workflow_id": "xyz_to_geometry_analysis", "input": {"type": "xyz", "path": "examples/example.xyz"}, "outputs": {"summary_csv": True, "summary_json": True}}
     if key == "Generate an octahedral iron complex using molSimplify.":
         return {"status": "backend_unavailable", "reason": "molsimplify backend is unavailable in this environment.", "missing_backends": ["molsimplify"]}
     return {"status": "unsupported", "reason": "Requested task is not supported by the current workflow catalog.", "suggested_supported_workflows": ["smiles_to_3d_rdkit", "smiles_to_xtb_relax"]}

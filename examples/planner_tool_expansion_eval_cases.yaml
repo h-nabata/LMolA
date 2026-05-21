@@ -1,0 +1,28 @@
+suite_id: planner_tool_expansion_eval_v1
+cases:
+  - id: rdkit_descriptors_smiles_csv
+    request: Compute RDKit molecular descriptors for examples/smiles_list.csv.
+    expected_status: ok
+    expected_workflow_id: smiles_to_rdkit_descriptors
+    expected_required_backends: [rdkit]
+    expected_normalized_status: ok
+  - id: rdkit_descriptors_single_smiles
+    request: Compute basic molecular descriptors for ethanol SMILES CCO.
+    expected_status: ok
+    expected_workflow_id: smiles_to_rdkit_descriptors
+    expected_normalized_status: ok
+  - id: xyz_geometry_analysis
+    request: Analyze the geometry of examples/example.xyz and report suspicious short contacts.
+    expected_status: ok
+    expected_workflow_id: xyz_to_geometry_analysis
+    expected_required_backends: [ase]
+    expected_normalized_status: ok
+  - id: xtb_relax_stays_distinct
+    request: Validate examples/example.xyz and relax it with xTB.
+    expected_status: ok
+    expected_workflow_id: xyz_to_xtb_relax
+    expected_normalized_status: ok
+  - id: unsupported_dft_ts_search
+    request: Run a DFT transition state search.
+    expected_status: unsupported
+    expected_normalized_status: unsupported
