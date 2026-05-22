@@ -87,6 +87,8 @@ def detect_artifact_kind(path: str | Path) -> str:
         return "geometry_analysis_csv"
     if p.name == "canonical_workflow.json":
         return "canonical_workflow_json"
+    if p.name == "singlepoint_result.json":
+        return "singlepoint_result"
     if p.name.endswith("validation_report.json"):
         return "validation_report"
     return "unknown_lmola_artifact"
@@ -296,8 +298,10 @@ def summarize_artifact_path(path: str | Path, *, max_items: int = 20, max_text_c
         return summarize_plan_dir(p, max_text_chars=max_text_chars)
     if kind == "validation_report":
         return summarize_validation_report(p)
-    if kind in {"summary_json", "workflow_result_json", "canonical_workflow_json"}:
+    if kind in {"summary_json", "workflow_result_json", "canonical_workflow_json", "singlepoint_result"}:
         payload = _read_json(p)
+        if kind == "singlepoint_result" and isinstance(payload, dict):
+            return {"status": "ok", "artifact_kind": "singlepoint_result", "path": str(p), "payload": payload, "singlepoint_status": payload.get("status"), "energy": payload.get("energy"), "energy_unit": payload.get("energy_unit"), "geometry_modified": payload.get("geometry_modified"), "normal_termination": payload.get("normal_termination"), "method": payload.get("method")}
         return {"status": "ok", "artifact_kind": kind, "path": str(p), "payload": payload}
     if kind in {"descriptors_json", "geometry_analysis_json"}:
         payload = _read_json(p)

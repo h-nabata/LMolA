@@ -36,6 +36,27 @@ def _record(
     )
 
 
+
+
+def _parse_xtb_singlepoint_energy(text: str) -> float | None:
+    import re
+
+    patterns = [
+        r"\|\s*TOTAL ENERGY\s+(-?\d+\.\d+)",
+        r"TOTAL ENERGY\s+(-?\d+\.\d+)",
+        r"total E\s*=\s*(-?\d+\.\d+)",
+        r"final singlepoint energy\s*[:=]\s*(-?\d+\.\d+)",
+    ]
+    for pat in patterns:
+        m = re.search(pat, text, re.IGNORECASE)
+        if m:
+            try:
+                return float(m.group(1))
+            except Exception:
+                pass
+    return None
+
+
 class XtbRelaxationCalculator(RelaxationCalculator):
     method = "xtb"
 
@@ -93,6 +114,24 @@ class XtbRelaxationCalculator(RelaxationCalculator):
             generated_files=generated_files,
             tool_calls=[tool_call],
         )
+
+    def run_singlepoint(self, structure_path: Path, run_dir: Path) -> ToolResult:
+        available, message = self.check_available()
+        if not available:
+            return ToolResult(status="error", message=message, cwd=str(run_dir), tool_calls=[_record("error", "xtb", message, cwd=str(run_dir))])
+
+        cmd = [str(self.executable), str(structure_path.name)]
+        cp = subprocess.run(cmd, cwd=run_dir, capture_output=True, text=True)
+        (run_dir / "xtb.stdout.txt").write_text(cp.stdout or "", encoding="utf-8")
+        (run_dir / "xtb.stderr.txt").write_text(cp.stderr or "", encoding="utf-8")
+        combined = f"{cp.stdout or ''}\n{cp.stderr or ''}"
+        normal_termination = cp.returncode == 0 and ("normal termination" in combined.lower())
+        energy = _parse_xtb_singlepoint_energy(combined)
+        status = "ok" if cp.returncode == 0 else "error"
+        message = "xTB single-point completed" if cp.returncode == 0 else "xTB single-point failed"
+        tool_call = ToolCallRecord(timestamp=datetime.now(timezone.utc).isoformat(), tool="xtb", command=cmd, cwd=str(run_dir), returncode=cp.returncode, stdout_excerpt=(cp.stdout or "")[:500], stderr_excerpt=(cp.stderr or "")[:500], stdout_path="xtb.stdout.txt", stderr_path="xtb.stderr.txt", status=status)
+        generated_files = [x for x in ["xtb.stdout.txt", "xtb.stderr.txt", "xtbopt.log"] if (run_dir / x).exists()]
+        return ToolResult(status=status, message=message, stdout=cp.stdout or "", stderr=cp.stderr or "", returncode=cp.returncode, command=cmd, cwd=str(run_dir), generated_files=generated_files, tool_calls=[tool_call], energy=energy, normal_termination=normal_termination)
 
 
 class UnsupportedRelaxationCalculator(RelaxationCalculator):

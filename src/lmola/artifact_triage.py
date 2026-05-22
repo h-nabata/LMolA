@@ -111,7 +111,20 @@ def classify_failure(summary: dict[str, Any]) -> dict[str, Any]:
     out = _base(Path(summary.get("path", ".")), "unknown_lmola_artifact")
     out["summary"] = "Unsupported LMolA artifact kind for triage."
     if isinstance(summary, dict) and summary.get("artifact_kind") == "singlepoint_result":
-        out["failure_category"] = "xtb_singlepoint_failure"
+        sp = summary.get("payload", {}) if isinstance(summary.get("payload"), dict) else {}
+        if sp.get("status") == "ok":
+            out["failure_category"] = "none"
+            out["summary"] = "xTB singlepoint artifact indicates success."
+            out["safe_next_actions"] = ["Inspect reported energy and method fields."]
+        elif sp.get("error_type") == "energy_parse_failed":
+            out["has_failure"] = True
+            out["severity"] = "error"
+            out["failure_category"] = "energy_parse_failed"
+            out["summary"] = "xTB terminated but energy parsing failed."
+        else:
+            out["has_failure"] = True
+            out["severity"] = "error"
+            out["failure_category"] = "xtb_singlepoint_failure"
     return out
 
 

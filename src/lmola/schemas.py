@@ -69,6 +69,8 @@ class ToolResult(BaseModel):
     validation_report_path: str | None = None
     run_dir: str = ""
     tool_calls: list[ToolCallRecord] = Field(default_factory=list)
+    energy: float | None = None
+    normal_termination: bool | None = None
 
 
 class ValidationReport(BaseModel):

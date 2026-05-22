@@ -202,13 +202,18 @@ def _exec_geometry_analysis(payload: dict[str, Any], run_dir: Path) -> ToolExecu
 def _exec_xtb_singlepoint(payload: dict[str, Any], run_dir: Path) -> ToolExecutionResult:
     req = XtbSinglepointRequest.model_validate(payload)
     calc = get_relaxation_calculator("xtb")
-    result = calc.run(Path(req.input_structure), run_dir)
+    input_path = Path(req.input_structure)
+    copied_input = run_dir / input_path.name
+    copied_input.write_text(input_path.read_text(encoding="utf-8"), encoding="utf-8")
+    result = calc.run_singlepoint(copied_input, run_dir)
     energy = getattr(result, "energy", None)
-    payload_out = {"artifact_kind":"xtb_singlepoint","status": result.status, "task":"singlepoint", "energy": energy, "geometry_modified": False, "warnings": []}
+    normal_termination = bool(getattr(result, "normal_termination", False))
+    payload_out = {"artifact_kind":"xtb_singlepoint","status": ("ok" if result.status == "ok" and energy is not None else "error"), "task":"singlepoint", "energy": energy, "energy_unit":"hartree" if energy is not None else None, "method": req.method, "geometry_modified": False, "normal_termination": normal_termination, "run_dir": str(run_dir), "input_path": req.input_structure, "warnings": []}
     if result.status == "ok" and energy is None:
         payload_out["error_type"] = "energy_parse_failed"
+        payload_out["stdout_excerpt_path"] = str(run_dir / "xtb.stdout.txt")
     dump_json(run_dir / "singlepoint_result.json", payload_out)
-    return ToolExecutionResult(status=("ok" if energy is not None and result.status == "ok" else "error"), message="single-point completed" if energy is not None else "single-point energy parse failed", tool_name="xtb_singlepoint", run_dir=str(run_dir), artifact_paths=["singlepoint_result.json"], payload=payload_out)
+    return ToolExecutionResult(status=("ok" if result.status == "ok" and energy is not None else "error"), message="single-point completed" if energy is not None else "single-point energy parse failed", tool_name="xtb_singlepoint", run_dir=str(run_dir), artifact_paths=["singlepoint_result.json", "xtb.stdout.txt", "xtb.stderr.txt"], payload=payload_out)
 
 
 def _kabsch_rmsd(a: np.ndarray, b: np.ndarray) -> float:
@@ -260,7 +265,17 @@ def _exec_split_molecule_by_file_order(payload: dict[str, Any], run_dir: Path) -
     n = len(atoms)
     seen = set()
     for frag in fragments:
-        idxs = frag.get("atom_indices")
+        idxs = list(frag.get("atom_indices") or [])
+        for r in (frag.get("atom_ranges") or []):
+            if not isinstance(r, str) or "-" not in r:
+                return ToolExecutionResult(status="error", message="malformed range", tool_name="split_molecule_by_file_order_ase", run_dir=str(run_dir), payload={"status":"error","error_type":"malformed_range"})
+            a, b = r.split("-", 1)
+            if not (a.strip().isdigit() and b.strip().isdigit()):
+                return ToolExecutionResult(status="error", message="malformed range", tool_name="split_molecule_by_file_order_ase", run_dir=str(run_dir), payload={"status":"error","error_type":"malformed_range"})
+            ai, bi = int(a), int(b)
+            if ai < 1 or bi < 1 or ai > bi:
+                return ToolExecutionResult(status="error", message="malformed range", tool_name="split_molecule_by_file_order_ase", run_dir=str(run_dir), payload={"status":"error","error_type":"malformed_range"})
+            idxs.extend(list(range(ai, bi + 1)))
         if not idxs:
             return ToolExecutionResult(status="error", message="empty fragment", tool_name="split_molecule_by_file_order_ase", run_dir=str(run_dir), payload={"status":"error","error_type":"empty_fragment"})
         local=set()
