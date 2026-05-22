@@ -110,6 +110,8 @@ def classify_failure(summary: dict[str, Any]) -> dict[str, Any]:
         return triage_plan_dir(summary.get("path", ""), precomputed=summary)
     out = _base(Path(summary.get("path", ".")), "unknown_lmola_artifact")
     out["summary"] = "Unsupported LMolA artifact kind for triage."
+    if isinstance(summary, dict) and summary.get("artifact_kind") == "singlepoint_result":
+        out["failure_category"] = "xtb_singlepoint_failure"
     return out
 
 

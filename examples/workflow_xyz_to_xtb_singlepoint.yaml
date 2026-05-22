@@ -1,0 +1,3 @@
+workflow_id: xyz_to_xtb_singlepoint
+input: {type: xyz, path: examples/example.xyz}
+outputs: {summary_csv: true, summary_json: true}

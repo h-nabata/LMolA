@@ -37,6 +37,10 @@ def _resolve_artifact_path(run_dir: str | None, artifact: str | None) -> str | N
 
 
 def _load_items(req: WorkflowRequest) -> list[dict[str, str]]:
+    if req.input.type == "xyz_pair":
+        if not req.input.paths or len(req.input.paths) != 2:
+            raise ValueError("xyz_pair requires input.paths with exactly two XYZ paths")
+        return [{"id": "pair_0001", "value": "::".join(req.input.paths), "path_a": req.input.paths[0], "path_b": req.input.paths[1]}]
     if req.input.type == "smiles":
         if not req.input.value:
             raise ValueError("input.value is required for smiles input type")
@@ -120,6 +124,26 @@ def _run_workflow_request(req: WorkflowRequest, *, source_yaml: str | None, outp
                     step_params.setdefault("item_id", item["id"])
                 elif step_tool == "analyze_geometry_ase":
                     step_params.setdefault("structure_path", current_structure_path or item["value"])
+                elif step_tool == "xtb_singlepoint":
+                    step_params.setdefault("input_structure", current_structure_path or item["value"])
+                    step_params.setdefault("charge", 0)
+                    step_params.setdefault("method", "gfn2")
+                elif step_tool in {"compare_geometries_ase", "compute_rmsd_ase"}:
+                    step_params.setdefault("path_a", item.get("path_a"))
+                    step_params.setdefault("path_b", item.get("path_b"))
+                elif step_tool == "count_element_atoms_ase":
+                    step_params.setdefault("structure_path", current_structure_path or item["value"])
+                    if req.metadata and "elements" in req.metadata:
+                        step_params.setdefault("elements", req.metadata.get("elements"))
+                elif step_tool == "split_molecule_by_file_order_ase":
+                    step_params.setdefault("structure_path", current_structure_path or item["value"])
+                    if req.metadata and "fragments" in req.metadata:
+                        step_params.setdefault("fragments", req.metadata.get("fragments"))
+                elif step_tool == "filter_molecules_by_descriptors":
+                    step_params.setdefault("smiles", item["value"])
+                    step_params.setdefault("item_id", item["id"])
+                    if req.metadata:
+                        step_params.update({k: req.metadata.get(k) for k in ["filters", "logic", "columns"] if k in req.metadata})
 
                 step_run_dir = item_dir / step_tool
                 step_run_dir.mkdir(exist_ok=True)
@@ -151,6 +175,14 @@ def _run_workflow_request(req: WorkflowRequest, *, source_yaml: str | None, outp
                     geo_row = dict(out.payload)
                     geo_row.setdefault("item_id", item["id"])
                     geometry_rows.append(geo_row)
+                    if out.status != "ok":
+                        raise RuntimeError(f"{step_tool}: {out.message}")
+                elif step_tool == "xtb_singlepoint":
+                    descriptor_rows.append({"item_id": item["id"]} | out.payload)
+                    if out.status != "ok":
+                        raise RuntimeError(f"{step_tool}: {out.message}")
+                elif step_tool in {"compare_geometries_ase", "compute_rmsd_ase", "count_element_atoms_ase", "split_molecule_by_file_order_ase", "filter_molecules_by_descriptors"}:
+                    geometry_rows.append({"item_id": item["id"], "tool": step_tool} | out.payload)
                     if out.status != "ok":
                         raise RuntimeError(f"{step_tool}: {out.message}")
 

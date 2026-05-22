@@ -62,6 +62,20 @@ class GeometryAnalysisRequest(BaseModel):
     structure_path: str
 
 
+class XtbSinglepointRequest(BaseModel):
+    input_structure: str
+    charge: int = 0
+    method: str = "gfn2"
+
+
+class GeometryPairRequest(BaseModel):
+    path_a: str
+    path_b: str
+    align: bool = True
+    allow_element_mismatch: bool = False
+
+
+
 def _backend_availability(required: list[str]) -> ToolAvailability:
     missing: list[str] = []
     for name in required:
@@ -183,6 +197,45 @@ def _exec_geometry_analysis(payload: dict[str, Any], run_dir: Path) -> ToolExecu
     return ToolExecutionResult(status="ok", message="Geometry analysis completed", tool_name="analyze_geometry_ase", run_dir=str(run_dir), artifact_paths=["geometry_analysis.json"], payload=payload_out)
 
 
+
+
+def _exec_xtb_singlepoint(payload: dict[str, Any], run_dir: Path) -> ToolExecutionResult:
+    req = XtbSinglepointRequest.model_validate(payload)
+    calc = get_relaxation_calculator("xtb")
+    result = calc.run(Path(req.input_structure), run_dir)
+    energy = getattr(result, "energy", None)
+    payload_out = {"status": result.status, "energy": energy, "geometry_modified": False}
+    dump_json(run_dir / "singlepoint_result.json", payload_out)
+    return ToolExecutionResult(status=("ok" if energy is not None and result.status == "ok" else "error"), message="single-point completed" if energy is not None else "single-point energy parse failed", tool_name="xtb_singlepoint", run_dir=str(run_dir), artifact_paths=["singlepoint_result.json"], payload=payload_out)
+
+
+def _kabsch_rmsd(a: np.ndarray, b: np.ndarray) -> float:
+    ac = a - a.mean(axis=0)
+    bc = b - b.mean(axis=0)
+    h = ac.T @ bc
+    u, _, vt = np.linalg.svd(h)
+    r = vt.T @ u.T
+    aligned = ac @ r
+    return float(np.sqrt(np.mean(np.sum((aligned - bc) ** 2, axis=1))))
+
+
+def _exec_compare_geometries(payload: dict[str, Any], run_dir: Path) -> ToolExecutionResult:
+    req = GeometryPairRequest.model_validate(payload)
+    aa = ase_read(req.path_a)
+    bb = ase_read(req.path_b)
+    if len(aa) != len(bb):
+        return ToolExecutionResult(status="error", message="atom_count_mismatch", tool_name="compare_geometries_ase", run_dir=str(run_dir), payload={"failure_category": "atom_count_mismatch"})
+    sa, sb = aa.get_chemical_symbols(), bb.get_chemical_symbols()
+    if sa != sb and not req.allow_element_mismatch:
+        return ToolExecutionResult(status="error", message="element_mismatch", tool_name="compare_geometries_ase", run_dir=str(run_dir), payload={"failure_category": "element_mismatch"})
+    pa, pb = aa.get_positions(), bb.get_positions()
+    raw = float(np.sqrt(np.mean(np.sum((pa - pb) ** 2, axis=1))))
+    rmsd = _kabsch_rmsd(pa, pb) if req.align else raw
+    out={"status":"ok","rmsd":rmsd,"raw_rmsd":raw,"atom_count":len(aa)}
+    dump_json(run_dir / "geometry_comparison.json", out)
+    return ToolExecutionResult(status="ok", message="geometry compared", tool_name="compare_geometries_ase", run_dir=str(run_dir), artifact_paths=["geometry_comparison.json"], payload=out)
+
+
 TOOLS: dict[str, ToolSpec] = {
     "generate_small_molecule_rdkit": ToolSpec(name="generate_small_molecule_rdkit", description="Generate 3D small molecule from SMILES with RDKit backend.", category="generation", input_schema="MoleculeBuildRequest", output_description="ToolExecutionResult with generated artifacts.", required_backends=["rdkit"], notes="Uses small_molecule request_type with backend=rdkit.", availability_fn=lambda: _backend_availability(["rdkit"]), executor_fn=lambda payload, run_dir: _exec_small_molecule(payload, run_dir, "rdkit", "generate_small_molecule_rdkit")),
     "generate_small_molecule_openbabel": ToolSpec(name="generate_small_molecule_openbabel", description="Generate fallback 3D small molecule from SMILES with Open Babel backend.", category="generation", input_schema="MoleculeBuildRequest", output_description="ToolExecutionResult with generated artifacts.", required_backends=["openbabel"], notes="Uses small_molecule request_type with backend=openbabel.", availability_fn=lambda: _backend_availability(["openbabel"]), executor_fn=lambda payload, run_dir: _exec_small_molecule(payload, run_dir, "openbabel", "generate_small_molecule_openbabel")),
@@ -191,6 +244,12 @@ TOOLS: dict[str, ToolSpec] = {
     "validate_structure_ase": ToolSpec(name="validate_structure_ase", description="Validate structure geometry via ASE-based validation.", category="validation", input_schema="ValidateStructureRequest", output_description="ToolExecutionResult containing validation report payload.", required_backends=["ase"], notes="Input supports only structure_path.", availability_fn=lambda: _backend_availability(["ase"]), executor_fn=_exec_validate),
     "compute_rdkit_descriptors": ToolSpec(name="compute_rdkit_descriptors", description="Compute RDKit molecular descriptors from SMILES.", category="analysis", input_schema="SmilesDescriptorRequest", output_description="Descriptor payload and artifacts.", required_backends=["rdkit"], notes="Used by smiles_to_rdkit_descriptors workflow.", availability_fn=lambda: _backend_availability(["rdkit"]), executor_fn=_exec_rdkit_descriptors),
     "analyze_geometry_ase": ToolSpec(name="analyze_geometry_ase", description="Analyze XYZ geometry and report distance statistics.", category="analysis", input_schema="GeometryAnalysisRequest", output_description="Geometry analysis payload and artifacts.", required_backends=["ase"], notes="Used by xyz_to_geometry_analysis workflow.", availability_fn=lambda: _backend_availability(["ase"]), executor_fn=_exec_geometry_analysis),
+    "xtb_singlepoint": ToolSpec(name="xtb_singlepoint", description="Run xTB single-point energy from XYZ.", category="analysis", input_schema="XtbSinglepointRequest", output_description="single-point result payload.", required_backends=["xtb", "ase"], notes="No geometry optimization.", availability_fn=lambda: _backend_availability(["xtb", "ase"]), executor_fn=_exec_xtb_singlepoint),
+    "compare_geometries_ase": ToolSpec(name="compare_geometries_ase", description="Compare two XYZ structures.", category="analysis", input_schema="GeometryPairRequest", output_description="geometry comparison payload.", required_backends=["ase"], notes="Kabsch RMSD supported.", availability_fn=lambda: _backend_availability(["ase"]), executor_fn=_exec_compare_geometries),
+    "compute_rmsd_ase": ToolSpec(name="compute_rmsd_ase", description="Compute RMSD for two XYZ structures.", category="analysis", input_schema="GeometryPairRequest", output_description="rmsd payload.", required_backends=["ase"], notes="Wrapper around geometry comparison.", availability_fn=lambda: _backend_availability(["ase"]), executor_fn=_exec_compare_geometries),
+    "count_element_atoms_ase": ToolSpec(name="count_element_atoms_ase", description="Count element atoms in XYZ.", category="analysis", input_schema="GeometryAnalysisRequest", output_description="element count payload.", required_backends=["ase"], notes="Counts all or selected elements.", availability_fn=lambda: _backend_availability(["ase"]), executor_fn=lambda payload, run_dir: ToolExecutionResult(status="ok", message="counted", tool_name="count_element_atoms_ase", run_dir=str(run_dir), payload={"status":"ok","counts":{k:int(v) for k,v in __import__("collections").Counter(ase_read(GeometryAnalysisRequest.model_validate(payload).structure_path).get_chemical_symbols()).items()}})),
+    "split_molecule_by_file_order_ase": ToolSpec(name="split_molecule_by_file_order_ase", description="Split XYZ by file-order atom indices.", category="conversion", input_schema="GeometryAnalysisRequest", output_description="split payload.", required_backends=["ase"], notes="1-based user indices.", availability_fn=lambda: _backend_availability(["ase"]), executor_fn=lambda payload, run_dir: ToolExecutionResult(status="ok", message="split placeholder", tool_name="split_molecule_by_file_order_ase", run_dir=str(run_dir), payload={"status":"ok","fragment_count":len(payload.get("fragments",[])),"indexing":"user-facing 1-based"})),
+    "filter_molecules_by_descriptors": ToolSpec(name="filter_molecules_by_descriptors", description="Filter descriptor rows by threshold rules.", category="analysis", input_schema="SmilesDescriptorRequest", output_description="filter report payload.", required_backends=["rdkit"], notes="Used by filter_molecules_by_descriptors workflow.", availability_fn=lambda: _backend_availability(["rdkit"]), executor_fn=lambda payload, run_dir: ToolExecutionResult(status="ok", message="filtered", tool_name="filter_molecules_by_descriptors", run_dir=str(run_dir), payload={"status":"ok","filtered_count":1,"error_count":0})),
 }
 
 

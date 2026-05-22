@@ -1,0 +1,2 @@
+workflow_id: xyz_to_rmsd
+input: {type: xyz_pair, paths: [examples/geometry_a.xyz, examples/geometry_b.xyz]}

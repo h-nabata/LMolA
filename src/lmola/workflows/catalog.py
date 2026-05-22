@@ -14,6 +14,7 @@ TASK_TAXONOMY: list[str] = [
     "summarization",
     "descriptor_calculation",
     "geometry_analysis",
+    "property_calculation",
 ]
 
 FUTURE_TASK_TYPES: list[str] = [
@@ -92,6 +93,54 @@ WORKFLOW_CATALOG: dict[str, WorkflowCatalogEntry] = {
         tools=["compute_rdkit_descriptors"],
         required_backends=["rdkit"],
         description="Compute basic molecular descriptors from SMILES using RDKit.",
+    ),
+    "xyz_to_xtb_singlepoint": WorkflowCatalogEntry(
+        workflow_id="xyz_to_xtb_singlepoint",
+        task_type="property_calculation",
+        input_types=["xyz", "xyz_list"],
+        tools=["xtb_singlepoint"],
+        required_backends=["ase", "xtb"],
+        description="Run xTB single-point energy calculation from XYZ without geometry optimization.",
+    ),
+    "compare_two_geometries": WorkflowCatalogEntry(
+        workflow_id="compare_two_geometries",
+        task_type="geometry_analysis",
+        input_types=["xyz_pair"],
+        tools=["compare_geometries_ase"],
+        required_backends=["ase"],
+        description="Compare two XYZ geometries by atom count, element ordering, and RMSD.",
+    ),
+    "xyz_to_rmsd": WorkflowCatalogEntry(
+        workflow_id="xyz_to_rmsd",
+        task_type="geometry_analysis",
+        input_types=["xyz_pair"],
+        tools=["compute_rmsd_ase"],
+        required_backends=["ase"],
+        description="Compute RMSD between two XYZ geometries.",
+    ),
+    "count_element_atoms": WorkflowCatalogEntry(
+        workflow_id="count_element_atoms",
+        task_type="geometry_analysis",
+        input_types=["xyz", "xyz_list"],
+        tools=["count_element_atoms_ase"],
+        required_backends=["ase"],
+        description="Count atoms by element symbol for XYZ input(s).",
+    ),
+    "split_molecule_by_file_order": WorkflowCatalogEntry(
+        workflow_id="split_molecule_by_file_order",
+        task_type="conversion",
+        input_types=["xyz"],
+        tools=["split_molecule_by_file_order_ase"],
+        required_backends=["ase"],
+        description="Split XYZ into named fragments using 1-based atom indices in file order.",
+    ),
+    "filter_molecules_by_descriptors": WorkflowCatalogEntry(
+        workflow_id="filter_molecules_by_descriptors",
+        task_type="descriptor_calculation",
+        input_types=["smiles_csv"],
+        tools=["compute_rdkit_descriptors", "filter_molecules_by_descriptors"],
+        required_backends=["rdkit"],
+        description="Compute RDKit descriptors and filter rows by descriptor threshold rules.",
     ),
     "xyz_to_geometry_analysis": WorkflowCatalogEntry(
         workflow_id="xyz_to_geometry_analysis",

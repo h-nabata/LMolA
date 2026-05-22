@@ -1,0 +1,7 @@
+workflow_id: filter_molecules_by_descriptors
+input: {type: smiles_csv, path: examples/descriptor_filter_smiles.csv}
+columns: {id: id, smiles: smiles}
+metadata:
+  filters:
+    - {descriptor: MolWt, op: "<=", value: 300}
+  logic: and

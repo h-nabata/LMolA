@@ -6,9 +6,10 @@ from pydantic import BaseModel, Field
 
 
 class WorkflowInput(BaseModel):
-    type: Literal["smiles", "smiles_csv", "xyz", "xyz_list"]
+    type: Literal["smiles", "smiles_csv", "xyz", "xyz_list", "xyz_pair"]
     path: str | None = None
     value: str | None = None
+    paths: list[str] | None = None
 
 
 class WorkflowStep(BaseModel):
