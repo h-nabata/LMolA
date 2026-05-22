@@ -26,6 +26,9 @@ def test_mock_llm_execution_smoke_execute_safe_and_aliases() -> None:
     assert payload["status"] == "ok"
     assert "descriptor" in payload["executed_case_ids"]
     assert "geometry" in payload["executed_case_ids"]
+    assert "descriptor" not in payload["skipped_execution_case_ids"]
+    assert "geometry" not in payload["skipped_execution_case_ids"]
+    assert "xtb" in payload["skipped_execution_case_ids"]
     assert payload["case_id_aliases"]["descriptor_request"] == "descriptor"
     assert payload["case_id_aliases"]["geometry_request"] == "geometry"
     smoke_dir = Path(payload["smoke_dir"])

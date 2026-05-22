@@ -184,7 +184,7 @@ def run_llm_execution_smoke(**kwargs: Any) -> dict[str, Any]:
                         artifact_triage_payload = _empty_error_summary("triage_exception")
             if cfg.execute_safe and workflow_id in SAFE_EXECUTION_WORKFLOWS and not (case_dir / "mcp_confirmed_execution_response.json").exists():
                 _write_json(case_dir / "mcp_confirmed_execution_response.json", {"status": "error", "error_type": "missing_confirmed_execution_response"})
-            elif cfg.execute_safe:
+            elif cfg.execute_safe and workflow_id not in SAFE_EXECUTION_WORKFLOWS:
                 skipped_confirmed_execution = True
                 skip_reason = "workflow not in safe execution smoke list"
         if not (case_dir / "mcp_dry_run_response.json").exists():
