@@ -178,6 +178,12 @@ def summarize_batch_dir(batch_dir: str | Path, *, max_items: int = 20, max_text_
     if "geometry_analysis.json" in artifact_files or "geometry_analysis.csv" in artifact_files or workflow_id == "xyz_to_geometry_analysis":
         artifact_subkind = "geometry_analysis_batch"
         artifact_types.append("geometry_analysis")
+    comparison_summary = None
+    if workflow_id in {"compare_two_geometries", "xyz_to_rmsd"} and (p / "geometry_analysis.json").exists():
+        g = _read_json(p / "geometry_analysis.json")
+        if isinstance(g, list) and g:
+            comparison_summary = g[0]
+
     next_actions = (
         [
             "Inspect summary.csv, relaxed structures, and representative item artifacts.",
@@ -208,6 +214,7 @@ def summarize_batch_dir(batch_dir: str | Path, *, max_items: int = 20, max_text_
         "warnings": ([w for w in canonical_warnings] + (["items_truncated"] if len(items) > max_items else [])),
         "next_recommended_actions": next_actions,
         "run_log_excerpt": _read_text_excerpt(p / "run.log", max_text_chars),
+        "comparison_summary": comparison_summary,
     }
 
 

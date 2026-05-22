@@ -156,10 +156,14 @@ def _mock_workflow_plan(request: str) -> dict:
         return {"workflow_id":"compare_two_geometries","input":{"type":"xyz_pair","paths":["examples/geometry_a.xyz","examples/geometry_b.xyz"]}}
     if "rmsd" in low and "xyz" in low:
         return {"workflow_id":"xyz_to_rmsd","input":{"type":"xyz_pair","paths":["examples/geometry_a.xyz","examples/geometry_b.xyz"]}}
-    if "count fe atoms" in low or "count c/h/o" in low:
-        return {"workflow_id":"count_element_atoms","input":{"type":"xyz","path":"examples/example.xyz"},"metadata":{"elements":["Fe"] if "fe" in low else ["C","H","O"]}}
+    if "count fe atoms" in low:
+        return {"workflow_id":"count_element_atoms","input":{"type":"xyz","path":"examples/example.xyz"},"metadata":{"elements":["Fe"]}}
+    if "count all elements" in low:
+        return {"workflow_id":"count_element_atoms","input":{"type":"xyz","path":"examples/example.xyz"}}
     if "split molecule" in low and "file order" in low:
         return {"workflow_id":"split_molecule_by_file_order","input":{"type":"xyz","path":"examples/example.xyz"},"metadata":{"fragments":[{"name":"a","atom_indices":[1,2]}]}}
     if "filter molecules" in low and "molwt" in low:
+        return {"workflow_id":"filter_molecules_by_descriptors","input":{"type":"smiles_csv","path":"examples/descriptor_filter_smiles.csv"},"columns":{"id":"id","smiles":"smiles"}}
+    if "filter by h donor" in low or "acceptor-like" in low:
         return {"workflow_id":"filter_molecules_by_descriptors","input":{"type":"smiles_csv","path":"examples/descriptor_filter_smiles.csv"},"columns":{"id":"id","smiles":"smiles"}}
     return {"status": "unsupported", "reason": "Requested task is not supported by the current workflow catalog.", "suggested_supported_workflows": ["smiles_to_3d_rdkit", "smiles_to_xtb_relax"]}

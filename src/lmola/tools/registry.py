@@ -204,7 +204,9 @@ def _exec_xtb_singlepoint(payload: dict[str, Any], run_dir: Path) -> ToolExecuti
     calc = get_relaxation_calculator("xtb")
     result = calc.run(Path(req.input_structure), run_dir)
     energy = getattr(result, "energy", None)
-    payload_out = {"status": result.status, "energy": energy, "geometry_modified": False}
+    payload_out = {"artifact_kind":"xtb_singlepoint","status": result.status, "task":"singlepoint", "energy": energy, "geometry_modified": False, "warnings": []}
+    if result.status == "ok" and energy is None:
+        payload_out["error_type"] = "energy_parse_failed"
     dump_json(run_dir / "singlepoint_result.json", payload_out)
     return ToolExecutionResult(status=("ok" if energy is not None and result.status == "ok" else "error"), message="single-point completed" if energy is not None else "single-point energy parse failed", tool_name="xtb_singlepoint", run_dir=str(run_dir), artifact_paths=["singlepoint_result.json"], payload=payload_out)
 
@@ -231,9 +233,49 @@ def _exec_compare_geometries(payload: dict[str, Any], run_dir: Path) -> ToolExec
     pa, pb = aa.get_positions(), bb.get_positions()
     raw = float(np.sqrt(np.mean(np.sum((pa - pb) ** 2, axis=1))))
     rmsd = _kabsch_rmsd(pa, pb) if req.align else raw
-    out={"status":"ok","rmsd":rmsd,"raw_rmsd":raw,"atom_count":len(aa)}
+    disp = np.linalg.norm(pa - pb, axis=1)
+    out={"artifact_kind":"geometry_comparison","status":"ok","atom_count_a":len(aa),"atom_count_b":len(bb),"atom_count_match":len(aa)==len(bb),"element_order_match":sa==sb,"rmsd_aligned":_kabsch_rmsd(pa,pb),"rmsd_raw":raw,"centroid_shift":float(np.linalg.norm(pa.mean(axis=0)-pb.mean(axis=0))),"max_displacement":float(disp.max()) if len(disp) else 0.0,"mean_displacement":float(disp.mean()) if len(disp) else 0.0,"warnings":[],"rmsd":rmsd,"align":req.align,"atom_mapping":"index"}
     dump_json(run_dir / "geometry_comparison.json", out)
     return ToolExecutionResult(status="ok", message="geometry compared", tool_name="compare_geometries_ase", run_dir=str(run_dir), artifact_paths=["geometry_comparison.json"], payload=out)
+
+
+def _exec_rmsd(payload: dict[str, Any], run_dir: Path) -> ToolExecutionResult:
+    base = _exec_compare_geometries(payload, run_dir)
+    if base.status != "ok":
+        return ToolExecutionResult(status=base.status, message=base.message, tool_name="compute_rmsd_ase", run_dir=base.run_dir, payload=base.payload)
+    p = dict(base.payload)
+    out = {"artifact_kind":"rmsd_result","status":"ok","rmsd":p.get("rmsd_aligned" if p.get("align", True) else "rmsd_raw", p.get("rmsd")),"align":p.get("align", True),"atom_mapping":"index","atom_count":p.get("atom_count_a"),"warnings":p.get("warnings",[])}
+    dump_json(run_dir / "rmsd_result.json", out)
+    return ToolExecutionResult(status="ok", message="rmsd computed", tool_name="compute_rmsd_ase", run_dir=str(run_dir), artifact_paths=["rmsd_result.json"], payload=out)
+
+
+def _exec_split_molecule_by_file_order(payload: dict[str, Any], run_dir: Path) -> ToolExecutionResult:
+    req = GeometryAnalysisRequest.model_validate(payload)
+    fragments = payload.get("fragments") or []
+    allow_overlap = bool(payload.get("allow_overlap", False))
+    try:
+        atoms = ase_read(req.structure_path)
+    except Exception as exc:
+        return ToolExecutionResult(status="error", message=str(exc), tool_name="split_molecule_by_file_order_ase", run_dir=str(run_dir), payload={"status":"error","error_type":"invalid_atom_indices"})
+    n = len(atoms)
+    seen = set()
+    for frag in fragments:
+        idxs = frag.get("atom_indices")
+        if not idxs:
+            return ToolExecutionResult(status="error", message="empty fragment", tool_name="split_molecule_by_file_order_ase", run_dir=str(run_dir), payload={"status":"error","error_type":"empty_fragment"})
+        local=set()
+        for i in idxs:
+            if not isinstance(i,int) or i < 1 or i > n:
+                return ToolExecutionResult(status="error", message="invalid atom index", tool_name="split_molecule_by_file_order_ase", run_dir=str(run_dir), payload={"status":"error","error_type":"invalid_atom_indices","atom_count":n})
+            if i in local:
+                return ToolExecutionResult(status="error", message="duplicate atom index", tool_name="split_molecule_by_file_order_ase", run_dir=str(run_dir), payload={"status":"error","error_type":"duplicate_atom_indices"})
+            local.add(i)
+            if (not allow_overlap) and i in seen:
+                return ToolExecutionResult(status="error", message="duplicate atom index", tool_name="split_molecule_by_file_order_ase", run_dir=str(run_dir), payload={"status":"error","error_type":"duplicate_atom_indices"})
+            seen.add(i)
+    out={"status":"ok","fragment_count":len(fragments),"indexing":"user-facing 1-based","atom_count":n}
+    dump_json(run_dir / "split_result.json", out)
+    return ToolExecutionResult(status="ok", message="split validated", tool_name="split_molecule_by_file_order_ase", run_dir=str(run_dir), artifact_paths=["split_result.json"], payload=out)
 
 
 TOOLS: dict[str, ToolSpec] = {
@@ -246,9 +288,9 @@ TOOLS: dict[str, ToolSpec] = {
     "analyze_geometry_ase": ToolSpec(name="analyze_geometry_ase", description="Analyze XYZ geometry and report distance statistics.", category="analysis", input_schema="GeometryAnalysisRequest", output_description="Geometry analysis payload and artifacts.", required_backends=["ase"], notes="Used by xyz_to_geometry_analysis workflow.", availability_fn=lambda: _backend_availability(["ase"]), executor_fn=_exec_geometry_analysis),
     "xtb_singlepoint": ToolSpec(name="xtb_singlepoint", description="Run xTB single-point energy from XYZ.", category="analysis", input_schema="XtbSinglepointRequest", output_description="single-point result payload.", required_backends=["xtb", "ase"], notes="No geometry optimization.", availability_fn=lambda: _backend_availability(["xtb", "ase"]), executor_fn=_exec_xtb_singlepoint),
     "compare_geometries_ase": ToolSpec(name="compare_geometries_ase", description="Compare two XYZ structures.", category="analysis", input_schema="GeometryPairRequest", output_description="geometry comparison payload.", required_backends=["ase"], notes="Kabsch RMSD supported.", availability_fn=lambda: _backend_availability(["ase"]), executor_fn=_exec_compare_geometries),
-    "compute_rmsd_ase": ToolSpec(name="compute_rmsd_ase", description="Compute RMSD for two XYZ structures.", category="analysis", input_schema="GeometryPairRequest", output_description="rmsd payload.", required_backends=["ase"], notes="Wrapper around geometry comparison.", availability_fn=lambda: _backend_availability(["ase"]), executor_fn=_exec_compare_geometries),
+    "compute_rmsd_ase": ToolSpec(name="compute_rmsd_ase", description="Compute RMSD for two XYZ structures.", category="analysis", input_schema="GeometryPairRequest", output_description="rmsd payload.", required_backends=["ase"], notes="Wrapper around geometry comparison.", availability_fn=lambda: _backend_availability(["ase"]), executor_fn=_exec_rmsd),
     "count_element_atoms_ase": ToolSpec(name="count_element_atoms_ase", description="Count element atoms in XYZ.", category="analysis", input_schema="GeometryAnalysisRequest", output_description="element count payload.", required_backends=["ase"], notes="Counts all or selected elements.", availability_fn=lambda: _backend_availability(["ase"]), executor_fn=lambda payload, run_dir: ToolExecutionResult(status="ok", message="counted", tool_name="count_element_atoms_ase", run_dir=str(run_dir), payload={"status":"ok","counts":{k:int(v) for k,v in __import__("collections").Counter(ase_read(GeometryAnalysisRequest.model_validate(payload).structure_path).get_chemical_symbols()).items()}})),
-    "split_molecule_by_file_order_ase": ToolSpec(name="split_molecule_by_file_order_ase", description="Split XYZ by file-order atom indices.", category="conversion", input_schema="GeometryAnalysisRequest", output_description="split payload.", required_backends=["ase"], notes="1-based user indices.", availability_fn=lambda: _backend_availability(["ase"]), executor_fn=lambda payload, run_dir: ToolExecutionResult(status="ok", message="split placeholder", tool_name="split_molecule_by_file_order_ase", run_dir=str(run_dir), payload={"status":"ok","fragment_count":len(payload.get("fragments",[])),"indexing":"user-facing 1-based"})),
+    "split_molecule_by_file_order_ase": ToolSpec(name="split_molecule_by_file_order_ase", description="Split XYZ by file-order atom indices.", category="conversion", input_schema="GeometryAnalysisRequest", output_description="split payload.", required_backends=["ase"], notes="1-based user indices.", availability_fn=lambda: _backend_availability(["ase"]), executor_fn=_exec_split_molecule_by_file_order),
     "filter_molecules_by_descriptors": ToolSpec(name="filter_molecules_by_descriptors", description="Filter descriptor rows by threshold rules.", category="analysis", input_schema="SmilesDescriptorRequest", output_description="filter report payload.", required_backends=["rdkit"], notes="Used by filter_molecules_by_descriptors workflow.", availability_fn=lambda: _backend_availability(["rdkit"]), executor_fn=lambda payload, run_dir: ToolExecutionResult(status="ok", message="filtered", tool_name="filter_molecules_by_descriptors", run_dir=str(run_dir), payload={"status":"ok","filtered_count":1,"error_count":0})),
 }
 
