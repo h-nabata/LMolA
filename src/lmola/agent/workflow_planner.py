@@ -72,6 +72,8 @@ def build_schema_driven_planner_prompt(context: dict) -> str:
     supported_value_example = {"input": {"type": "smiles", "value": "CCO"}}
     unsupported_example = {"status": "unsupported", "reason": "short reason"}
     backend_unavailable_example = {"status": "backend_unavailable", "reason": "xTB backend is unavailable", "missing_backends": ["xtb"]}
+    compare_example = {"status":"ok","workflow_id":"compare_two_geometries","input":{"type":"xyz_pair","paths":["examples/geometry_a.xyz","examples/geometry_b.xyz"]},"metadata":{"align":True,"atom_mapping":"file_order","output_per_atom_displacements":True},"reason":"Broad geometry comparison requested."}
+    rmsd_only_example = {"status":"ok","workflow_id":"xyz_to_rmsd","input":{"type":"xyz_pair","paths":["examples/geometry_a.xyz","examples/geometry_b.xyz"]},"metadata":{"align":True,"atom_mapping":"file_order"},"reason":"RMSD-only calculation requested."}
     return (
         "You are LMolA local workflow planner.\\n"
         "You are the LMolA schema-driven workflow planner.\\n"
@@ -103,8 +105,13 @@ def build_schema_driven_planner_prompt(context: dict) -> str:
         f"Output contract unsupported_task: {json.dumps(context.get('output_contract', {}).get('unsupported_task', {}))}\\n"
         f"Supported task output example: {json.dumps(supported_example)}\\n"
         f"Value input example: {json.dumps(supported_value_example)}\\n"
+        "Disambiguation rule: choose compare_two_geometries for broad structure comparison (atom-count match, element-order match, per-atom displacement, structural comparison, or compare geometries).\n"
+        "Disambiguation rule: choose xyz_to_rmsd only for RMSD-only requests.\n"
+        "Do not choose xyz_to_rmsd when the user asks for a general comparison.\n"
         f"Unsupported task output example: {json.dumps(unsupported_example)}"
         f"Backend unavailable output example: {json.dumps(backend_unavailable_example)}"
+        f"Comparison output example: {json.dumps(compare_example)}"
+        f"RMSD-only output example: {json.dumps(rmsd_only_example)}"
     )
 
 

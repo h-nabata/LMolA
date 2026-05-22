@@ -2,5 +2,5 @@ workflow_id: split_molecule_by_file_order
 input: {type: xyz, path: examples/example.xyz}
 metadata:
   fragments:
-    - {name: oxygen, atom_indices: [1]}
-    - {name: hydrogens, atom_ranges: ["2-3"]}
+    - {name: bad_zero, atom_indices: [0]}
+    - {name: bad_dup, atom_indices: [1,1]}

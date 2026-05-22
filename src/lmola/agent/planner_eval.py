@@ -301,6 +301,7 @@ def run_planner_eval(eval_cases_yaml: str) -> PlannerEvalRunResult:
             "unavailable_backend_selected": unavailable_backend_selected,
             "backend_constraint_violated": backend_constraint_violated,
             "passed": case_passed,
+            "raw_response_path": str(case_dir / "raw_llm_response.txt"),
         }
         row["failure_category"] = _classify_failure(row)
         dump_json(
