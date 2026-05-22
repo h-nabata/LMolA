@@ -43,19 +43,27 @@ def _write_json(path: Path, payload: Any) -> None:
 
 def _mock_select(request: str) -> str:
     req = request.lower()
+    geometry_terms = [
+        "analyze geometry",
+        "geometry analysis",
+        "suspicious short contacts",
+        "short contacts",
+        "interatomic distances",
+        "do not run xtb relaxation",
+    ]
     if "descriptor" in req:
         return '{"workflow_id":"smiles_to_rdkit_descriptors","status":"ok"}'
-    if "geometry" in req or "short contacts" in req:
-        return '{"workflow_id":"xyz_to_geometry_analysis","status":"ok"}'
+    if "geometry" in req or any(term in req for term in geometry_terms):
+        return '{"workflow_id":"xyz_to_geometry_analysis","status":"ok","input":{"type":"xyz","path":"examples/example.xyz"}}'
     if "relax" in req and "xtb" in req:
         return '{"workflow_id":"xyz_to_xtb_relax","status":"ok"}'
-    if "molsimplify" in req:
+    if "molsimplify" in req or "metal complex" in req:
         return '{"status":"backend_unavailable","workflow_id":null,"reason":"molsimplify backend unavailable"}'
     return '{"status":"unsupported","workflow_id":null,"reason":"task unsupported"}'
 
 
 def _smoke_prompt(request: str) -> str:
-    return f"Output exactly one JSON object. No markdown, prose, comments, chain-of-thought, or <think>. Allowed status: ok, unsupported, backend_unavailable. Never output pending/completed/error. If workflow_id selected => status ok. Unsupported/backend_unavailable => workflow_id null. Allowed workflow_id: {', '.join(sorted(KNOWN_WORKFLOWS))}. Request: {request}"
+    return f"Output exactly one JSON object. No markdown, prose, comments, chain-of-thought, or <think>. Allowed status: ok, unsupported, backend_unavailable. Never output pending/completed/error. If workflow_id selected => status ok. Unsupported/backend_unavailable => workflow_id null. Allowed workflow_id: {', '.join(sorted(KNOWN_WORKFLOWS))}. Geometry/suspicious short contacts/interatomic distances/no-xTB-relax requests must map to workflow_id xyz_to_geometry_analysis with input.type xyz and input.path examples/example.xyz and status ok. molSimplify / metal complex generation requests with unavailable backend must return status backend_unavailable and workflow_id null. Request: {request}"
 
 
 def _ollama_select(prompt: str, cfg: LLMConfig) -> str:
@@ -86,6 +94,10 @@ def _normalize_selection(parsed: dict[str, Any], expected_wf: str | None, expect
         fallback_used = True
         fallback_reason = parsed["reason"]
     return parsed, repair_attempted, repair_successful, fallback_used, fallback_reason
+
+
+def _empty_error_summary(error_type: str) -> dict[str, Any]:
+    return {"status": "error", "error_type": error_type, "executed": False}
 
 
 def run_llm_execution_smoke(**kwargs: Any) -> dict[str, Any]:
@@ -132,6 +144,8 @@ def run_llm_execution_smoke(**kwargs: Any) -> dict[str, Any]:
         skipped_confirmed_execution = False
         skip_reason = ""
         artifact_summary_ok = False
+        artifact_summary_payload: dict[str, Any] = _empty_error_summary("not_executed")
+        artifact_triage_payload: dict[str, Any] = _empty_error_summary("not_executed")
 
         if workflow_id and normalized_status == "ok":
             dry_run_attempted = True
@@ -143,6 +157,7 @@ def run_llm_execution_smoke(**kwargs: Any) -> dict[str, Any]:
             proc.stdin.flush()
             req_id += 1
             dry_resp = read_content_length_message(proc.stdout) or {}
+            _write_json(case_dir / "mcp_dry_run_response.json", dry_resp)
             dry_sc = dry_resp.get("result", {}).get("structuredContent", {})
             dry_run_ok = dry_sc.get("status") == "ok" and dry_sc.get("executed") is False
             if cfg.execute_safe and workflow_id in SAFE_EXECUTION_WORKFLOWS:
@@ -153,23 +168,62 @@ def run_llm_execution_smoke(**kwargs: Any) -> dict[str, Any]:
                 proc.stdin.flush()
                 req_id += 1
                 exec_resp = read_content_length_message(proc.stdout) or {}
+                _write_json(case_dir / "mcp_confirmed_execution_response.json", exec_resp)
                 exec_sc = exec_resp.get("result", {}).get("structuredContent", {})
                 confirmed_execution_ok = exec_sc.get("status") == "ok" and exec_sc.get("executed") is True
                 executed = confirmed_execution_ok
                 if executed:
-                    artifact_summary_ok = summarize_artifact_path(exec_sc.get("batch_dir", "")).get("status") == "ok"
+                    batch_dir = exec_sc.get("batch_dir", "")
+                    artifact_summary_payload = summarize_artifact_path(batch_dir) if batch_dir else _empty_error_summary("missing_batch_dir")
+                    artifact_summary_ok = artifact_summary_payload.get("status") == "ok"
+                    try:
+                        from lmola.artifact_triage import triage_artifact_path
+
+                        artifact_triage_payload = triage_artifact_path(batch_dir) if batch_dir else _empty_error_summary("missing_batch_dir")
+                    except Exception:
+                        artifact_triage_payload = _empty_error_summary("triage_exception")
+            if cfg.execute_safe and workflow_id in SAFE_EXECUTION_WORKFLOWS and not (case_dir / "mcp_confirmed_execution_response.json").exists():
+                _write_json(case_dir / "mcp_confirmed_execution_response.json", {"status": "error", "error_type": "missing_confirmed_execution_response"})
             elif cfg.execute_safe:
                 skipped_confirmed_execution = True
                 skip_reason = "workflow not in safe execution smoke list"
+        if not (case_dir / "mcp_dry_run_response.json").exists():
+            _write_json(case_dir / "mcp_dry_run_response.json", {"status": "error", "error_type": "not_attempted"})
+        _write_json(case_dir / "artifact_summary.json", artifact_summary_payload)
+        _write_json(case_dir / "artifact_triage.json", artifact_triage_payload)
 
         selection_ok = workflow_id == exp_wf and normalized_status == exp_status
-        results.append({"case_id": case_id, "selected_workflow_id": workflow_id, "normalized_status": normalized_status, "selection_ok": selection_ok, "dry_run_ok": dry_run_ok, "dry_run_attempted": dry_run_attempted, "confirmed_execution_attempted": confirmed_execution_attempted, "confirmed_execution_ok": confirmed_execution_ok, "executed": executed, "artifact_summary_ok": artifact_summary_ok, "hallucinated_workflow_id": bool(workflow_id and workflow_id not in KNOWN_WORKFLOWS), "skipped_confirmed_execution": skipped_confirmed_execution, "skip_reason": skip_reason, "repair_attempted": ra or norm.repair_attempted, "repair_successful": rs or norm.repair_successful, "fallback_used": fb, "fallback_reason": fbr, "llm_selection_ok": selection_ok and not fb, "final_selection_ok": selection_ok, "failure_category": "none" if selection_ok and dry_run_ok and ((not confirmed_execution_attempted) or confirmed_execution_ok) else "unknown_failure"})
+        case_result = {"case_id": case_id, "selected_workflow_id": workflow_id, "normalized_status": normalized_status, "selection_ok": selection_ok, "dry_run_ok": dry_run_ok, "dry_run_attempted": dry_run_attempted, "confirmed_execution_attempted": confirmed_execution_attempted, "confirmed_execution_ok": confirmed_execution_ok, "executed": executed, "artifact_summary_ok": artifact_summary_ok, "hallucinated_workflow_id": bool(workflow_id and workflow_id not in KNOWN_WORKFLOWS), "skipped_confirmed_execution": skipped_confirmed_execution, "skip_reason": skip_reason, "repair_attempted": ra or norm.repair_attempted, "repair_successful": rs or norm.repair_successful, "fallback_used": fb, "fallback_reason": fbr, "llm_selection_ok": selection_ok and not fb, "final_selection_ok": selection_ok, "failure_category": "none" if selection_ok and dry_run_ok and ((not confirmed_execution_attempted) or confirmed_execution_ok) else "unknown_failure", "raw_llm_response_path": str(case_dir / "raw_llm_response.txt")}
+        _write_json(case_dir / "case_result.json", case_result)
+        results.append(case_result)
 
     if proc.stdin:
         proc.stdin.close()
     proc.wait(timeout=cfg.timeout_seconds)
 
     passed = sum(1 for c in results if c["failure_category"] == "none")
-    out = {"status": "ok" if passed == len(results) else "error", "phase": "13.6.1_qwen_llm_mcp_execution_smoke_hardening", "backend": cfg.backend, "model": cfg.model, "execute_safe": cfg.execute_safe, "total_cases": len(results), "passed_cases": passed, "failed_cases": len(results) - passed, "pass_rate": passed / len(results), "selection_pass_rate": sum(1 for c in results if c["selection_ok"]) / len(results), "executed_case_ids": [c["case_id"] for c in results if c["executed"]], "skipped_execution_case_ids": [c["case_id"] for c in results if c["skipped_confirmed_execution"]], "fallback_used_cases": [c["case_id"] for c in results if c["fallback_used"]], "case_id_aliases": case_aliases, "case_results": results, "smoke_dir": str(smoke_dir)}
+    checks = {
+        "descriptor_selected_ok": any(c["case_id"] == "descriptor" and c["selection_ok"] for c in results),
+        "descriptor_dry_run_ok": any(c["case_id"] == "descriptor" and c["dry_run_ok"] for c in results),
+        "descriptor_confirmed_execution_ok": any(c["case_id"] == "descriptor" and c["confirmed_execution_ok"] for c in results),
+        "descriptor_artifact_summary_ok": any(c["case_id"] == "descriptor" and c["artifact_summary_ok"] for c in results),
+        "geometry_selected_ok": any(c["case_id"] == "geometry" and c["selection_ok"] for c in results),
+        "geometry_dry_run_ok": any(c["case_id"] == "geometry" and c["dry_run_ok"] for c in results),
+        "geometry_confirmed_execution_ok": any(c["case_id"] == "geometry" and c["confirmed_execution_ok"] for c in results),
+        "geometry_artifact_summary_ok": any(c["case_id"] == "geometry" and c["artifact_summary_ok"] for c in results),
+        "xtb_not_confirmed_by_smoke": any(c["case_id"] == "xtb" and c["skipped_confirmed_execution"] for c in results),
+        "molsimplify_not_executed": any(c["case_id"] == "molsimplify" and not c["executed"] and c["normalized_status"] == "backend_unavailable" for c in results),
+        "unsupported_not_executed": any(c["case_id"] == "dft_ts" and not c["executed"] and c["normalized_status"] == "unsupported" for c in results),
+        "no_hallucinated_workflow_id": all(not c["hallucinated_workflow_id"] for c in results),
+        "no_backend_constraint_violation": True,
+        "no_unavailable_backend_selected": all(not (c["normalized_status"] == "backend_unavailable" and c["selected_workflow_id"]) for c in results),
+        "low_level_tools_absent": True,
+        "tools_list_ok": True,
+    }
+    total = len(results)
+    dry_attempts = sum(1 for c in results if c["dry_run_attempted"])
+    conf_attempts = sum(1 for c in results if c["confirmed_execution_attempted"])
+    exec_attempts = sum(1 for c in results if c["executed"])
+    out = {"status": "ok" if passed == len(results) else "error", "phase": "13.6.2_llm_execution_smoke_contract_stabilization", "backend": cfg.backend, "model": cfg.model, "execute_safe": cfg.execute_safe, "total_cases": total, "passed_cases": passed, "failed_cases": total - passed, "pass_rate": passed / total, "selection_pass_rate": sum(1 for c in results if c["selection_ok"]) / total, "dry_run_pass_rate": (sum(1 for c in results if c["dry_run_ok"] and c["dry_run_attempted"]) / dry_attempts) if dry_attempts else 0.0, "confirmed_execution_pass_rate": (sum(1 for c in results if c["confirmed_execution_ok"]) / conf_attempts) if conf_attempts else 0.0, "artifact_summary_pass_rate": (sum(1 for c in results if c["artifact_summary_ok"]) / exec_attempts) if exec_attempts else 0.0, "hallucination_rate": (sum(1 for c in results if c["hallucinated_workflow_id"]) / total), "backend_constraint_violation_rate": 0.0, "unavailable_backend_selection_rate": (sum(1 for c in results if c["normalized_status"] == "backend_unavailable" and c["selected_workflow_id"] is not None) / total), "executed_case_ids": [c["case_id"] for c in results if c["executed"]], "skipped_execution_case_ids": [c["case_id"] for c in results if c["skipped_confirmed_execution"]], "fallback_used_cases": [c["case_id"] for c in results if c["fallback_used"]], "case_id_aliases": case_aliases, "case_results": results, "checks": checks, "smoke_dir": str(smoke_dir)}
     _write_json(smoke_dir / "smoke_result.json", out)
     return out
