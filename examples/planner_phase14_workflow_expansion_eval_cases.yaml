@@ -1,0 +1,13 @@
+cases:
+  - case_id: xtb_singlepoint
+    request: single point energy with xTB for examples/example.xyz and do not optimize geometry
+    expected_workflow_id: xyz_to_xtb_singlepoint
+    expected_status: ok
+  - case_id: compare_two_geometries
+    request: compare two geometries examples/geometry_a.xyz and examples/geometry_b.xyz
+    expected_workflow_id: compare_two_geometries
+    expected_status: ok
+  - case_id: rmsd
+    request: RMSD between two XYZ files
+    expected_workflow_id: xyz_to_rmsd
+    expected_status: ok

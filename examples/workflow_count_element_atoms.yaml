@@ -1,0 +1,3 @@
+workflow_id: count_element_atoms
+input: {type: xyz, path: examples/example.xyz}
+metadata: {elements: [C,H,O]}

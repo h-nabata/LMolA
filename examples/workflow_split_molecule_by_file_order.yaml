@@ -1,0 +1,6 @@
+workflow_id: split_molecule_by_file_order
+input: {type: xyz, path: examples/example.xyz}
+metadata:
+  fragments:
+    - {name: head, atom_indices: [1,2]}
+    - {name: tail, atom_ranges: ["3-3"]}
