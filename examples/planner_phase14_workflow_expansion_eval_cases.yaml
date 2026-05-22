@@ -1,13 +1,43 @@
+suite_id: planner_phase14_workflow_expansion_v1
 cases:
-  - case_id: xtb_singlepoint
+  - id: xtb_singlepoint
     request: single point energy with xTB for examples/example.xyz and do not optimize geometry
     expected_workflow_id: xyz_to_xtb_singlepoint
     expected_status: ok
-  - case_id: compare_two_geometries
+  - id: compare_two_geometries
     request: compare two geometries examples/geometry_a.xyz and examples/geometry_b.xyz
     expected_workflow_id: compare_two_geometries
     expected_status: ok
-  - case_id: rmsd
+  - id: rmsd
     request: RMSD between two XYZ files
     expected_workflow_id: xyz_to_rmsd
     expected_status: ok
+  - id: count_fe_atoms
+    request: count Fe atoms in examples/example.xyz
+    expected_workflow_id: count_element_atoms
+    expected_status: ok
+  - id: count_all_elements
+    request: count all elements in examples/example.xyz
+    expected_workflow_id: count_element_atoms
+    expected_status: ok
+  - id: split_by_file_order
+    request: split molecule by file-order atom indices
+    expected_workflow_id: split_molecule_by_file_order
+    expected_status: ok
+  - id: filter_by_molwt
+    request: filter molecules by MolWt <= 300
+    expected_workflow_id: filter_molecules_by_descriptors
+    expected_status: ok
+  - id: filter_by_hbd_hba_like_rule
+    request: filter by H donor / acceptor-like rule
+    expected_workflow_id: filter_molecules_by_descriptors
+    expected_status: ok
+  - id: unsupported_crest
+    request: run CREST conformer search on examples/example.xyz
+    expected_status: unsupported
+  - id: unsupported_dft_ts
+    request: run DFT TS / NEB / reaction path search on examples/example.xyz
+    expected_status: unsupported
+  - id: molsimplify_backend_unavailable
+    request: Generate an octahedral iron complex using molSimplify.
+    expected_status: backend_unavailable
