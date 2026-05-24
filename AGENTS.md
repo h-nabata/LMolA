@@ -2,7 +2,7 @@
 
 This file is for repository development agents such as Codex Desktop / Codex CLI.
 It governs code changes, tests, safety boundaries, and repository conventions.
-It is not the runtime prompt for chemistry task execution.
+It is **not** the runtime prompt for chemistry task execution.
 Runtime chemistry agent instructions live in `docs/agents/runtime_chemistry_agent.md`.
 
 This repository is maintained with a conservative, Codex-friendly workflow.
@@ -20,7 +20,11 @@ xTB, molSimplify, RDKit, Open Babel, or network access.
 - Do not execute LLM output directly.
 - Keep execution permission deterministic and controlled by LMolA-side validation, allowlists, and confirmation gates.
 - Do not relax `lmola.run_workflow` confirmation policy.
-- Keep dry-run behavior safe by default.
+- Preserve safe defaults for execution gates and never weaken or bypass them:
+  - `dry_run` remains the safe default behavior.
+  - `allow_execution` must remain explicitly required for real execution.
+  - `confirm` must remain explicitly required for real execution.
+- Development agents must not auto-enable `allow_execution`/`confirm`, and must not bypass `dry_run`-first behavior.
 - Optional external tools must fail clearly when unavailable.
 - Do not log secrets, API keys, credentials, or raw environment dumps.
 - Do not use `shell=True`.
