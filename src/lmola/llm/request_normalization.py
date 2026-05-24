@@ -8,8 +8,12 @@ def _contains_any(text: str, patterns: list[str]) -> bool:
     return any(p in text for p in patterns)
 
 
+def _xyz_paths(raw: str) -> list[str]:
+    return re.findall(r"[\w./\\-]+\.xyz\b", raw, flags=re.IGNORECASE)
+
+
 def _has_xyz_path(raw: str) -> bool:
-    return bool(re.search(r"[\w./\\-]+\.xyz\b", raw, flags=re.IGNORECASE))
+    return bool(_xyz_paths(raw))
 
 
 def _has_csv_path(raw: str) -> bool:
@@ -90,7 +94,10 @@ def normalize_request(request: str, language: str = "auto") -> dict[str, Any]:
     if method is None and _contains_any(text, ["単一点", "シングルポイント", "single point", "singlepoint", "one-point"]):
         method = "xtb"
         _append_evidence(evidence, "method", "xtb", "singlepoint")
-    if _has_xyz_path(raw):
+    xyz_paths = _xyz_paths(raw)
+    if len(xyz_paths) >= 2:
+        input_kind = "xyz_pair"
+    elif len(xyz_paths) == 1:
         input_kind = "xyz"
     elif _has_csv_path(raw):
         input_kind = "smiles_csv"
@@ -120,13 +127,17 @@ def normalize_request(request: str, language: str = "auto") -> dict[str, Any]:
             input_kind = "smiles_csv"
     elif _contains_any(text, ["rmsdだけ", "rmsdのみ", "rmsd only"]):
         operation = "rmsd_calculation"
-        if _contains_any(text, ["2つ", "two", "比較"]):
+        if input_kind == "unknown" and _contains_any(text, ["2つ", "two", "two geometries", "2 geometries", "二つ"]):
             input_kind = "xyz_pair"
         elif input_kind == "unknown":
             input_kind = "xyz"
-    elif _contains_any(text, ["構造を比較", "2つの構造を比較", "原子ごとの変位"]):
+    elif _contains_any(text, ["構造を比較", "2つの構造を比較", "原子ごとの変位", "two geometries"]):
         operation = "structure_comparison"
-        input_kind = "xyz_pair"
+        if input_kind == "unknown" and not _contains_any(text, ["2つ", "two", "二つ"]):
+            input_kind = "unknown"
+            notes.append("pair input implied but no explicit XYZ paths found")
+        else:
+            input_kind = "xyz_pair"
     elif _contains_any(text, ["元素数", "原子数", "fe原子の数", "炭素原子数", "指定元素"]):
         operation = "element_counting"
         if input_kind == "unknown":
