@@ -60,6 +60,7 @@ def test_call_readonly_tools_and_errors(monkeypatch) -> None:
     planner_context = call_mcp_tool("lmola.get_planner_context", {})["planner_context"]
     assert planner_context["schema_version"] == "lmola.planner_context.v1"
     assert "backend_capabilities" in planner_context
+    assert "artifact_contract_summaries" in planner_context
     assert "readiness" in planner_context["workflows"][0]
     assert call_mcp_tool("lmola.get_schema_bundle", {})["schema_bundle"]["schema_version"] == "lmola.schema_bundle.v1"
 

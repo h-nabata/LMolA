@@ -9,6 +9,7 @@ from lmola.agent.planner_eval import PlannerEvalCase, PlannerEvalSuite
 from lmola.schemas import BuildOptions, MoleculeBuildRequest, ToolCallRecord, ToolResult
 from lmola.tools.registry import RelaxXtbRequest, ValidateStructureRequest, list_tools
 from lmola.backends.capabilities import backend_capability_schema, list_backend_capabilities
+from lmola.artifact_contracts import ArtifactContract, ArtifactRegistry, export_artifact_registry
 from lmola.workflows import check_workflow_backend_readiness, list_workflows
 from lmola.workflows.catalog import WorkflowArtifactOutputDescriptor, WorkflowContract, WorkflowExecutionPolicy, WorkflowPortContract
 from lmola.workflows.schemas import WorkflowInput, WorkflowOutputs, WorkflowRequest, WorkflowStep
@@ -144,6 +145,7 @@ def export_planner_schema_bundle() -> dict:
                 for backend_id in unavailable
             ],
             "unsupported_task_policy": "Return status='unsupported' with a short reason when no catalog workflow matches the user request.",
+            "artifact_contract_summaries": export_artifact_registry(compact=True).get("artifact_contracts", {}),
         }
     )
 
@@ -165,6 +167,10 @@ def export_all_schemas() -> dict:
             "workflow_port_contract_schema": WorkflowPortContract.model_json_schema(),
             "workflow_execution_policy_schema": WorkflowExecutionPolicy.model_json_schema(),
             "workflow_artifact_output_descriptor_schema": WorkflowArtifactOutputDescriptor.model_json_schema(),
+            "artifact_contract_schema": ArtifactContract.model_json_schema(),
+            "artifact_registry_schema": ArtifactRegistry.model_json_schema(),
+            "artifact_contracts": export_artifact_registry(compact=False),
+            "artifact_contracts_compact": export_artifact_registry(compact=True),
             "backend_capabilities": {k: v.model_dump() for k, v in list_backend_capabilities().items()},
         }
     )

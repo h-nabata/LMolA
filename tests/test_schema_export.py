@@ -22,6 +22,9 @@ def test_schema_export_json_cli() -> None:
     assert "RelaxXtbRequest" in payload["models"]
     assert "ValidateStructureRequest" in payload["models"]
     assert "workflow_contract_schema" in payload
+    assert "artifact_contract_schema" in payload
+    assert "artifact_registry_schema" in payload
+    assert "artifact_contracts" in payload
 
 
 def test_model_schema_contains_molecule_build_request() -> None:
@@ -81,6 +84,8 @@ def test_planner_context_compact_contract() -> None:
     assert payload["output_contract"]["unsupported_task"]["status_value"] == "unsupported"
     sample = payload["workflows"][0]
     assert "operation" in sample and "method" in sample and "geometry_modified" in sample
+    assert "artifact_contract_summaries" in payload
+    assert len(payload["artifact_contract_summaries"]) >= 10
 
 
 def test_schema_export_out_writes_files(tmp_path: Path) -> None:
