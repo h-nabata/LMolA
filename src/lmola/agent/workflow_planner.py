@@ -99,6 +99,7 @@ def build_schema_driven_planner_prompt(context: dict) -> str:
         "For supported tasks, include workflow_id and input.\\n"
         "For smiles_csv input, include columns when obvious: {\"id\":\"id\",\"smiles\":\"smiles\"}.\\n"
         "If the user names a file, prefer input.path. input.value is allowed for direct values like a single SMILES string.\\n\\n"
+        "Japanese requests are supported; map Japanese chemistry terms to the same catalog workflows without translating workflow IDs.\\n"
         f"Planner context schema version: {context.get('schema_version')}\\n"
         f"Allowed workflow IDs: {json.dumps(context.get('allowed_workflow_ids', []))}\\n"
         f"Allowed input types: {json.dumps(context.get('allowed_input_types', []))}\\n"
