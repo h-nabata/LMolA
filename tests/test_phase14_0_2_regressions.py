@@ -19,6 +19,13 @@ def test_phase14_planner_eval_cases_with_mock(monkeypatch) -> None:
     assert by_case["rmsd"]["selected_workflow_id"] == "xyz_to_rmsd"
 
 
+def test_phase14_1_japanese_planner_eval_cases_with_mock(monkeypatch) -> None:
+    monkeypatch.setenv("LMOLA_LLM_ENABLED", "1")
+    monkeypatch.setenv("LMOLA_LLM_BACKEND", "mock")
+    result = run_planner_eval("examples/planner_phase14_1_japanese_eval_cases.yaml")
+    assert result.failed_cases == 0
+
+
 def test_split_positive_and_invalid_examples() -> None:
     pos = run_workflow_yaml("examples/workflow_split_molecule_by_file_order.yaml")
     assert pos.status == "ok"
