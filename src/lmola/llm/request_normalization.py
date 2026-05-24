@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import re
 from typing import Any
 
 
@@ -7,87 +8,172 @@ def _contains_any(text: str, patterns: list[str]) -> bool:
     return any(p in text for p in patterns)
 
 
+def _has_xyz_path(raw: str) -> bool:
+    return bool(re.search(r"[\w./\\-]+\.xyz\b", raw, flags=re.IGNORECASE))
+
+
+def _has_csv_path(raw: str) -> bool:
+    return bool(re.search(r"[\w./\\-]+\.csv\b", raw, flags=re.IGNORECASE))
+
+
+def _append_evidence(evidence: list[dict[str, str]], field: str, value: str, source_text: str) -> None:
+    if source_text:
+        evidence.append({"field": field, "value": value, "source_text": source_text})
+
+
+def _derive_workflow_hints(intent: dict[str, Any]) -> list[str]:
+    method = intent.get("method")
+    operation = intent.get("operation")
+    input_kind = intent.get("input_kind")
+    constraints = set(intent.get("constraints", []))
+
+    hints: list[str] = []
+    if method == "xtb" and operation == "singlepoint_energy" and input_kind == "xyz":
+        hints.append("xyz_to_xtb_singlepoint")
+    if (
+        method == "xtb"
+        and operation == "geometry_optimization"
+        and input_kind == "xyz"
+        and "do_not_optimize_geometry" not in constraints
+    ):
+        hints.append("xyz_to_xtb_relax")
+    if operation == "descriptor_filtering" and input_kind == "smiles_csv":
+        hints.append("filter_molecules_by_descriptors")
+    if operation == "rmsd_calculation":
+        hints.append("xyz_to_rmsd")
+    if operation == "structure_comparison" and input_kind == "xyz_pair":
+        hints.append("compare_two_geometries")
+    if operation == "element_counting":
+        hints.append("count_element_atoms")
+    if operation == "molecule_splitting":
+        hints.append("split_molecule_by_file_order")
+    if operation == "geometry_analysis":
+        hints.append("xyz_to_geometry_analysis")
+    if operation == "unsupported":
+        return []
+    return sorted(set(hints))
+
+
 def normalize_request(request: str, language: str = "auto") -> dict[str, Any]:
     raw = (request or "").strip()
     text = raw.lower()
     lang = "ja" if language == "ja" or any("\u3040" <= ch <= "\u30ff" or "\u4e00" <= ch <= "\u9fff" for ch in raw) else "en"
 
-    intents: list[str] = []
-    hints: list[str] = []
-    safety: list[str] = []
     notes: list[str] = []
+    safety: list[str] = []
+    evidence: list[dict[str, str]] = []
+    status = "ok"
     execution_preference = "unspecified"
 
     if _contains_any(text, ["dry-run", "ドライラン", "実行しない", "準備だけ"]):
         execution_preference = "dry_run"
+        _append_evidence(evidence, "execution_preference", "dry_run", "dry-run")
     elif _contains_any(text, ["実行してよい", "安全な範囲で実行"]):
         execution_preference = "execute_safe"
         notes.append("execution permission is still controlled by deterministic external confirmation gates")
 
-    if _contains_any(text, ["dft", "遷移状態", "反応経路", "neb"]):
-        intents.append("unsupported_research_task")
-        notes.append("unsupported: advanced quantum chemistry research request")
-    if _contains_any(text, ["molsimplify", "錯体生成"]):
-        intents.append("backend_unavailable_check")
-        notes.append("backend_unavailable if molSimplify backend is not available")
+    method: str | None = None
+    operation: str | None = None
+    input_kind = "unknown"
 
-    singlepoint_requested = _contains_any(
-        text,
-        ["単一点計算", "一点計算", "シングルポイント", "single point", "singlepoint"],
-    )
-    no_optimize_requested = _contains_any(
-        text,
-        ["構造最適化しない", "最適化は行わない", "入力構造を変更しない", "構造を変更しない"],
-    )
-    relax_requested = _contains_any(text, ["構造最適化", "最適化してください", "xtb最適化", "緩和", "relax"])
+    if _contains_any(text, ["xtb"]):
+        method = "xtb"
+        _append_evidence(evidence, "method", "xtb", "xtb")
+    elif _contains_any(text, ["molsimplify", "錯体生成"]):
+        method = "molsimplify"
+        _append_evidence(evidence, "method", "molsimplify", "molsimplify")
+    elif _contains_any(text, ["dft", "遷移状態", "反応経路", "neb", "ts search"]):
+        method = "dft"
+        _append_evidence(evidence, "method", "dft", "dft/ts/neb")
 
-    if singlepoint_requested:
-        intents.append("xtb_singlepoint")
-        hints.append("xyz_to_xtb_singlepoint")
-        safety.extend(["do_not_optimize_geometry", "geometry_modified=false"])
+
+    if method is None and _contains_any(text, ["単一点", "シングルポイント", "single point", "singlepoint", "one-point"]):
+        method = "xtb"
+        _append_evidence(evidence, "method", "xtb", "singlepoint")
+    if _has_xyz_path(raw):
+        input_kind = "xyz"
+    elif _has_csv_path(raw):
+        input_kind = "smiles_csv"
+
+    no_optimize_requested = _contains_any(text, ["構造最適化しない", "最適化は行わない", "入力構造を変更しない", "構造を変更しない", "without optimization", "without changing geometry"])
     if no_optimize_requested:
         safety.append("do_not_optimize_geometry")
-    if relax_requested and not singlepoint_requested and not no_optimize_requested:
-        intents.append("xtb_relax")
-        hints.append("xyz_to_xtb_relax")
-    if _contains_any(text, ["rmsdだけ", "rmsdのみ"]):
-        intents.append("rmsd_only")
-        hints.append("xyz_to_rmsd")
-    if _contains_any(text, ["構造を比較", "2つの構造を比較", "原子ごとの変位"]):
-        intents.append("compare_geometries")
-        hints.append("compare_two_geometries")
-    if _contains_any(text, ["元素数", "原子数", "fe原子の数", "炭素原子の数"]):
-        intents.append("count_atoms")
-        hints.append("count_element_atoms")
-    if _contains_any(text, ["ファイル順", "原子番号", "1番から3番", "4番から最後"]):
-        intents.append("split_by_file_order")
-        hints.append("split_molecule_by_file_order")
-    if _contains_any(text, ["分子量", "水素結合ドナー", "水素結合アクセプター", "hbd", "hba", "ドナー数", "アクセプター数"]):
-        intents.append("descriptor_filter")
-        hints.append("filter_molecules_by_descriptors")
-    if _contains_any(text, ["失敗行", "エラー行", "失敗した項目を確認"]):
-        intents.append("failed_rows_triage")
-        hints.append("inspect_failed_rows")
+        _append_evidence(evidence, "constraints", "do_not_optimize_geometry", "no optimization")
+    if _contains_any(text, ["入力構造を変更しない", "構造を変更しない", "without changing geometry"]):
+        safety.append("do_not_modify_input_geometry")
 
-    if "xyz_to_xtb_singlepoint" in hints and "xyz_to_xtb_relax" in hints and "do_not_optimize_geometry" in safety:
-        hints = [h for h in hints if h != "xyz_to_xtb_relax"]
-        notes.append("singlepoint intent kept; relax removed due to explicit do_not_optimize_geometry safety constraint")
+    singlepoint_requested = _contains_any(text, ["単一点", "一点エネルギー", "シングルポイント", "single point", "singlepoint", "single-point", "one-point"])
+    energy_requested = _contains_any(text, ["エネルギー計算", "energy calculation"])
+    relax_requested = _contains_any(text, ["構造最適化", "xtb最適化", "緩和", "relax geometry", "geometry optimization"])
 
-    hints = sorted(set(hints))
-    intents = sorted(set(intents))
-    safety = sorted(set(safety))
+    if _contains_any(text, ["dft", "遷移状態", "反応経路", "neb", "ts search"]):
+        operation = "transition_state_search" if _contains_any(text, ["遷移状態", "ts search"]) else "reaction_path_search"
+        status = "ambiguous"
+        notes.append("unsupported: advanced quantum chemistry research request")
+    elif _contains_any(text, ["molsimplify", "錯体生成", "八面体鉄錯体"]):
+        operation = "metal_complex_generation"
+        status = "ambiguous"
+        notes.append("backend_unavailable if molSimplify backend is not available")
+    elif _contains_any(text, ["分子量", "水素結合ドナー", "水素結合アクセプター", "hbd", "hba", "lipinski", "donor", "acceptor"]):
+        operation = "descriptor_filtering"
+        if input_kind == "unknown":
+            input_kind = "smiles_csv"
+    elif _contains_any(text, ["rmsdだけ", "rmsdのみ", "rmsd only"]):
+        operation = "rmsd_calculation"
+        if _contains_any(text, ["2つ", "two", "比較"]):
+            input_kind = "xyz_pair"
+        elif input_kind == "unknown":
+            input_kind = "xyz"
+    elif _contains_any(text, ["構造を比較", "2つの構造を比較", "原子ごとの変位"]):
+        operation = "structure_comparison"
+        input_kind = "xyz_pair"
+    elif _contains_any(text, ["元素数", "原子数", "fe原子の数", "炭素原子数", "指定元素"]):
+        operation = "element_counting"
+        if input_kind == "unknown":
+            input_kind = "xyz"
+    elif _contains_any(text, ["ファイル順", "原子番号", "1番から3番", "4番から最後", "ファイルオーダー"]):
+        operation = "molecule_splitting"
+        if input_kind == "unknown":
+            input_kind = "xyz"
+    elif method == "xtb":
+        if (singlepoint_requested or (energy_requested and no_optimize_requested)):
+            operation = "singlepoint_energy"
+            if input_kind == "unknown":
+                input_kind = "xyz"
+        elif relax_requested and not no_optimize_requested:
+            operation = "geometry_optimization"
+            if input_kind == "unknown":
+                input_kind = "xyz"
+        else:
+            status = "ambiguous"
+
+    if operation:
+        _append_evidence(evidence, "operation", operation, operation)
+
+    intent = {
+        "method": method,
+        "operation": operation,
+        "input_kind": input_kind,
+        "constraints": sorted(set(safety)),
+        "execution_preference": execution_preference,
+        "evidence": evidence,
+    }
+    hints = _derive_workflow_hints(intent)
+
     normalized_request = (
-        f"language={lang}; intents={','.join(intents) if intents else 'none'}; "
-        f"workflow_hints={','.join(hints) if hints else 'none'}; "
-        f"execution_preference={execution_preference}; safety_constraints={','.join(safety) if safety else 'none'}"
+        f"language={lang}; method={method or 'none'}; operation={operation or 'none'}; "
+        f"input_kind={input_kind}; workflow_hints={','.join(hints) if hints else 'none'}; "
+        f"execution_preference={execution_preference}; safety_constraints={','.join(sorted(set(safety))) if safety else 'none'}"
     )
     return {
-        "status": "ok",
+        "status": status,
         "language": lang,
+        "raw_request": raw,
         "normalized_request": normalized_request,
-        "detected_intents": intents,
+        "normalized_intent": intent,
+        "detected_intents": sorted({f for f in [method, operation] if f}),
         "workflow_hints": hints,
-        "safety_constraints": safety,
+        "safety_constraints": sorted(set(safety)),
         "execution_preference": execution_preference,
         "notes": notes,
     }
