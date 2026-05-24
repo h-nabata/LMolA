@@ -35,6 +35,64 @@ class WorkflowCatalogEntry(BaseModel):
     tools: list[str] = Field(default_factory=list)
     required_backends: list[str] = Field(default_factory=list)
     description: str = ""
+    contract: dict = Field(default_factory=dict)
+
+
+class WorkflowPortContract(BaseModel):
+    name: str
+    role: str
+    data_types: list[str] = Field(default_factory=list)
+    required: bool
+    multiple: bool
+    description: str
+    geometry_modified: bool | None = None
+
+
+class WorkflowExecutionPolicy(BaseModel):
+    dry_run_default: bool = True
+    requires_allow_execution: bool = True
+    requires_confirm: bool = True
+    mcp_allowlisted: bool = True
+    low_level_direct_call_allowed: bool = False
+
+
+class WorkflowArtifactOutputDescriptor(BaseModel):
+    name: str
+    artifact_type: str
+    produced_on: str
+    description: str
+    geometry_modified: bool | None = None
+
+
+class WorkflowContract(BaseModel):
+    schema_version: str = "lmola.workflow_contract.v1"
+    workflow_id: str
+    task_type: str
+    operation: str
+    method: str | None = None
+    input_ports: list[WorkflowPortContract]
+    output_ports: list[WorkflowPortContract]
+    required_backends: list[str] = Field(default_factory=list)
+    optional_backends: list[str] = Field(default_factory=list)
+    execution_policy: WorkflowExecutionPolicy = Field(default_factory=WorkflowExecutionPolicy)
+    geometry_modified: bool | None = None
+    side_effects: list[str] = Field(default_factory=list)
+    cost_class: str = "unknown"
+    safe_for_confirmed_smoke: bool = True
+    artifact_outputs: list[WorkflowArtifactOutputDescriptor] = Field(default_factory=list)
+    llm_use_when: list[str] = Field(default_factory=list)
+    llm_do_not_use_when: list[str] = Field(default_factory=list)
+    notes: list[str] = Field(default_factory=list)
+
+
+def _default_execution_policy() -> WorkflowExecutionPolicy:
+    return WorkflowExecutionPolicy(
+        dry_run_default=True,
+        requires_allow_execution=True,
+        requires_confirm=True,
+        mcp_allowlisted=True,
+        low_level_direct_call_allowed=False,
+    )
 
 
 WORKFLOW_CATALOG: dict[str, WorkflowCatalogEntry] = {
@@ -152,6 +210,43 @@ WORKFLOW_CATALOG: dict[str, WorkflowCatalogEntry] = {
     ),
 }
 
+_WORKFLOW_CONTRACT_DEFS: dict[str, dict] = {
+    "smiles_to_3d_rdkit": {"operation": "structure_generation", "method": "rdkit", "geometry_modified": True, "artifact_type": "generated_xyz"},
+    "smiles_to_conformers_rdkit": {"operation": "conformer_generation", "method": "rdkit", "geometry_modified": True, "artifact_type": "conformer_ensemble"},
+    "smiles_to_3d_openbabel": {"operation": "structure_generation", "method": "openbabel", "geometry_modified": True, "artifact_type": "generated_xyz"},
+    "smiles_to_xtb_relax": {"operation": "geometry_optimization", "method": "xtb", "geometry_modified": True, "artifact_type": "xtb_relax_result"},
+    "xyz_to_xtb_relax": {"operation": "geometry_optimization", "method": "xtb", "geometry_modified": True, "artifact_type": "relaxed_xyz"},
+    "validate_xyz": {"operation": "validation", "method": None, "geometry_modified": False, "artifact_type": "validation_report"},
+    "smiles_to_rdkit_descriptors": {"operation": "descriptor_calculation", "method": "rdkit", "geometry_modified": False, "artifact_type": "rdkit_descriptor_table"},
+    "xyz_to_xtb_singlepoint": {"operation": "singlepoint_energy", "method": "xtb", "geometry_modified": False, "artifact_type": "xtb_singlepoint_result"},
+    "compare_two_geometries": {"operation": "structure_comparison", "method": None, "geometry_modified": False, "artifact_type": "geometry_comparison_report"},
+    "xyz_to_rmsd": {"operation": "rmsd_calculation", "method": None, "geometry_modified": False, "artifact_type": "rmsd_report"},
+    "count_element_atoms": {"operation": "element_counting", "method": None, "geometry_modified": False, "artifact_type": "element_count_report"},
+    "split_molecule_by_file_order": {"operation": "molecule_splitting", "method": None, "geometry_modified": False, "artifact_type": "molecule_split_report"},
+    "filter_molecules_by_descriptors": {"operation": "descriptor_filtering", "method": "rdkit", "geometry_modified": False, "artifact_type": "descriptor_filter_report"},
+    "xyz_to_geometry_analysis": {"operation": "geometry_analysis", "method": None, "geometry_modified": False, "artifact_type": "geometry_analysis_report"},
+}
+
+for _wf_id, _entry in WORKFLOW_CATALOG.items():
+    _meta = _WORKFLOW_CONTRACT_DEFS[_wf_id]
+    _entry.contract = WorkflowContract(
+        workflow_id=_wf_id,
+        task_type=_entry.task_type,
+        operation=_meta["operation"],
+        method=_meta["method"],
+        input_ports=[WorkflowPortContract(name="input", role="input", data_types=list(_entry.input_types), required=True, multiple="list" in ",".join(_entry.input_types) or "pair" in ",".join(_entry.input_types), description=f"Accepted input types for {_wf_id}.", geometry_modified=False)],
+        output_ports=[WorkflowPortContract(name="result", role="output", data_types=[_meta["artifact_type"], "workflow_summary"], required=True, multiple=False, description=f"Primary workflow output for {_wf_id}.", geometry_modified=_meta["geometry_modified"])],
+        required_backends=list(_entry.required_backends),
+        execution_policy=_default_execution_policy(),
+        geometry_modified=_meta["geometry_modified"],
+        side_effects=["writes_batch_artifacts"],
+        cost_class="medium" if "xtb" in _entry.workflow_id else "low",
+        artifact_outputs=[WorkflowArtifactOutputDescriptor(name="primary_output", artifact_type=_meta["artifact_type"], produced_on="success", description="Primary produced artifact.", geometry_modified=_meta["geometry_modified"])],
+        llm_use_when=[f"Use for {_meta['operation'].replace('_', ' ')} tasks."],
+        llm_do_not_use_when=["Do not use when user requests a different operation."] + (["Do not use for geometry optimization or relaxation requests."] if _wf_id == "xyz_to_xtb_singlepoint" else []) + (["Do not use when user explicitly says do not modify geometry."] if _wf_id in {"xyz_to_xtb_relax", "smiles_to_xtb_relax"} else []),
+        notes=["Phase 15.0 typed workflow contract foundation."],
+    ).model_dump()
+
 
 def list_workflows() -> list[WorkflowCatalogEntry]:
     return [WORKFLOW_CATALOG[k] for k in sorted(WORKFLOW_CATALOG)]
@@ -177,3 +272,20 @@ def check_workflow_backend_readiness(workflow_id: str) -> dict:
         "missing_backends": missing,
         "warnings": [f"Missing backend: {b}" for b in missing],
     }
+
+
+def validate_workflow_contracts() -> dict:
+    missing: list[str] = []
+    invalid: list[str] = []
+    for wf_id, entry in WORKFLOW_CATALOG.items():
+        if not entry.contract:
+            missing.append(wf_id)
+            continue
+        try:
+            contract = WorkflowContract.model_validate(entry.contract)
+            if contract.workflow_id != wf_id or sorted(contract.required_backends) != sorted(entry.required_backends):
+                invalid.append(wf_id)
+        except Exception:
+            invalid.append(wf_id)
+    status = "ok" if not missing and not invalid else "error"
+    return {"status": status, "schema_version": "lmola.workflow_contract.v1", "workflow_count": len(WORKFLOW_CATALOG), "missing_contracts": sorted(missing), "invalid_contracts": sorted(invalid), "warnings": []}
