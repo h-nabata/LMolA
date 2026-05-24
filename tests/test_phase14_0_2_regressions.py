@@ -57,3 +57,7 @@ def test_xtb_singlepoint_success_and_summary(tmp_path: Path, monkeypatch) -> Non
     summary = summarize_artifact_path(batch / "items" / "item_0001" / "xtb_singlepoint" / "singlepoint_result.json")
     assert summary["artifact_kind"] == "singlepoint_result"
     assert summary["energy"] is not None
+    batch_summary = summarize_artifact_path(batch)
+    serialized = json.dumps(batch_summary, sort_keys=True)
+    assert '"geometry_modified": false' in serialized
+    assert '"energy"' in serialized

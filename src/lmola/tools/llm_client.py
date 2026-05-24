@@ -166,8 +166,10 @@ def _mock_workflow_plan(request: str) -> dict:
         return {"workflow_id":"count_element_atoms","input":{"type":"xyz","path":"examples/example.xyz"}}
     if "split molecule" in low and ("file order" in low or "file-order" in low):
         return {"workflow_id":"split_molecule_by_file_order","input":{"type":"xyz","path":"examples/example.xyz"},"metadata":{"fragments":[{"name":"a","atom_indices":[1,2]}]}}
-    if "filter molecules" in low and "molwt" in low:
+    if "filter molecules" in low and ("molwt" in low or "molecular weight" in low):
         return {"workflow_id":"filter_molecules_by_descriptors","input":{"type":"smiles_csv","path":"examples/descriptor_filter_smiles.csv"},"columns":{"id":"id","smiles":"smiles"}}
-    if "filter by h donor" in low or "acceptor-like" in low:
+    hbd_hba_tokens = ["hbd", "hba", "hydrogen bond donor", "hydrogen-bond donor", "h donor", "h-bond donor", "hydrogen bond acceptor", "hydrogen-bond acceptor", "donor/acceptor", "lipinski-like"]
+    filter_tokens = ["filter", "select", "threshold", "smiles csv", "smiles_csv", "descriptor_filter_smiles.csv"]
+    if any(tok in low for tok in hbd_hba_tokens) and any(tok in low for tok in filter_tokens):
         return {"workflow_id":"filter_molecules_by_descriptors","input":{"type":"smiles_csv","path":"examples/descriptor_filter_smiles.csv"},"columns":{"id":"id","smiles":"smiles"}}
     return {"status": "unsupported", "reason": "Requested task is not supported by the current workflow catalog.", "suggested_supported_workflows": ["smiles_to_3d_rdkit", "smiles_to_xtb_relax"]}

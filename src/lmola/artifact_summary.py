@@ -181,10 +181,24 @@ def summarize_batch_dir(batch_dir: str | Path, *, max_items: int = 20, max_text_
         artifact_subkind = "geometry_analysis_batch"
         artifact_types.append("geometry_analysis")
     comparison_summary = None
+    singlepoint_summary = None
     if workflow_id in {"compare_two_geometries", "xyz_to_rmsd"} and (p / "geometry_analysis.json").exists():
         g = _read_json(p / "geometry_analysis.json")
         if isinstance(g, list) and g:
             comparison_summary = g[0]
+    if workflow_id == "xyz_to_xtb_singlepoint" and (p / "descriptors.json").exists():
+        d = _read_json(p / "descriptors.json")
+        if isinstance(d, list) and d and isinstance(d[0], dict):
+            row = d[0]
+            singlepoint_summary = {
+                "artifact_kind": row.get("artifact_kind") or "xtb_singlepoint",
+                "status": row.get("status"),
+                "energy": row.get("energy"),
+                "energy_unit": row.get("energy_unit"),
+                "geometry_modified": row.get("geometry_modified"),
+                "normal_termination": row.get("normal_termination"),
+                "method": row.get("method"),
+            }
 
     next_actions = (
         [
@@ -217,6 +231,7 @@ def summarize_batch_dir(batch_dir: str | Path, *, max_items: int = 20, max_text_
         "next_recommended_actions": next_actions,
         "run_log_excerpt": _read_text_excerpt(p / "run.log", max_text_chars),
         "comparison_summary": comparison_summary,
+        "singlepoint_summary": singlepoint_summary,
     }
 
 

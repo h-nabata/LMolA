@@ -74,6 +74,8 @@ def build_schema_driven_planner_prompt(context: dict) -> str:
     backend_unavailable_example = {"status": "backend_unavailable", "reason": "xTB backend is unavailable", "missing_backends": ["xtb"]}
     compare_example = {"status":"ok","workflow_id":"compare_two_geometries","input":{"type":"xyz_pair","paths":["examples/geometry_a.xyz","examples/geometry_b.xyz"]},"metadata":{"align":True,"atom_mapping":"file_order","output_per_atom_displacements":True},"reason":"Broad geometry comparison requested."}
     rmsd_only_example = {"status":"ok","workflow_id":"xyz_to_rmsd","input":{"type":"xyz_pair","paths":["examples/geometry_a.xyz","examples/geometry_b.xyz"]},"metadata":{"align":True,"atom_mapping":"file_order"},"reason":"RMSD-only calculation requested."}
+    descriptor_threshold_example = {"status":"ok","workflow_id":"filter_molecules_by_descriptors","input":{"type":"smiles_csv","path":"examples/descriptor_filter_smiles.csv"},"columns":{"id":"id","smiles":"smiles"},"metadata":{"filters":[{"descriptor":"MolWt","op":"<=","value":300},{"descriptor":"NumHDonors","op":"<=","value":5},{"descriptor":"NumHAcceptors","op":"<=","value":10}],"logic":"and"},"reason":"Descriptor-threshold filtering requested."}
+    hbd_hba_example = {"status":"ok","workflow_id":"filter_molecules_by_descriptors","input":{"type":"smiles_csv","path":"examples/descriptor_filter_smiles.csv"},"columns":{"id":"id","smiles":"smiles"},"metadata":{"filters":[{"descriptor":"NumHDonors","op":"<=","value":5},{"descriptor":"NumHAcceptors","op":"<=","value":10}],"logic":"and"},"reason":"Hydrogen-bond donor/acceptor descriptor filtering requested."}
     return (
         "You are LMolA local workflow planner.\\n"
         "You are the LMolA schema-driven workflow planner.\\n"
@@ -107,11 +109,14 @@ def build_schema_driven_planner_prompt(context: dict) -> str:
         f"Value input example: {json.dumps(supported_value_example)}\\n"
         "Disambiguation rule: choose compare_two_geometries for broad structure comparison (atom-count match, element-order match, per-atom displacement, structural comparison, or compare geometries).\n"
         "Disambiguation rule: choose xyz_to_rmsd only for RMSD-only requests.\n"
+        "Disambiguation rule: descriptor-threshold filtering requests (MolWt/NumHDonors/NumHAcceptors, molecular-weight threshold, HBD/HBA, hydrogen-bond donor/acceptor, donor/acceptor rule, Lipinski-like rule) must map to filter_molecules_by_descriptors.\n"
         "Do not choose xyz_to_rmsd when the user asks for a general comparison.\n"
         f"Unsupported task output example: {json.dumps(unsupported_example)}"
         f"Backend unavailable output example: {json.dumps(backend_unavailable_example)}"
         f"Comparison output example: {json.dumps(compare_example)}"
         f"RMSD-only output example: {json.dumps(rmsd_only_example)}"
+        f"Descriptor threshold output example: {json.dumps(descriptor_threshold_example)}"
+        f"HBD/HBA descriptor output example: {json.dumps(hbd_hba_example)}"
     )
 
 
