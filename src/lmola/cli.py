@@ -41,7 +41,7 @@ from lmola.tools.openbabel_tool import run_openbabel_conversion
 from lmola.validation.geometry_checks import validate_xyz
 from lmola.tools.registry import get_tool, get_tool_availability, list_tools
 from lmola.workflows import get_workflow_entry, list_workflows, run_workflow_yaml
-from lmola.workflows.catalog import check_workflow_backend_readiness
+from lmola.workflows.catalog import check_workflow_backend_readiness, validate_workflow_contracts
 from lmola.schema_export import (
     export_all_schemas,
     export_model_schemas,
@@ -313,6 +313,11 @@ def workflow_inspect(workflow_id: str) -> None:
 @workflow_app.command("readiness")
 def workflow_readiness(workflow_id: str, fmt: str = typer.Option("json", "--format")) -> None:
     _emit_schema(check_workflow_backend_readiness(workflow_id), fmt)
+
+
+@workflow_app.command("validate-contracts")
+def workflow_validate_contracts(fmt: str = typer.Option("json", "--format")) -> None:
+    _emit_schema(validate_workflow_contracts(), fmt)
 
 
 @workflow_app.command("plan")

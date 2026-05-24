@@ -10,6 +10,7 @@ from lmola.schemas import BuildOptions, MoleculeBuildRequest, ToolCallRecord, To
 from lmola.tools.registry import RelaxXtbRequest, ValidateStructureRequest, list_tools
 from lmola.backends.capabilities import backend_capability_schema, list_backend_capabilities
 from lmola.workflows import check_workflow_backend_readiness, list_workflows
+from lmola.workflows.catalog import WorkflowArtifactOutputDescriptor, WorkflowContract, WorkflowExecutionPolicy, WorkflowPortContract
 from lmola.workflows.schemas import WorkflowInput, WorkflowOutputs, WorkflowRequest, WorkflowStep
 
 MODEL_REGISTRY = {
@@ -76,6 +77,7 @@ def export_workflow_catalog_schema(*, compact: bool = False) -> dict:
             "description": entry.description,
             "canonical_steps": canonical_steps,
             "required_backends": backends,
+            "contract": entry.contract,
             "readiness": readiness,
             "supported": True,
             "notes": "",
@@ -88,6 +90,12 @@ def export_workflow_catalog_schema(*, compact: bool = False) -> dict:
                 "tools": entry.tools,
                 "description": entry.description,
                 "required_backends": backends,
+                "contract": {
+                    "operation": entry.contract.get("operation"),
+                    "method": entry.contract.get("method"),
+                    "geometry_modified": entry.contract.get("geometry_modified"),
+                    "cost_class": entry.contract.get("cost_class"),
+                },
                 "readiness": {
                     "ready": readiness["ready"],
                     "missing_backends": readiness["missing_backends"],
@@ -119,6 +127,14 @@ def export_planner_schema_bundle() -> dict:
                     "description": wf["description"],
                     "required_backends": wf.get("required_backends", []),
                     "readiness": wf.get("readiness", {}),
+                    "operation": wf.get("contract", {}).get("operation"),
+                    "method": wf.get("contract", {}).get("method"),
+                    "input_summary": wf.get("contract", {}).get("input_ports", []),
+                    "output_summary": wf.get("contract", {}).get("output_ports", []),
+                    "geometry_modified": wf.get("contract", {}).get("geometry_modified"),
+                    "cost_class": wf.get("contract", {}).get("cost_class"),
+                    "llm_use_when": wf.get("contract", {}).get("llm_use_when", []),
+                    "llm_do_not_use_when": wf.get("contract", {}).get("llm_do_not_use_when", []),
                 }
                 for wf in full["workflows"]
             ],
@@ -145,6 +161,10 @@ def export_all_schemas() -> dict:
             "workflow_catalog_compact": export_workflow_catalog_schema(compact=True),
             "planner_context_compact": export_planner_schema_bundle(),
             "backend_capability_schema": backend_capability_schema(),
+            "workflow_contract_schema": WorkflowContract.model_json_schema(),
+            "workflow_port_contract_schema": WorkflowPortContract.model_json_schema(),
+            "workflow_execution_policy_schema": WorkflowExecutionPolicy.model_json_schema(),
+            "workflow_artifact_output_descriptor_schema": WorkflowArtifactOutputDescriptor.model_json_schema(),
             "backend_capabilities": {k: v.model_dump() for k, v in list_backend_capabilities().items()},
         }
     )

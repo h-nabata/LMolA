@@ -21,6 +21,7 @@ def test_schema_export_json_cli() -> None:
     assert "MoleculeBuildRequest" in payload["models"]
     assert "RelaxXtbRequest" in payload["models"]
     assert "ValidateStructureRequest" in payload["models"]
+    assert "workflow_contract_schema" in payload
 
 
 def test_model_schema_contains_molecule_build_request() -> None:
@@ -71,12 +72,15 @@ def test_workflow_export_catalog_contains_smiles_to_xtb_relax() -> None:
     wf = {w["workflow_id"]: w for w in payload["workflows"]}
     assert "smiles_to_xtb_relax" in wf
     assert wf["smiles_to_xtb_relax"]["canonical_steps"]
+    assert "contract" in wf["smiles_to_xtb_relax"]
 
 
 def test_planner_context_compact_contract() -> None:
     payload = export_planner_schema_bundle()
     assert payload["allowed_workflow_ids"]
     assert payload["output_contract"]["unsupported_task"]["status_value"] == "unsupported"
+    sample = payload["workflows"][0]
+    assert "operation" in sample and "method" in sample and "geometry_modified" in sample
 
 
 def test_schema_export_out_writes_files(tmp_path: Path) -> None:
