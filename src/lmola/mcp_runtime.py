@@ -14,6 +14,7 @@ from lmola.agent.workflow_planner import plan_workflow_request
 from lmola.mcp_preview import export_mcp_tools_preview
 from lmola.artifact_summary import summarize_artifact_path
 from lmola.artifact_triage import triage_artifact_path
+from lmola.artifact_contracts import export_artifact_registry
 from lmola.schema_export import export_all_schemas, export_planner_schema_bundle, export_tool_registry_schema, export_workflow_catalog_schema
 from lmola.backends.capabilities import list_backend_capabilities, resolve_backend_capability
 from lmola.workflows.catalog import get_workflow_entry, list_workflows
@@ -44,6 +45,7 @@ RUNTIME_ALLOWED_TOOLS = {
     "lmola.summarize_artifacts",
     "lmola.triage_artifacts",
     "lmola.get_backend_capabilities",
+    "lmola.get_artifact_contracts",
 }
 
 
@@ -164,6 +166,7 @@ def list_mcp_tools_runtime() -> list[dict[str, Any]]:
         "lmola.summarize_artifacts": {"description": "Summarize LMolA output artifacts into compact structured JSON for LLM interpretation.", "inputSchema": {"type": "object", "additionalProperties": False, "properties": {"path": {"type": "string"}, "max_items": {"type": "integer", "default": 20, "minimum": 1, "maximum": 200}, "max_text_chars": {"type": "integer", "default": 4000, "minimum": 100, "maximum": 20000}}, "required": ["path"]}},
         "lmola.triage_artifacts": {"description": "Diagnose LMolA output artifacts and produce read-only failure triage JSON.", "inputSchema": {"type": "object", "additionalProperties": False, "properties": {"path": {"type": "string"}, "max_items": {"type": "integer", "default": 20, "minimum": 1, "maximum": 200}, "max_text_chars": {"type": "integer", "default": 4000, "minimum": 100, "maximum": 20000}}, "required": ["path"]}},
         "lmola.get_backend_capabilities": {"description": "Return backend capability registry metadata without executing tools.", "inputSchema": {"type": "object", "additionalProperties": False, "properties": {"backend_id": {"type": ["string", "null"]}, "compact": {"type": "boolean", "default": False}}}},
+        "lmola.get_artifact_contracts": {"description": "Return artifact contract registry metadata without execution side effects.", "inputSchema": {"type": "object", "additionalProperties": False, "properties": {"artifact_type": {"type": ["string", "null"]}, "compact": {"type": "boolean", "default": True}}}},
     }
     runtime_tools: list[dict[str, Any]] = []
     for name in sorted(RUNTIME_ALLOWED_TOOLS):
@@ -261,6 +264,17 @@ def call_mcp_tool(name: str, arguments: dict[str, Any] | None = None) -> dict[st
             if cap is None:
                 return _runtime_error("unknown_backend", "Unknown backend_id.", backend_id=backend_id)
             return {"status": "ok", "backend_capability": cap.model_dump()}
+        if name == "lmola.get_artifact_contracts":
+            artifact_type = args.get("artifact_type")
+            registry = export_artifact_registry(compact=bool(args.get("compact", True)))
+            if artifact_type is None:
+                return {"status": "ok", **registry}
+            if not isinstance(artifact_type, str) or not artifact_type.strip():
+                return _runtime_error("invalid_arguments", "artifact_type must be string or null.")
+            contract = registry["artifact_contracts"].get(artifact_type)
+            if contract is None:
+                return _runtime_error("unknown_artifact_type", "Unknown artifact_type.", artifact_type=artifact_type)
+            return {"status": "ok", "schema_version": registry["schema_version"], "artifact_contract_schema_version": registry["artifact_contract_schema_version"], "artifact_type": artifact_type, "artifact_contract": contract}
         if name == "lmola.validate_workflow":
             req = WorkflowRequest.model_validate(args)
             return {"status": "ok", "canonical_workflow_json": _canonicalize_workflow(req)}
