@@ -31,13 +31,23 @@ def normalize_request(request: str, language: str = "auto") -> dict[str, Any]:
         intents.append("backend_unavailable_check")
         notes.append("backend_unavailable if molSimplify backend is not available")
 
-    if _contains_any(text, ["単一点計算", "一点計算", "シングルポイント", "single point"]):
+    singlepoint_requested = _contains_any(
+        text,
+        ["単一点計算", "一点計算", "シングルポイント", "single point", "singlepoint"],
+    )
+    no_optimize_requested = _contains_any(
+        text,
+        ["構造最適化しない", "最適化は行わない", "入力構造を変更しない", "構造を変更しない"],
+    )
+    relax_requested = _contains_any(text, ["構造最適化", "最適化してください", "xtb最適化", "緩和", "relax"])
+
+    if singlepoint_requested:
         intents.append("xtb_singlepoint")
         hints.append("xyz_to_xtb_singlepoint")
         safety.extend(["do_not_optimize_geometry", "geometry_modified=false"])
-    if _contains_any(text, ["構造最適化しない", "最適化は行わない", "入力構造を変更しない"]):
+    if no_optimize_requested:
         safety.append("do_not_optimize_geometry")
-    if _contains_any(text, ["構造最適化", "xtb最適化", "緩和"]):
+    if relax_requested and not singlepoint_requested and not no_optimize_requested:
         intents.append("xtb_relax")
         hints.append("xyz_to_xtb_relax")
     if _contains_any(text, ["rmsdだけ", "rmsdのみ"]):
