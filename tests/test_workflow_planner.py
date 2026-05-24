@@ -50,6 +50,16 @@ def test_mock_planner_validate_xyz(monkeypatch) -> None:
     assert result.selected_workflow_id == "validate_xyz"
 
 
+def test_mock_planner_hbd_hba_filter_maps_to_descriptor_filter(monkeypatch) -> None:
+    _enable_mock(monkeypatch)
+    result = plan_workflow_request(
+        "Apply an HBD/HBA-like filter to the SMILES CSV examples/descriptor_filter_smiles.csv.",
+        write_artifacts=False,
+    )
+    assert result.status == "ok"
+    assert result.selected_workflow_id == "filter_molecules_by_descriptors"
+
+
 def test_unsupported_request_safe_error(monkeypatch) -> None:
     _enable_mock(monkeypatch)
     result = plan_workflow_request("Run DFT on this molecule.", write_artifacts=False)
