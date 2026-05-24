@@ -1,0 +1,29 @@
+suite_id: planner_phase14_1_japanese_v1
+cases:
+  - id: ja_xtb_singlepoint
+    request: examples/example.xyz で最適化なしのxTB一点エネルギー計算。
+    expected_workflow_id: xyz_to_xtb_singlepoint
+    expected_status: ok
+  - id: ja_compare_two_geometries
+    request: examples/geometry_a.xyz と examples/geometry_b.xyz の2つの構造を比較。
+    expected_workflow_id: compare_two_geometries
+    expected_status: ok
+  - id: ja_rmsd
+    request: 2つのXYZのRMSDを計算。
+    expected_workflow_id: xyz_to_rmsd
+    expected_status: ok
+  - id: ja_count_fe_atoms
+    request: examples/example.xyz のFe原子数を数える。
+    expected_workflow_id: count_element_atoms
+    expected_status: ok
+  - id: ja_split_by_file_order
+    request: ファイル順インデックス1-3と4-9で分割。
+    expected_workflow_id: split_molecule_by_file_order
+    expected_status: ok
+  - id: ja_filter_by_descriptors
+    request: MolWt<=300 かつ NumHDonors<=5 で分子を抽出。
+    expected_workflow_id: filter_molecules_by_descriptors
+    expected_status: ok
+  - id: ja_unsupported_dft_neb
+    request: DFT TS/NEBはunsupportedで停止。
+    expected_status: unsupported
