@@ -150,6 +150,28 @@ def _mock_workflow_plan(request: str) -> dict:
         return {"status": "backend_unavailable", "reason": "molsimplify backend is unavailable in this environment.", "missing_backends": ["molsimplify"]}
 
     low = key.lower()
+    ja_descriptor_intent = (
+        "記述子" in key or "molwt" in low or "numhdonors" in low or "numhacceptors" in low
+    )
+    ja_filter_intent = "フィルタ" in key or "抽出" in key or "molwt" in low or "numhdonors" in low
+    if ja_descriptor_intent and ja_filter_intent:
+        return {"workflow_id":"filter_molecules_by_descriptors","input":{"type":"smiles_csv","path":"examples/descriptor_filter_smiles.csv"},"columns":{"id":"id","smiles":"smiles"}}
+    if "一点" in key and "xtb" in low and ("最適化なし" in key or "最適化しない" in key):
+        return {"workflow_id":"xyz_to_xtb_singlepoint","input":{"type":"xyz","path":"examples/example.xyz"}}
+    if "構造" in key and "比較" in key:
+        return {"workflow_id":"compare_two_geometries","input":{"type":"xyz_pair","paths":["examples/geometry_a.xyz","examples/geometry_b.xyz"]}}
+    if "rmsd" in low and ("計算" in key or "xyz" in low):
+        return {"workflow_id":"xyz_to_rmsd","input":{"type":"xyz_pair","paths":["examples/geometry_a.xyz","examples/geometry_b.xyz"]}}
+    if "原子数" in key and ("数" in key or "カウント" in key):
+        metadata = {"elements":["Fe"]} if "Fe" in key else {}
+        out = {"workflow_id":"count_element_atoms","input":{"type":"xyz","path":"examples/example.xyz"}}
+        if metadata:
+            out["metadata"] = metadata
+        return out
+    if "分割" in key and ("ファイル順" in key or "インデックス" in key):
+        return {"workflow_id":"split_molecule_by_file_order","input":{"type":"xyz","path":"examples/example.xyz"},"metadata":{"fragments":[{"name":"a","atom_indices":[1,2]}]}}
+    if "dft" in low or "neb" in low:
+        return {"status": "unsupported", "reason": "Requested task is not supported by the current workflow catalog.", "suggested_supported_workflows": ["smiles_to_3d_rdkit", "smiles_to_xtb_relax"]}
     if "single point energy" in low and "xtb" in low:
         return {"workflow_id":"xyz_to_xtb_singlepoint","input":{"type":"xyz","path":"examples/example.xyz"}}
     if (("compare" in low or "comparison" in low or "structural" in low) and ("geometr" in low or "xyz" in low)):
