@@ -5,6 +5,8 @@ import json
 import os
 import subprocess
 import sys
+
+import yaml
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
@@ -13,6 +15,7 @@ from uuid import uuid4
 
 from lmola.llm_output_normalization import normalize_planner_output
 from lmola.mcp_runtime import encode_content_length_message, read_content_length_message
+from lmola.llm.request_normalization import normalize_request
 
 DEFAULT_SERVER_COMMAND = [sys.executable, "-c", "from lmola.cli import app; app(['mcp','serve-stdio'])"]
 ALLOWED_ACTIONS = {"report_success", "report_partial_success", "inspect_failed_rows", "stop_due_to_partial_failure", "propose_xtb_relax_dry_run", "stop_backend_unavailable", "stop_unsupported", "no_further_action"}
@@ -43,9 +46,9 @@ def _write(path: Path, payload: Any) -> None:
 
 def _mock_initial(task: str, csv_path: str) -> str:
     t = task.lower()
-    if "descriptor" in t:
+    if "smiles_to_rdkit_descriptors" in t or "descriptor" in t:
         return json.dumps({"status": "ok", "workflow_id": "smiles_to_rdkit_descriptors", "input": {"type": "smiles_csv", "path": csv_path}, "columns": {"id": "id", "smiles": "smiles"}})
-    if "geometry" in t:
+    if "xyz_to_geometry_analysis" in t or "geometry" in t:
         return '{"status":"ok","workflow_id":"xyz_to_geometry_analysis","input":{"type":"xyz","path":"examples/example.xyz"}}'
     if "molsimplify" in t:
         return '{"status":"backend_unavailable","workflow_id":null}'
@@ -53,16 +56,34 @@ def _mock_initial(task: str, csv_path: str) -> str:
 
 
 def _mock_second(case_id: str) -> str:
-    if case_id == "descriptor_then_triage":
+    if case_id in {"descriptor_then_triage", "ja_descriptor_then_triage"}:
         return '{"action":"inspect_failed_rows","next_workflow_id":null,"execute_next":false,"reason":"1 failed row"}'
-    if case_id == "geometry_then_relax_dry_run":
+    if case_id in {"geometry_then_relax_dry_run", "ja_geometry_then_relax_dry_run"}:
         return '{"action":"propose_xtb_relax_dry_run","next_workflow_id":"xyz_to_xtb_relax","execute_next":true,"reason":"geometry ok"}'
-    if case_id == "unavailable_backend_stop":
+    if case_id == "ja_geometry_then_xtb_singlepoint":
+        return '{"action":"no_further_action","next_workflow_id":"xyz_to_xtb_singlepoint","execute_next":false,"reason":"singlepoint selected"}'
+    if case_id in {"unavailable_backend_stop", "ja_unavailable_backend_stop"}:
         return '{"action":"stop_backend_unavailable","next_workflow_id":null,"execute_next":false,"reason":"backend unavailable"}'
     return '{"action":"stop_unsupported","next_workflow_id":null,"execute_next":false,"reason":"unsupported"}'
 
 
+def _load_cases(cases_path: str | None, input_csv: Path) -> list[tuple[str, str, str | None, str]]:
+    if not cases_path:
+        return [
+            ("descriptor_then_triage", f"Compute RDKit descriptors for {input_csv} then summarize and decide if safe to continue.", "smiles_to_rdkit_descriptors", "ok"),
+            ("geometry_then_relax_dry_run", "Analyze geometry of examples/example.xyz then propose xtb relax dry-run only.", "xyz_to_geometry_analysis", "ok"),
+            ("unavailable_backend_stop", "Generate an octahedral iron complex using molSimplify, then validate it.", None, "backend_unavailable"),
+            ("unsupported_research_task_stop", "Find a DFT transition state and run a reaction path search.", None, "unsupported"),
+        ]
+    payload = yaml.safe_load(Path(cases_path).read_text(encoding="utf-8"))
+    out=[]
+    for c in payload.get("cases",[]):
+        exp=c.get("expected",{})
+        out.append((c["case_id"], c["request"], exp.get("initial_workflow"), exp.get("status","ok")))
+    return out
+
 def run_llm_orchestration_smoke(**kwargs: Any) -> dict[str, Any]:
+    cases_path = kwargs.pop("cases_path", None)
     cfg = OrchestrationConfig(**kwargs)
     smoke_dir = Path("outputs/llm_orchestration_smoke") / f"smoke_{datetime.now(UTC).strftime('%Y%m%d_%H%M%S')}_{uuid4().hex[:6]}"
     (smoke_dir / "cases").mkdir(parents=True, exist_ok=True)
@@ -76,12 +97,7 @@ def run_llm_orchestration_smoke(**kwargs: Any) -> dict[str, Any]:
         w.writerow(["benzene", "c1ccccc1"])
         w.writerow(["bad_smiles", "not_a_smiles"])
 
-    cases = [
-        ("descriptor_then_triage", f"Compute RDKit descriptors for {input_csv} then summarize and decide if safe to continue.", "smiles_to_rdkit_descriptors", "ok"),
-        ("geometry_then_relax_dry_run", "Analyze geometry of examples/example.xyz then propose xtb relax dry-run only.", "xyz_to_geometry_analysis", "ok"),
-        ("unavailable_backend_stop", "Generate an octahedral iron complex using molSimplify, then validate it.", None, "backend_unavailable"),
-        ("unsupported_research_task_stop", "Find a DFT transition state and run a reaction path search.", None, "unsupported"),
-    ]
+    cases = _load_cases(cases_path, input_csv)
 
     env = os.environ.copy()
     env["PYTHONPATH"] = str(Path(__file__).resolve().parents[2] / "src")
@@ -97,10 +113,12 @@ def run_llm_orchestration_smoke(**kwargs: Any) -> dict[str, Any]:
     for case_id, task, exp_wf, exp_status in cases:
         cdir = smoke_dir / "cases" / case_id
         cdir.mkdir(exist_ok=True)
-        raw = _mock_initial(task, str(input_csv))
+        norm_req = normalize_request(task, language="auto")
+        raw = _mock_initial(norm_req.get("normalized_request", task), str(input_csv))
         _write(cdir / "initial_raw_llm_response.txt", raw)
         _write(cdir / "initial_sanitized_llm_response.txt", raw)
         norm = normalize_planner_output(raw).parsed or {}
+        _write(cdir / "request_normalization.json", norm_req)
         _write(cdir / "initial_parsed_output.json", norm)
         status = norm.get("status", exp_status)
         wf = norm.get("workflow_id", exp_wf)
@@ -177,7 +195,7 @@ def run_llm_orchestration_smoke(**kwargs: Any) -> dict[str, Any]:
             _write(cdir / "next_workflow_dry_run_response.json", {"status": "skipped", "skipped": True, "skip_reason": "not_applicable"})
 
         c = {
-            "case_id": case_id, "task": task, "initial_selected_workflow_id": wf, "initial_normalized_status": status,
+            "case_id": case_id, "task": task, "raw_request": task, "normalized_request": norm_req.get("normalized_request"), "initial_selected_workflow_id": wf, "initial_normalized_status": status,
             "initial_selection_ok": wf == exp_wf and status == exp_status, "dry_run_attempted": dry_attempted, "dry_run_ok": dry_ok,
             "confirmed_execution_attempted": conf_attempted, "confirmed_execution_ok": conf_ok, "executed": executed, "batch_dir": batch_dir,
             "artifact_summary_ok": art_sum.get("status") in {"ok", "skipped"}, "artifact_triage_ok": art_tri.get("status") in {"ok", "skipped"},
@@ -202,6 +220,7 @@ def run_llm_orchestration_smoke(**kwargs: Any) -> dict[str, Any]:
     out = {
         "status": "ok" if passed == total else "error", "phase": "13.7_multi_step_llm_tool_orchestration_smoke", "backend": cfg.backend, "model": cfg.model,
         "execute_safe": cfg.execute_safe, "total_cases": total, "passed_cases": passed, "failed_cases": total - passed, "pass_rate": passed / total,
+        "normalization_pass_rate": sum(1 for r in results if bool(r.get("normalized_request"))) / total,
         "initial_selection_pass_rate": sum(1 for r in results if r["initial_selection_ok"]) / total,
         "execution_pass_rate": sum(1 for r in results if (not r["confirmed_execution_attempted"]) or r["confirmed_execution_ok"]) / total,
         "artifact_summary_pass_rate": sum(1 for r in results if r["artifact_summary_ok"]) / total,

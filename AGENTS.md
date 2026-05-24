@@ -1,5 +1,10 @@
 # AGENTS.md
 
+This file is for repository development agents such as Codex Desktop / Codex CLI.
+It governs code changes, tests, safety boundaries, and repository conventions.
+It is not the runtime prompt for chemistry task execution.
+Runtime chemistry agent instructions live in `docs/agents/runtime_chemistry_agent.md`.
+
 This repository is maintained with a conservative, Codex-friendly workflow.
 
 ## Scope

@@ -30,6 +30,7 @@ from lmola.mcp_client_smoke import render_smoke_result, run_mcp_client_smoke
 from lmola.mcp_confirmed_execution_smoke import run_mcp_confirmed_execution_smoke
 from lmola.mcp_llm_execution_smoke import run_llm_execution_smoke
 from lmola.mcp_llm_orchestration_smoke import run_llm_orchestration_smoke
+from lmola.llm.request_normalization import normalize_request
 from lmola.mcp_runtime import RUNTIME_PHASE, call_mcp_tool, handle_jsonrpc_message, list_mcp_tools_runtime, run_mcp_stdio_server
 from lmola.artifact_summary import summarize_artifact_path
 from lmola.artifact_triage import triage_artifact_path
@@ -226,9 +227,10 @@ def mcp_llm_orchestration_smoke(
     max_tokens: int = typer.Option(800, "--max-tokens"),
     execute_safe: bool = typer.Option(False, "--execute-safe"),
     summary_only: bool = typer.Option(False, "--summary-only"),
+    cases: str = typer.Option("", "--cases"),
     fmt: str = typer.Option("json", "--format"),
 ) -> None:
-    result = run_llm_orchestration_smoke(backend=backend, model=model, base_url=base_url, temperature=temperature, timeout_seconds=timeout_seconds, max_tokens=max_tokens, execute_safe=execute_safe, summary_only=summary_only)
+    result = run_llm_orchestration_smoke(backend=backend, model=model, base_url=base_url, temperature=temperature, timeout_seconds=timeout_seconds, max_tokens=max_tokens, execute_safe=execute_safe, summary_only=summary_only, cases_path=cases or None)
     typer.echo(render_smoke_result(result, fmt))
     if result.get("status") != "ok":
         raise typer.Exit(code=1)
@@ -372,6 +374,16 @@ def workflow_run(workflow_yaml: str) -> None:
     print(result.model_dump_json(indent=2))
     if result.status != "ok":
         raise typer.Exit(code=1)
+
+
+@workflow_app.command("normalize-request")
+def workflow_normalize_request(
+    request: str = typer.Option(..., "--request"),
+    language: str = typer.Option("auto", "--language"),
+    fmt: str = typer.Option("json", "--format"),
+) -> None:
+    payload = normalize_request(request=request, language=language)
+    _emit_schema(payload, fmt)
 
 
 
