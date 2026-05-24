@@ -1,0 +1,26 @@
+cases:
+  - case_id: ja_descriptor_then_triage
+    request: "examples/descriptor_filter_smiles.csv についてRDKit記述子を計算。id列はid、SMILES列はsmiles。無効なSMILESは行単位エラーとして扱う。"
+    expected:
+      status: ok
+      initial_workflow: smiles_to_rdkit_descriptors
+  - case_id: ja_geometry_then_xtb_singlepoint
+    request: "examples/example.xyz を解析し、妥当ならxTBの単一点計算を準備または実行。構造最適化しない。"
+    expected:
+      status: ok
+      initial_workflow: xyz_to_geometry_analysis
+  - case_id: ja_geometry_then_relax_dry_run
+    request: "examples/example.xyz を解析し、妥当ならxTB構造最適化をドライランで準備のみ。"
+    expected:
+      status: ok
+      initial_workflow: xyz_to_geometry_analysis
+  - case_id: ja_unavailable_backend_stop
+    request: "molSimplifyで八面体鉄錯体を生成する。"
+    expected:
+      status: backend_unavailable
+      initial_workflow:
+  - case_id: ja_unsupported_research_task_stop
+    request: "DFTで遷移状態を探索し反応経路を計算する。"
+    expected:
+      status: unsupported
+      initial_workflow:
