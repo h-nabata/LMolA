@@ -101,6 +101,23 @@ def test_japanese_orchestration_case_file_and_smoke() -> None:
         assert case["normalized_request"]
 
 
+
+def test_japanese_xyz_pair_detection_regressions() -> None:
+    rmsd = normalize_request("examples/geometry_a.xyz と examples/geometry_b.xyz のRMSDだけを計算してください。", language="ja")
+    assert rmsd["normalized_intent"]["operation"] == "rmsd_calculation"
+    assert rmsd["normalized_intent"]["input_kind"] == "xyz_pair"
+    assert "xyz_to_rmsd" in rmsd["workflow_hints"]
+    assert "compare_two_geometries" not in rmsd["workflow_hints"]
+
+    comp = normalize_request("examples/geometry_a.xyz と examples/geometry_b.xyz の2つの構造を比較してください。", language="ja")
+    assert comp["normalized_intent"]["operation"] == "structure_comparison"
+    assert comp["normalized_intent"]["input_kind"] == "xyz_pair"
+    assert "compare_two_geometries" in comp["workflow_hints"]
+
+    sp = normalize_request("examples/example.xyz に対してxTB単一点エネルギー計算をしてください。", language="ja")
+    assert sp["normalized_intent"]["input_kind"] == "xyz"
+    assert "xyz_to_xtb_singlepoint" in sp["workflow_hints"]
+
 def test_agents_role_separation_docs() -> None:
     agents = Path("AGENTS.md").read_text(encoding="utf-8")
     assert "development agents" in agents.lower()
