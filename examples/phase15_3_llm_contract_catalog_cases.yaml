@@ -1,0 +1,9 @@
+cases:
+  - id: catalog_parse
+    type: catalog
+  - id: singlepoint_not_geometry
+    type: manifest_awareness
+  - id: geometry_manifest_next_action
+    type: next_action
+  - id: result_only_manifest_no_geometry_exec
+    type: next_action

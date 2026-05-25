@@ -36,6 +36,7 @@ from lmola.artifact_summary import summarize_artifact_path
 from lmola.artifact_triage import triage_artifact_path
 from lmola.artifact_contracts import export_artifact_registry, validate_artifact_contract_registry
 from lmola.artifact_manifest import inspect_manifest, get_compatibility
+from lmola.llm_contract_catalog import export_llm_contract_catalog, recommend_next_actions
 from lmola.relaxation import get_relaxation_calculator, select_relaxed_structure, write_relaxation_request
 from lmola.tools.llm_client import make_llm_client
 from lmola.tools.molsimplify_tool import detect_molsimplify_cli, detect_molsimplify_import, run_generation
@@ -190,6 +191,16 @@ def artifact_inspect_manifest(path: str, fmt: str = typer.Option("json", "--form
         raise typer.Exit(code=1)
 
 
+@artifact_app.command("recommend-next-actions")
+def artifact_recommend_next_actions(path: str, fmt: str = typer.Option("json", "--format")) -> None:
+    payload = recommend_next_actions(path)
+    if fmt != "json":
+        raise typer.BadParameter("Only --format json is currently supported.")
+    typer.echo(json.dumps(payload, indent=2, sort_keys=True))
+    if payload.get("status") == "error":
+        raise typer.Exit(code=1)
+
+
 @artifact_app.command("compatibility")
 def artifact_compatibility(path: str, fmt: str = typer.Option("json", "--format")) -> None:
     payload = get_compatibility(path)
@@ -238,6 +249,16 @@ def mcp_agent_smoke(
         max_artifact_text_chars=max_artifact_text_chars,
         use_artifact_triage=use_artifact_triage,
     )
+    typer.echo(render_smoke_result(result, fmt))
+    if result.get("status") != "ok":
+        raise typer.Exit(code=1)
+
+
+
+@mcp_app.command("llm-contract-catalog-smoke")
+def mcp_llm_contract_catalog_smoke(backend: str = typer.Option("mock", "--backend"), model: str = typer.Option("", "--model"), base_url: str = typer.Option("http://127.0.0.1:11434", "--base-url"), temperature: float = typer.Option(0.0, "--temperature"), timeout_seconds: int = typer.Option(20, "--timeout-seconds"), max_tokens: int = typer.Option(800, "--max-tokens"), cases: str = typer.Option("examples/phase15_3_llm_contract_catalog_cases.yaml", "--cases"), fmt: str = typer.Option("json", "--format")) -> None:
+    from lmola.mcp_llm_contract_catalog_smoke import run_llm_contract_catalog_smoke
+    result = run_llm_contract_catalog_smoke(backend=backend, model=model, base_url=base_url, temperature=temperature, timeout_seconds=timeout_seconds, max_tokens=max_tokens, cases=cases)
     typer.echo(render_smoke_result(result, fmt))
     if result.get("status") != "ok":
         raise typer.Exit(code=1)
@@ -356,6 +377,14 @@ def workflow_inspect(workflow_id: str) -> None:
 @workflow_app.command("readiness")
 def workflow_readiness(workflow_id: str, fmt: str = typer.Option("json", "--format")) -> None:
     _emit_schema(check_workflow_backend_readiness(workflow_id), fmt)
+
+
+@workflow_app.command("export-llm-catalog")
+def workflow_export_llm_catalog(fmt: str = typer.Option("json", "--format")) -> None:
+    payload = export_llm_contract_catalog()
+    if fmt != "json":
+        raise typer.BadParameter("Only --format json is currently supported.")
+    typer.echo(json.dumps(payload, indent=2, sort_keys=True))
 
 
 @workflow_app.command("validate-contracts")
