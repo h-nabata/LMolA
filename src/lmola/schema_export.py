@@ -148,6 +148,17 @@ def export_planner_schema_bundle() -> dict:
             "unsupported_task_policy": "Return status='unsupported' with a short reason when no catalog workflow matches the user request.",
             "artifact_contract_summaries": export_artifact_registry(compact=True).get("artifact_contracts", {}),
             "runtime_artifact_manifest_note": "Runtime outputs may include artifact_manifest.json. Use lmola.inspect_artifact_manifest and lmola.get_artifact_compatibility for read-only inspection.",
+            "artifact_manifest_runtime": {
+                "schema_version": "lmola.artifact_manifest.v1",
+                "manifest_filename": "artifact_manifest.json",
+                "inspection_tools": ["lmola.inspect_artifact_manifest", "lmola.get_artifact_compatibility"],
+                "compatibility_field": "next_compatible_workflows",
+                "notes": [
+                    "Compatibility hints are read-only.",
+                    "Compatibility hints do not grant execution permission.",
+                    "Confirmed execution still requires dry_run=false, allow_execution=true, and confirm=true.",
+                ],
+            },
         }
     )
 
