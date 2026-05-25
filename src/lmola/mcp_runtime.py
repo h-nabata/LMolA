@@ -15,6 +15,7 @@ from lmola.mcp_preview import export_mcp_tools_preview
 from lmola.artifact_summary import summarize_artifact_path
 from lmola.artifact_triage import triage_artifact_path
 from lmola.artifact_contracts import export_artifact_registry
+from lmola.artifact_manifest import inspect_manifest, get_compatibility
 from lmola.schema_export import export_all_schemas, export_planner_schema_bundle, export_tool_registry_schema, export_workflow_catalog_schema
 from lmola.backends.capabilities import list_backend_capabilities, resolve_backend_capability
 from lmola.workflows.catalog import get_workflow_entry, list_workflows
@@ -46,6 +47,8 @@ RUNTIME_ALLOWED_TOOLS = {
     "lmola.triage_artifacts",
     "lmola.get_backend_capabilities",
     "lmola.get_artifact_contracts",
+    "lmola.inspect_artifact_manifest",
+    "lmola.get_artifact_compatibility",
 }
 
 
@@ -167,6 +170,8 @@ def list_mcp_tools_runtime() -> list[dict[str, Any]]:
         "lmola.triage_artifacts": {"description": "Diagnose LMolA output artifacts and produce read-only failure triage JSON.", "inputSchema": {"type": "object", "additionalProperties": False, "properties": {"path": {"type": "string"}, "max_items": {"type": "integer", "default": 20, "minimum": 1, "maximum": 200}, "max_text_chars": {"type": "integer", "default": 4000, "minimum": 100, "maximum": 20000}}, "required": ["path"]}},
         "lmola.get_backend_capabilities": {"description": "Return backend capability registry metadata without executing tools.", "inputSchema": {"type": "object", "additionalProperties": False, "properties": {"backend_id": {"type": ["string", "null"]}, "compact": {"type": "boolean", "default": False}}}},
         "lmola.get_artifact_contracts": {"description": "Return artifact contract registry metadata without execution side effects.", "inputSchema": {"type": "object", "additionalProperties": False, "properties": {"artifact_type": {"type": ["string", "null"]}, "compact": {"type": "boolean", "default": True}}}},
+        "lmola.inspect_artifact_manifest": {"description": "Inspect runtime artifact_manifest.json in a safe read-only manner.", "inputSchema": {"type": "object", "additionalProperties": False, "properties": {"path": {"type": "string"}}, "required": ["path"]}},
+        "lmola.get_artifact_compatibility": {"description": "Return compact compatibility hints from runtime artifact_manifest.json.", "inputSchema": {"type": "object", "additionalProperties": False, "properties": {"path": {"type": "string"}}, "required": ["path"]}},
     }
     runtime_tools: list[dict[str, Any]] = []
     for name in sorted(RUNTIME_ALLOWED_TOOLS):
@@ -275,6 +280,17 @@ def call_mcp_tool(name: str, arguments: dict[str, Any] | None = None) -> dict[st
             if contract is None:
                 return _runtime_error("unknown_artifact_type", "Unknown artifact_type.", artifact_type=artifact_type)
             return {"status": "ok", "schema_version": registry["schema_version"], "artifact_contract_schema_version": registry["artifact_contract_schema_version"], "artifact_type": artifact_type, "artifact_contract": contract}
+
+        if name == "lmola.inspect_artifact_manifest":
+            path = args.get("path")
+            if not isinstance(path, str) or not path:
+                return _runtime_error("invalid_arguments", "path is required.")
+            return inspect_manifest(path)
+        if name == "lmola.get_artifact_compatibility":
+            path = args.get("path")
+            if not isinstance(path, str) or not path:
+                return _runtime_error("invalid_arguments", "path is required.")
+            return get_compatibility(path)
         if name == "lmola.validate_workflow":
             req = WorkflowRequest.model_validate(args)
             return {"status": "ok", "canonical_workflow_json": _canonicalize_workflow(req)}

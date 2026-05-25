@@ -5,6 +5,7 @@ import json
 from pathlib import Path
 from typing import Any
 from lmola.workflows.catalog import get_workflow_entry
+from lmola.artifact_manifest import inspect_manifest
 
 MAX_FILE_BYTES = 2_000_000
 
@@ -200,6 +201,13 @@ def summarize_batch_dir(batch_dir: str | Path, *, max_items: int = 20, max_text_
                 "method": row.get("method"),
             }
 
+    manifest_info = inspect_manifest(p)
+    manifest_status = manifest_info.get("manifest", {}).get("status") if manifest_info.get("status") == "ok" else None
+    manifest_payload = manifest_info.get("manifest", {}) if manifest_info.get("status") == "ok" else {}
+    manifest_types = sorted({a.get("artifact_type") for a in manifest_payload.get("artifacts", []) if isinstance(a, dict) and a.get("artifact_type")})
+    manifest_geom = [a.get("geometry_modified") for a in manifest_payload.get("artifacts", []) if isinstance(a, dict)]
+    manifest_geom_summary = {"true": sum(1 for x in manifest_geom if x is True), "false": sum(1 for x in manifest_geom if x is False), "unknown": sum(1 for x in manifest_geom if x is None)} if manifest_geom else None
+
     next_actions = (
         [
             "Inspect summary.csv, relaxed structures, and representative item artifacts.",
@@ -220,6 +228,12 @@ def summarize_batch_dir(batch_dir: str | Path, *, max_items: int = 20, max_text_
         "success_rate": (ok_count / item_count) if item_count else None,
         "artifact_subkind": artifact_subkind,
         "artifact_types": artifact_types,
+        "manifest_status": manifest_status,
+        "artifact_manifest_path": manifest_info.get("artifact_manifest_path") if manifest_info.get("status") == "ok" else None,
+        "artifact_count": len(manifest_payload.get("artifacts", [])) if manifest_payload else None,
+        "artifact_types_from_manifest": manifest_types,
+        "geometry_modified_summary": manifest_geom_summary,
+        "next_compatible_workflows": manifest_payload.get("next_compatible_workflows", []) if manifest_payload else [],
         "summary_csv": str(p / "summary.csv") if (p / "summary.csv").exists() else None,
         "summary_json": str(p / "summary.json") if (p / "summary.json").exists() else None,
         "workflow_result": workflow_result if isinstance(workflow_result, dict) else {},
