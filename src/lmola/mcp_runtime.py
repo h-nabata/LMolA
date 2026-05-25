@@ -16,6 +16,7 @@ from lmola.artifact_summary import summarize_artifact_path
 from lmola.artifact_triage import triage_artifact_path
 from lmola.artifact_contracts import export_artifact_registry
 from lmola.artifact_manifest import inspect_manifest, get_compatibility
+from lmola.llm_contract_catalog import export_llm_contract_catalog, recommend_next_actions
 from lmola.schema_export import export_all_schemas, export_planner_schema_bundle, export_tool_registry_schema, export_workflow_catalog_schema
 from lmola.backends.capabilities import list_backend_capabilities, resolve_backend_capability
 from lmola.workflows.catalog import get_workflow_entry, list_workflows
@@ -49,6 +50,8 @@ RUNTIME_ALLOWED_TOOLS = {
     "lmola.get_artifact_contracts",
     "lmola.inspect_artifact_manifest",
     "lmola.get_artifact_compatibility",
+    "lmola.get_compact_contract_catalog",
+    "lmola.recommend_next_actions",
 }
 
 
@@ -172,6 +175,8 @@ def list_mcp_tools_runtime() -> list[dict[str, Any]]:
         "lmola.get_artifact_contracts": {"description": "Return artifact contract registry metadata without execution side effects.", "inputSchema": {"type": "object", "additionalProperties": False, "properties": {"artifact_type": {"type": ["string", "null"]}, "compact": {"type": "boolean", "default": True}}}},
         "lmola.inspect_artifact_manifest": {"description": "Inspect runtime artifact_manifest.json in a safe read-only manner.", "inputSchema": {"type": "object", "additionalProperties": False, "properties": {"path": {"type": "string"}}, "required": ["path"]}},
         "lmola.get_artifact_compatibility": {"description": "Return compact compatibility hints from runtime artifact_manifest.json.", "inputSchema": {"type": "object", "additionalProperties": False, "properties": {"path": {"type": "string"}}, "required": ["path"]}},
+        "lmola.get_compact_contract_catalog": {"description": "Return compact LLM-facing contract catalog.", "inputSchema": {"type": "object", "additionalProperties": False, "properties": {"compact": {"type": "boolean", "default": True}}}},
+        "lmola.recommend_next_actions": {"description": "Read-only manifest-aware next-action recommendations.", "inputSchema": {"type": "object", "additionalProperties": False, "properties": {"path": {"type": "string"}, "compact": {"type": "boolean", "default": True}}, "required": ["path"]}},
     }
     runtime_tools: list[dict[str, Any]] = []
     for name in sorted(RUNTIME_ALLOWED_TOOLS):
@@ -291,6 +296,13 @@ def call_mcp_tool(name: str, arguments: dict[str, Any] | None = None) -> dict[st
             if not isinstance(path, str) or not path:
                 return _runtime_error("invalid_arguments", "path is required.")
             return get_compatibility(path)
+        if name == "lmola.get_compact_contract_catalog":
+            return export_llm_contract_catalog(compact=bool(args.get("compact", True)))
+        if name == "lmola.recommend_next_actions":
+            path = args.get("path")
+            if not isinstance(path, str) or not path:
+                return _runtime_error("invalid_arguments", "path is required.")
+            return recommend_next_actions(path, compact=bool(args.get("compact", True)))
         if name == "lmola.validate_workflow":
             req = WorkflowRequest.model_validate(args)
             return {"status": "ok", "canonical_workflow_json": _canonicalize_workflow(req)}
