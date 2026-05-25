@@ -271,6 +271,8 @@ def _run_workflow_request(req: WorkflowRequest, *, source_yaml: str | None, outp
         "summary": summary.model_dump(),
     }
     dump_json(batch_dir / "workflow_result.json", workflow_result_payload)
+    from lmola.artifact_manifest import write_batch_artifact_manifest
+    write_batch_artifact_manifest(batch_dir)
     (batch_dir / "run.log").write_text(f"{message}.\n", encoding="utf-8")
     (batch_dir / "README_batch.md").write_text("# LMolA Batch Workflow Run\n", encoding="utf-8")
 
