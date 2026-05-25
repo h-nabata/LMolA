@@ -86,6 +86,7 @@ def test_planner_context_compact_contract() -> None:
     assert "operation" in sample and "method" in sample and "geometry_modified" in sample
     assert "artifact_contract_summaries" in payload
     assert len(payload["artifact_contract_summaries"]) >= 10
+    assert payload["artifact_manifest_runtime"]["compatibility_field"] == "next_compatible_workflows"
 
 
 def test_schema_export_out_writes_files(tmp_path: Path) -> None:

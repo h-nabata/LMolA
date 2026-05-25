@@ -35,6 +35,7 @@ from lmola.mcp_runtime import RUNTIME_PHASE, call_mcp_tool, handle_jsonrpc_messa
 from lmola.artifact_summary import summarize_artifact_path
 from lmola.artifact_triage import triage_artifact_path
 from lmola.artifact_contracts import export_artifact_registry, validate_artifact_contract_registry
+from lmola.artifact_manifest import inspect_manifest, get_compatibility
 from lmola.relaxation import get_relaxation_calculator, select_relaxed_structure, write_relaxation_request
 from lmola.tools.llm_client import make_llm_client
 from lmola.tools.molsimplify_tool import detect_molsimplify_cli, detect_molsimplify_import, run_generation
@@ -171,6 +172,27 @@ def artifact_export_contracts(fmt: str = typer.Option("json", "--format")) -> No
 @artifact_app.command("validate-contracts")
 def artifact_validate_contracts(fmt: str = typer.Option("json", "--format")) -> None:
     payload = validate_artifact_contract_registry()
+    if fmt != "json":
+        raise typer.BadParameter("Only --format json is currently supported.")
+    typer.echo(json.dumps(payload, indent=2, sort_keys=True))
+    if payload.get("status") == "error":
+        raise typer.Exit(code=1)
+
+
+
+@artifact_app.command("inspect-manifest")
+def artifact_inspect_manifest(path: str, fmt: str = typer.Option("json", "--format")) -> None:
+    payload = inspect_manifest(path)
+    if fmt != "json":
+        raise typer.BadParameter("Only --format json is currently supported.")
+    typer.echo(json.dumps(payload, indent=2, sort_keys=True))
+    if payload.get("status") == "error":
+        raise typer.Exit(code=1)
+
+
+@artifact_app.command("compatibility")
+def artifact_compatibility(path: str, fmt: str = typer.Option("json", "--format")) -> None:
+    payload = get_compatibility(path)
     if fmt != "json":
         raise typer.BadParameter("Only --format json is currently supported.")
     typer.echo(json.dumps(payload, indent=2, sort_keys=True))

@@ -7,6 +7,7 @@ from typing import Any
 
 from lmola.artifact_summary import summarize_artifact_path
 from lmola.workflows.catalog import get_workflow_entry
+from lmola.artifact_manifest import inspect_manifest
 
 BACKEND_HINT_TOKENS = ("backend", "import", "executable", "not found", "unavailable", "missing")
 FAILURE_LIKE = {"error", "failed", "fail"}
@@ -158,6 +159,11 @@ def triage_batch_dir(batch_dir: str | Path, *, max_items: int = 20, max_text_cha
         if any(tok in message.lower() for tok in BACKEND_HINT_TOKENS):
             out["backend_hints"].append(message[:240])
             categories.add("backend_unavailable")
+
+
+    manifest = inspect_manifest(batch_path)
+    if manifest.get("status") == "ok":
+        out["evidence"].append({"source": "artifact_manifest.json", "item_id": None, "step": "manifest", "message": f"manifest_status={manifest.get('manifest', {}).get('status')}"})
 
     error_count = int(s.get("error_count", 0) or 0)
     workflow_result = s.get("workflow_result", {}) if isinstance(s.get("workflow_result"), dict) else {}
