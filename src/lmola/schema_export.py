@@ -11,7 +11,7 @@ from lmola.tools.registry import RelaxXtbRequest, ValidateStructureRequest, list
 from lmola.backends.capabilities import backend_capability_schema, list_backend_capabilities
 from lmola.artifact_contracts import ArtifactContract, ArtifactRegistry, export_artifact_registry
 from lmola.artifact_manifest import ArtifactManifest, ArtifactManifestEntry, ArtifactCompatibilityHint
-from lmola.llm_contract_catalog import export_llm_contract_catalog, recommend_next_actions
+from lmola.llm_contract_catalog import NextActionItem, NextActionRecommendation, export_llm_contract_catalog
 from lmola.workflows import check_workflow_backend_readiness, list_workflows
 from lmola.workflows.catalog import WorkflowArtifactOutputDescriptor, WorkflowContract, WorkflowExecutionPolicy, WorkflowPortContract
 from lmola.workflows.schemas import WorkflowInput, WorkflowOutputs, WorkflowRequest, WorkflowStep
@@ -190,8 +190,8 @@ def export_all_schemas() -> dict:
             "artifact_manifest_entry_schema": ArtifactManifestEntry.model_json_schema(),
             "artifact_compatibility_hint_schema": ArtifactCompatibilityHint.model_json_schema(),
             "llm_contract_catalog_schema": {"schema_version": "lmola.llm_contract_catalog.v1", "example": export_llm_contract_catalog()},
-            "next_action_recommendation_schema": {"schema_version": "lmola.next_action_recommendation.v1"},
-            "next_action_item_schema": {"type": "object", "properties": {"action_id": {"type": "string"}, "workflow_id": {"type": ["string", "null"]}, "action_type": {"type": "string"}, "execution_allowed": {"type": "boolean"}}},
+            "next_action_recommendation_schema": NextActionRecommendation.model_json_schema(),
+            "next_action_item_schema": NextActionItem.model_json_schema(),
             "artifact_contracts": export_artifact_registry(compact=False),
             "artifact_contracts_compact": export_artifact_registry(compact=True),
             "backend_capabilities": {k: v.model_dump() for k, v in list_backend_capabilities().items()},
