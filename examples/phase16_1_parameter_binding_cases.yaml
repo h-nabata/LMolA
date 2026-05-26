@@ -1,0 +1,38 @@
+suite_id: phase16_1_parameter_binding
+cases:
+- case_id: ja_xtb_singlepoint_charge_multiplicity
+  language: ja
+  prompt: "examples/water.xyz を xTB で single point。charge 0 multiplicity 1。最適化しない"
+  expected_status: ok
+  expected_operation: singlepoint_energy
+- case_id: en_xtb_singlepoint_charge_multiplicity
+  language: en
+  prompt: "Run xTB single point for examples/water.xyz with charge 0 multiplicity 1. Do not optimize geometry."
+  expected_status: ok
+  expected_operation: singlepoint_energy
+- {case_id: ja_xtb_relax_default_thresholds, language: ja, prompt: "examples/mol.xyz を xTB で最適化", expected_status: ok, expected_operation: geometry_optimization}
+- {case_id: en_xtb_relax_default_thresholds, language: en, prompt: "Optimize examples/mol.xyz with xTB.", expected_status: ok, expected_operation: geometry_optimization}
+- {case_id: ja_xtb_relax_with_max_steps, language: ja, prompt: "examples/mol.xyz を xTB 最適化 max steps 200", expected_status: ok, expected_operation: geometry_optimization}
+- {case_id: en_xtb_relax_with_fmax, language: en, prompt: "Optimize examples/mol.xyz with xTB, fmax 0.05", expected_status: ok, expected_operation: geometry_optimization}
+- {case_id: ja_xtb_water_solvent, language: ja, prompt: "examples/mol.xyz を xTB で水中計算", expected_status: ambiguous}
+- {case_id: en_xtb_alpb_water, language: en, prompt: "xTB ALPB water single point for examples/mol.xyz", expected_status: ok, expected_operation: singlepoint_energy}
+- {case_id: ja_smiles_descriptor_filter_hbd_mw, language: ja, prompt: "smiles.csv を HBD と MW でフィルタ", expected_status: ok}
+- {case_id: en_smiles_descriptor_filter_hbd_mw, language: en, prompt: "Filter smiles.csv by HBD and MW", expected_status: ok}
+- {case_id: ja_count_ni_atoms, language: ja, prompt: "complex.xyz の Ni の数を数える", expected_status: ok, expected_operation: element_counting}
+- {case_id: en_count_ni_atoms, language: en, prompt: "Count Ni atoms in complex.xyz", expected_status: ok, expected_operation: element_counting}
+- {case_id: ja_split_file_order_ranges, language: ja, prompt: "complex.xyz をファイル順で 1-12 と 13-28 に分割", expected_status: ok, expected_operation: molecule_splitting}
+- {case_id: en_split_file_order_ranges, language: en, prompt: "Split complex.xyz into atoms 1-12 and 13-28 using file order", expected_status: ok, expected_operation: molecule_splitting}
+- {case_id: ja_rmsd_two_xyz_files, language: ja, prompt: "a.xyz と b.xyz の RMSD を計算", expected_status: ok, expected_operation: rmsd_calculation}
+- {case_id: en_rmsd_two_xyz_files, language: en, prompt: "Calculate RMSD between a.xyz and b.xyz", expected_status: ok, expected_operation: rmsd_calculation}
+- {case_id: ja_compare_two_geometries, language: ja, prompt: "a.xyz と b.xyz の構造を比較", expected_status: ok, expected_operation: structure_comparison}
+- {case_id: en_compare_two_geometries, language: en, prompt: "Compare two geometries a.xyz and b.xyz", expected_status: ok, expected_operation: structure_comparison}
+- {case_id: ja_periodic_surface_structure, language: ja, prompt: "surface.xyz の periodic surface 構造を解析", expected_status: ambiguous}
+- {case_id: en_periodic_surface_structure, language: en, prompt: "Analyze periodic surface structure surface.xyz", expected_status: ambiguous}
+- {case_id: ja_next_action_from_manifest, language: ja, prompt: "artifact_manifest.json から次アクション", expected_status: ok, expected_operation: next_action_recommendation}
+- {case_id: en_next_action_from_manifest, language: en, prompt: "Recommend next action from artifact_manifest.json", expected_status: ok, expected_operation: next_action_recommendation}
+- {case_id: ja_generic_xtb_ambiguous, language: ja, prompt: "examples/mol.xyz を xTB 計算", expected_status: ambiguous}
+- {case_id: en_generic_xtb_ambiguous, language: en, prompt: "Run an xTB calculation for examples/mol.xyz", expected_status: ambiguous}
+- {case_id: ja_singlepoint_result_not_geometry, language: ja, prompt: "xtb_singlepoint_result を使って最適化を続ける", expected_status: needs_clarification}
+- {case_id: en_singlepoint_result_not_geometry, language: en, prompt: "Use this xtb_singlepoint_result to continue optimization", expected_status: needs_clarification}
+- {case_id: optional_morfeus_steric_analysis_prompt, language: en, prompt: "Run morfeus steric buried volume on complex.xyz", expected_status: ambiguous}
+- {case_id: optional_orca_dft_prompt_deferred, language: en, prompt: "Run ORCA DFT B3LYP/def2-SVP on mol.xyz", expected_status: ambiguous}
