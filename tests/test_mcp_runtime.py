@@ -62,6 +62,12 @@ def test_call_readonly_tools_and_errors(monkeypatch) -> None:
     assert "backend_capabilities" in planner_context
     assert "artifact_contract_summaries" in planner_context
     amr = planner_context["artifact_manifest_runtime"]
+    hp = planner_context["human_prompt_normalization"]
+    assert "human prompt" in hp["purpose"].lower()
+    assert "normalize_human_prompt" in hp["tool"]
+    assert "ambiguous" in hp["ambiguous_policy"].lower()
+    assert hp["safety"]["execution_allowed"] is False
+    assert "result artifacts are not geometries" in hp["artifact_policy"]
     assert amr["manifest_filename"] == "artifact_manifest.json"
     assert "lmola.inspect_artifact_manifest" in amr["inspection_tools"]
     assert "lmola.get_artifact_compatibility" in amr["inspection_tools"]

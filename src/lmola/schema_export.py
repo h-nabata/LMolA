@@ -161,7 +161,7 @@ def export_planner_schema_bundle() -> dict:
                 "notes": [
                     "Compact contract catalog available via lmola.get_compact_contract_catalog.",
                     "Next-action recommendations available via lmola.recommend_next_actions.",
-                    "Result artifacts are not geometries.",
+                    "result artifacts are not geometries",
                     "Compatibility hints are read-only.",
                     "Compatibility hints do not grant execution permission.",
                     "Confirmed execution still requires dry_run=false, allow_execution=true, and confirm=true.",
@@ -170,6 +170,19 @@ def export_planner_schema_bundle() -> dict:
                     "Ambiguous prompts must not force execution.",
                     "execution_allowed remains false at normalization stage.",
                 ],
+            },
+            "human_prompt_normalization": {
+                "purpose": "Normalize a human prompt into a structured intent without executing chemistry.",
+                "tool": "lmola.normalize_human_prompt",
+                "benchmark": "lmola workflow eval-human-prompts",
+                "ambiguous_policy": "If a human prompt is ambiguous, return ambiguous or needs_clarification rather than forcing a workflow.",
+                "artifact_policy": "result artifacts are not geometries",
+                "safety": {
+                    "execution_allowed": False,
+                    "dry_run_recommended": True,
+                    "requires_confirmation": True,
+                    "requires_allow_execution": True,
+                },
             },
         }
     )
