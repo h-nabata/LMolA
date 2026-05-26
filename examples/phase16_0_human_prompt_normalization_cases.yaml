@@ -1,0 +1,41 @@
+suite_id: phase16_0_human_prompt_normalization
+cases:
+  - case_id: ja_xtb_singlepoint_no_opt
+    language: ja
+    prompt: "この xyz で単一点計算。構造最適化しないで"
+    expected_status: ok
+    expected_operation: singlepoint_energy
+    expected_requested_backend: xtb
+    expected_input_kind: xyz
+    expected_workflow_id: xyz_to_xtb_singlepoint
+    forbidden_workflow_ids: [xyz_to_xtb_relax]
+    expected_safety: {execution_allowed: false, dry_run_recommended: true}
+  - case_id: en_xtb_singlepoint_no_opt
+    language: en
+    prompt: "Run single point xTB on this xyz without optimization"
+    expected_status: ok
+    expected_operation: singlepoint_energy
+    expected_input_kind: xyz
+    expected_workflow_id: xyz_to_xtb_singlepoint
+    forbidden_workflow_ids: [xyz_to_xtb_relax]
+    expected_safety: {execution_allowed: false, dry_run_recommended: true}
+  - {case_id: ja_xtb_relax, language: ja, prompt: "このxyzをxTBで構造最適化して", expected_status: ok, expected_operation: geometry_optimization, expected_input_kind: xyz, expected_workflow_id: xyz_to_xtb_relax, forbidden_workflow_ids: []}
+  - {case_id: en_xtb_relax, language: en, prompt: "relax geometry with xtb for this xyz", expected_status: ok, expected_operation: geometry_optimization, expected_input_kind: xyz, expected_workflow_id: xyz_to_xtb_relax, forbidden_workflow_ids: []}
+  - {case_id: ja_generic_xtb_ambiguous, language: ja, prompt: "xTB計算して", expected_status: ambiguous, expected_operation: unknown, expected_input_kind: unknown, forbidden_workflow_ids: [xyz_to_xtb_relax]}
+  - {case_id: en_generic_xtb_ambiguous, language: en, prompt: "do an xtb calculation", expected_status: ambiguous, expected_operation: unknown, expected_input_kind: unknown, forbidden_workflow_ids: [xyz_to_xtb_relax]}
+  - {case_id: ja_rmsd_xyz_pair, language: ja, prompt: "a.xyz と b.xyz の RMSD を計算", expected_status: ok, expected_operation: rmsd_calculation, expected_input_kind: xyz_pair, expected_workflow_id: xyz_to_rmsd, forbidden_workflow_ids: []}
+  - {case_id: en_rmsd_xyz_pair, language: en, prompt: "RMSD between a.xyz and b.xyz", expected_status: ok, expected_operation: rmsd_calculation, expected_input_kind: xyz_pair, expected_workflow_id: xyz_to_rmsd, forbidden_workflow_ids: []}
+  - {case_id: ja_compare_two_geometries, language: ja, prompt: "2つの構造 a.xyz と b.xyz を比較", expected_status: ok, expected_operation: structure_comparison, expected_input_kind: xyz_pair, expected_workflow_id: compare_two_geometries, forbidden_workflow_ids: []}
+  - {case_id: en_compare_two_geometries, language: en, prompt: "compare two structures a.xyz and b.xyz", expected_status: ok, expected_operation: structure_comparison, expected_input_kind: xyz_pair, expected_workflow_id: compare_two_geometries, forbidden_workflow_ids: []}
+  - {case_id: ja_count_element_atoms, language: ja, prompt: "xyzで Ni の数を数える", expected_status: ok, expected_operation: element_counting, expected_input_kind: xyz, expected_workflow_id: count_element_atoms, forbidden_workflow_ids: []}
+  - {case_id: en_count_element_atoms, language: en, prompt: "count Ni atoms in this xyz", expected_status: ok, expected_operation: element_counting, expected_input_kind: xyz, expected_workflow_id: count_element_atoms, forbidden_workflow_ids: []}
+  - {case_id: ja_split_molecule_by_file_order, language: ja, prompt: "原子1-12と13-28で分割", expected_status: ok, expected_operation: molecule_splitting, expected_input_kind: xyz, expected_workflow_id: split_molecule_by_file_order, forbidden_workflow_ids: []}
+  - {case_id: en_split_molecule_by_file_order, language: en, prompt: "split atoms 1-12 and 13-28 by file order", expected_status: ok, expected_operation: molecule_splitting, expected_input_kind: xyz, expected_workflow_id: split_molecule_by_file_order, forbidden_workflow_ids: []}
+  - {case_id: ja_filter_descriptors, language: ja, prompt: "SMILES CSV から HBD=0 と MW<300 で絞り込み", expected_status: ok, expected_operation: descriptor_filtering, expected_input_kind: smiles_csv, expected_workflow_id: filter_molecules_by_descriptors, forbidden_workflow_ids: []}
+  - {case_id: en_filter_descriptors, language: en, prompt: "filter HBD=0 and MW<300 from SMILES CSV", expected_status: ok, expected_operation: descriptor_filtering, expected_input_kind: smiles_csv, expected_workflow_id: filter_molecules_by_descriptors, forbidden_workflow_ids: []}
+  - {case_id: ja_next_action_from_manifest, language: ja, prompt: "前のartifact manifestから次アクション提案", expected_status: ok, expected_operation: next_action_recommendation, expected_input_kind: artifact_manifest, forbidden_workflow_ids: []}
+  - {case_id: en_next_action_from_manifest, language: en, prompt: "from previous artifact manifest suggest next actions", expected_status: ok, expected_operation: next_action_recommendation, expected_input_kind: artifact_manifest, forbidden_workflow_ids: []}
+  - {case_id: ja_singlepoint_result_not_geometry, language: ja, prompt: "この xtb_singlepoint_result から最適化を続ける", expected_status: needs_clarification, expected_operation: unknown, expected_input_kind: artifact_result, forbidden_workflow_ids: [xyz_to_xtb_relax]}
+  - {case_id: en_singlepoint_result_not_geometry, language: en, prompt: "continue optimization from this singlepoint result", expected_status: needs_clarification, expected_operation: unknown, expected_input_kind: artifact_result, forbidden_workflow_ids: [xyz_to_xtb_relax]}
+  - {case_id: unsupported_heavy_engine_execution_without_adapter, language: en, prompt: "run vasp neb now", expected_status: unsupported, expected_operation: unsupported, expected_input_kind: unknown, forbidden_workflow_ids: []}
+  - {case_id: unsupported_research_task, language: en, prompt: "find a transition state and map reaction path", expected_status: unsupported, expected_operation: unsupported, expected_input_kind: unknown, forbidden_workflow_ids: []}
