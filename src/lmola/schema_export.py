@@ -16,6 +16,7 @@ from lmola.workflows import check_workflow_backend_readiness, list_workflows
 from lmola.workflows.catalog import WorkflowArtifactOutputDescriptor, WorkflowContract, WorkflowExecutionPolicy, WorkflowPortContract
 from lmola.workflows.schemas import WorkflowInput, WorkflowOutputs, WorkflowRequest, WorkflowStep
 from lmola.human_prompt_normalization import CandidateWorkflow, HumanPromptNormalizedIntent, HumanPromptNormalizationResult
+from lmola.parameter_binding import ParameterValue, InputFileBinding, ElectronicStateBinding, SolventBinding, PeriodicBinding, AtomSelectionBinding, CalculationControlsBinding, GeometryOptimizationControls, BoundParameterSet, ParameterBindingResult
 
 MODEL_REGISTRY = {
     "WorkflowRequest": WorkflowRequest,
@@ -33,6 +34,16 @@ MODEL_REGISTRY = {
     "HumanPromptNormalizedIntent": HumanPromptNormalizedIntent,
     "HumanPromptNormalizationResult": HumanPromptNormalizationResult,
     "CandidateWorkflow": CandidateWorkflow,
+    "ParameterValue": ParameterValue,
+    "InputFileBinding": InputFileBinding,
+    "ElectronicStateBinding": ElectronicStateBinding,
+    "SolventBinding": SolventBinding,
+    "PeriodicBinding": PeriodicBinding,
+    "AtomSelectionBinding": AtomSelectionBinding,
+    "CalculationControlsBinding": CalculationControlsBinding,
+    "GeometryOptimizationControls": GeometryOptimizationControls,
+    "BoundParameterSet": BoundParameterSet,
+    "ParameterBindingResult": ParameterBindingResult,
 }
 
 
@@ -169,6 +180,9 @@ def export_planner_schema_bundle() -> dict:
                     "Use lmola workflow eval-human-prompts as benchmark.",
                     "Ambiguous prompts must not force execution.",
                     "execution_allowed remains false at normalization stage.",
+                    "Parameter binding available via lmola.bind_human_prompt_parameters and lmola workflow bind-parameters.",
+                    "Parameter binding reports missing_parameters, assumed_defaults, clarification_recommended, unsupported_parameters, backend_specific.",
+                    "Optional backend controls use workflow/backend defaults.",
                 ],
             },
             "human_prompt_normalization": {
@@ -219,6 +233,17 @@ def export_all_schemas() -> dict:
             "human_prompt_normalization_result_schema": HumanPromptNormalizationResult.model_json_schema(),
             "human_prompt_candidate_workflow_schema": CandidateWorkflow.model_json_schema(),
             "human_prompt_normalization_eval_schema": {"schema_version": "lmola.human_prompt_normalization_eval.v1", "required_fields": ["normalized_intent", "candidate_workflows", "missing_parameters", "clarification_questions", "execution_allowed", "dry_run_recommended", "result_artifact_as_geometry_error_rate", "forced_selection_on_ambiguous_prompt_rate"]},
+            "parameter_value_schema": ParameterValue.model_json_schema(),
+            "input_file_binding_schema": InputFileBinding.model_json_schema(),
+            "electronic_state_binding_schema": ElectronicStateBinding.model_json_schema(),
+            "solvent_binding_schema": SolventBinding.model_json_schema(),
+            "periodic_binding_schema": PeriodicBinding.model_json_schema(),
+            "atom_selection_binding_schema": AtomSelectionBinding.model_json_schema(),
+            "calculation_controls_binding_schema": CalculationControlsBinding.model_json_schema(),
+            "geometry_optimization_controls_schema": GeometryOptimizationControls.model_json_schema(),
+            "bound_parameter_set_schema": BoundParameterSet.model_json_schema(),
+            "parameter_binding_result_schema": ParameterBindingResult.model_json_schema(),
+            "parameter_binding_eval_schema": {"schema_version": "lmola.parameter_binding_eval.v1", "required_fields": ["bound_parameters", "missing_parameters", "assumed_defaults", "clarification_recommended", "unsupported_parameters", "backend_specific", "execution_allowed", "dry_run_recommended"]},
             "backend_capabilities": {k: v.model_dump() for k, v in list_backend_capabilities().items()},
         }
     )
