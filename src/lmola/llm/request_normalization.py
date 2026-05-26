@@ -20,6 +20,20 @@ def _has_csv_path(raw: str) -> bool:
     return bool(re.search(r"[\w./\\-]+\.csv\b", raw, flags=re.IGNORECASE))
 
 
+def _is_explicit_rmsd_request(text: str) -> bool:
+    return any(
+        token in text
+        for token in [
+            "rmsd",
+            "root mean square deviation",
+            "root-mean-square deviation",
+            "calculate rmsd",
+            "rmsd between",
+            "rmsd of two xyz files",
+        ]
+    )
+
+
 def _append_evidence(evidence: list[dict[str, str]], field: str, value: str, source_text: str) -> None:
     if source_text:
         evidence.append({"field": field, "value": value, "source_text": source_text})
@@ -125,9 +139,9 @@ def normalize_request(request: str, language: str = "auto") -> dict[str, Any]:
         operation = "descriptor_filtering"
         if input_kind == "unknown":
             input_kind = "smiles_csv"
-    elif _contains_any(text, ["rmsdだけ", "rmsdのみ", "rmsd only"]):
+    elif _contains_any(text, ["rmsdだけ", "rmsdのみ", "rmsd only"]) or _is_explicit_rmsd_request(text):
         operation = "rmsd_calculation"
-        if input_kind == "unknown" and _contains_any(text, ["2つ", "two", "two geometries", "2 geometries", "二つ"]):
+        if input_kind == "unknown" and (_contains_any(text, ["2つ", "two", "two geometries", "2 geometries", "二つ"]) or " between " in f" {text} "):
             input_kind = "xyz_pair"
         elif input_kind == "unknown":
             input_kind = "xyz"

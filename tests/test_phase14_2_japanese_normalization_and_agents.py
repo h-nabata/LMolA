@@ -118,6 +118,25 @@ def test_japanese_xyz_pair_detection_regressions() -> None:
     assert sp["normalized_intent"]["input_kind"] == "xyz"
     assert "xyz_to_xtb_singlepoint" in sp["workflow_hints"]
 
+
+
+def test_english_rmsd_normalization_regression() -> None:
+    prompt = "Calculate only the RMSD between examples/geometry_a.xyz and examples/geometry_b.xyz."
+    out = normalize_request(prompt, language="en")
+    assert out["status"] == "ok"
+    assert out["normalized_intent"]["operation"] == "rmsd_calculation"
+    assert out["normalized_intent"]["input_kind"] == "xyz_pair"
+    assert "xyz_to_rmsd" in out["workflow_hints"]
+    assert "compare_two_geometries" not in out["workflow_hints"]
+
+    res = CliRunner().invoke(app, ["workflow", "normalize-request", "--language", "en", "--request", prompt, "--format", "json"])
+    assert res.exit_code == 0
+    payload = json.loads(res.stdout)
+    assert payload["status"] == "ok"
+    assert payload["normalized_intent"]["operation"] == "rmsd_calculation"
+    assert payload["normalized_intent"]["input_kind"] == "xyz_pair"
+    assert "xyz_to_rmsd" in payload["workflow_hints"]
+    assert "compare_two_geometries" not in payload["workflow_hints"]
 def test_agents_role_separation_docs() -> None:
     agents = Path("AGENTS.md").read_text(encoding="utf-8")
     assert "development agents" in agents.lower()
