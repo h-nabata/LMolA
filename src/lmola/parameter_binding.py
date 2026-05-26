@@ -111,14 +111,27 @@ class ParameterBindingResult(BaseModel):
 
 
 def _file_bindings(prompt: str) -> list[InputFileBinding]:
+    lower = prompt.lower()
     paths = re.findall(r"([\w./-]+\.(?:xyz|csv|json))", prompt)
     out: list[InputFileBinding] = []
+
+    if "xtb_singlepoint_result" in lower or "singlepoint_result" in lower:
+        out.append(InputFileBinding(role="previous_result", path=None, format="unknown", artifact_type="xtb_singlepoint_result", source="inferred_from_prompt"))
+        return out
+
+    if "manifest" in lower:
+        manifest_path = next((p for p in paths if p.lower().endswith(".json")), paths[0] if paths else None)
+        out.append(InputFileBinding(role="artifact_manifest", path=manifest_path, format="artifact_manifest", source="inferred_from_prompt"))
+        return out
+
+    if paths and paths[0].lower().endswith(".csv"):
+        out.append(InputFileBinding(role="smiles_table", path=paths[0], format="csv", source="user_explicit"))
+        return out
+
     if len(paths) >= 1:
         out.append(InputFileBinding(role="primary_structure", path=paths[0], format=paths[0].split(".")[-1], source="user_explicit"))
     if len(paths) >= 2:
         out.append(InputFileBinding(role="second_structure", path=paths[1], format=paths[1].split(".")[-1], source="user_explicit"))
-    if "manifest" in prompt.lower():
-        out.append(InputFileBinding(role="artifact_manifest", path=paths[0] if paths else None, format="artifact_manifest", source="inferred_from_prompt"))
     return out
 
 
@@ -216,6 +229,11 @@ def run_parameter_binding_eval(cases_yaml: str, **kwargs: Any) -> dict[str, Any]
         passed = r["status"] == c.get("expected_status", r["status"])
         if c.get("expected_operation") and r["bound_parameters"]["calculation_controls"]["operation"]["value"] != c.get("expected_operation"):
             passed = False
+        expected_roles = c.get("expected_input_file_roles") or c.get("expected_input_roles") or c.get("expected_input_files")
+        if expected_roles is not None:
+            actual_roles = [f.get("role") for f in r.get("bound_parameters", {}).get("input_files", [])]
+            if sorted(actual_roles) != sorted(expected_roles):
+                passed = False
         if r["safety"]["execution_allowed"] is not False or r["safety"]["dry_run_recommended"] is not True:
             passed = False
         out.append({"case_id": c.get("case_id"), "passed": passed})
