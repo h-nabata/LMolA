@@ -30,6 +30,8 @@ from lmola.mcp_client_smoke import render_smoke_result, run_mcp_client_smoke
 from lmola.mcp_confirmed_execution_smoke import run_mcp_confirmed_execution_smoke
 from lmola.mcp_llm_execution_smoke import run_llm_execution_smoke
 from lmola.mcp_llm_orchestration_smoke import run_llm_orchestration_smoke
+from lmola.human_prompt_eval import run_human_prompt_eval
+from lmola.mcp_human_prompt_normalization_smoke import run_mcp_human_prompt_normalization_smoke
 from lmola.llm.request_normalization import normalize_request
 from lmola.mcp_runtime import RUNTIME_PHASE, call_mcp_tool, handle_jsonrpc_message, list_mcp_tools_runtime, run_mcp_stdio_server
 from lmola.artifact_summary import summarize_artifact_path
@@ -255,6 +257,14 @@ def mcp_agent_smoke(
 
 
 
+
+@mcp_app.command("human-prompt-normalization-smoke")
+def mcp_human_prompt_normalization_smoke(backend: str = typer.Option("mock", "--backend"), model: str = typer.Option("", "--model"), base_url: str = typer.Option("http://127.0.0.1:11434", "--base-url"), temperature: float = typer.Option(0.0, "--temperature"), timeout_seconds: int = typer.Option(20, "--timeout-seconds"), max_tokens: int = typer.Option(800, "--max-tokens"), cases: str = typer.Option("examples/phase16_0_human_prompt_normalization_cases.yaml", "--cases"), fmt: str = typer.Option("json", "--format")) -> None:
+    result = run_mcp_human_prompt_normalization_smoke(backend=backend, model=model, base_url=base_url, temperature=temperature, timeout_seconds=timeout_seconds, max_tokens=max_tokens, cases=cases)
+    print(json.dumps(result, indent=2) if fmt == "json" else result)
+    if result.get("status") != "ok":
+        raise typer.Exit(code=1)
+
 @mcp_app.command("llm-contract-catalog-smoke")
 def mcp_llm_contract_catalog_smoke(backend: str = typer.Option("mock", "--backend"), model: str = typer.Option("", "--model"), base_url: str = typer.Option("http://127.0.0.1:11434", "--base-url"), temperature: float = typer.Option(0.0, "--temperature"), timeout_seconds: int = typer.Option(20, "--timeout-seconds"), max_tokens: int = typer.Option(800, "--max-tokens"), cases: str = typer.Option("examples/phase15_3_llm_contract_catalog_cases.yaml", "--cases"), fmt: str = typer.Option("json", "--format")) -> None:
     from lmola.mcp_llm_contract_catalog_smoke import run_llm_contract_catalog_smoke
@@ -452,6 +462,14 @@ def workflow_run(workflow_yaml: str) -> None:
     if result.status != "ok":
         raise typer.Exit(code=1)
 
+
+
+@workflow_app.command("eval-human-prompts")
+def workflow_eval_human_prompts(cases_yaml: str, backend: str = typer.Option("mock", "--backend"), model: str = typer.Option("", "--model"), base_url: str = typer.Option("http://127.0.0.1:11434", "--base-url"), temperature: float = typer.Option(0.0, "--temperature"), timeout_seconds: int = typer.Option(20, "--timeout-seconds"), max_tokens: int = typer.Option(800, "--max-tokens"), fmt: str = typer.Option("json", "--format")) -> None:
+    result = run_human_prompt_eval(cases_yaml, backend=backend, model=model, base_url=base_url, temperature=temperature, timeout_seconds=timeout_seconds, max_tokens=max_tokens)
+    print(json.dumps(result, indent=2) if fmt == "json" else result)
+    if result.get("status") != "ok":
+        raise typer.Exit(code=1)
 
 @workflow_app.command("normalize-request")
 def workflow_normalize_request(
