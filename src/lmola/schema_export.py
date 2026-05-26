@@ -15,6 +15,7 @@ from lmola.llm_contract_catalog import NextActionItem, NextActionRecommendation,
 from lmola.workflows import check_workflow_backend_readiness, list_workflows
 from lmola.workflows.catalog import WorkflowArtifactOutputDescriptor, WorkflowContract, WorkflowExecutionPolicy, WorkflowPortContract
 from lmola.workflows.schemas import WorkflowInput, WorkflowOutputs, WorkflowRequest, WorkflowStep
+from lmola.human_prompt_normalization import CandidateWorkflow, HumanPromptNormalizedIntent, HumanPromptNormalizationResult
 
 MODEL_REGISTRY = {
     "WorkflowRequest": WorkflowRequest,
@@ -29,6 +30,9 @@ MODEL_REGISTRY = {
     "ToolCallRecord": ToolCallRecord,
     "PlannerEvalSuite": PlannerEvalSuite,
     "PlannerEvalCase": PlannerEvalCase,
+    "HumanPromptNormalizedIntent": HumanPromptNormalizedIntent,
+    "HumanPromptNormalizationResult": HumanPromptNormalizationResult,
+    "CandidateWorkflow": CandidateWorkflow,
 }
 
 
@@ -157,11 +161,24 @@ def export_planner_schema_bundle() -> dict:
                 "notes": [
                     "Compact contract catalog available via lmola.get_compact_contract_catalog.",
                     "Next-action recommendations available via lmola.recommend_next_actions.",
-                    "Result artifacts are not geometries.",
+                    "result artifacts are not geometries",
                     "Compatibility hints are read-only.",
                     "Compatibility hints do not grant execution permission.",
                     "Confirmed execution still requires dry_run=false, allow_execution=true, and confirm=true.",
                 ],
+            },
+            "human_prompt_normalization": {
+                "purpose": "Normalize a human prompt into a structured intent without executing chemistry.",
+                "tool": "lmola.normalize_human_prompt",
+                "benchmark": "lmola workflow eval-human-prompts",
+                "ambiguous_policy": "If a human prompt is ambiguous, return ambiguous or needs_clarification rather than forcing a workflow.",
+                "artifact_policy": "result artifacts are not geometries",
+                "safety": {
+                    "execution_allowed": False,
+                    "dry_run_recommended": True,
+                    "requires_confirmation": True,
+                    "requires_allow_execution": True,
+                },
             },
         }
     )
@@ -194,6 +211,10 @@ def export_all_schemas() -> dict:
             "next_action_item_schema": NextActionItem.model_json_schema(),
             "artifact_contracts": export_artifact_registry(compact=False),
             "artifact_contracts_compact": export_artifact_registry(compact=True),
+            "human_prompt_normalized_intent_schema": HumanPromptNormalizedIntent.model_json_schema(),
+            "human_prompt_normalization_result_schema": HumanPromptNormalizationResult.model_json_schema(),
+            "human_prompt_candidate_workflow_schema": CandidateWorkflow.model_json_schema(),
+            "human_prompt_normalization_eval_schema": {"schema_version": "lmola.human_prompt_normalization_eval.v1", "required_fields": ["normalized_intent", "candidate_workflows", "missing_parameters", "clarification_questions", "execution_allowed", "dry_run_recommended", "result_artifact_as_geometry_error_rate", "forced_selection_on_ambiguous_prompt_rate"]},
             "backend_capabilities": {k: v.model_dump() for k, v in list_backend_capabilities().items()},
         }
     )
