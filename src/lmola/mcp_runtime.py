@@ -17,6 +17,7 @@ from lmola.artifact_triage import triage_artifact_path
 from lmola.artifact_contracts import export_artifact_registry
 from lmola.artifact_manifest import inspect_manifest, get_compatibility
 from lmola.llm_contract_catalog import export_llm_contract_catalog, recommend_next_actions
+from lmola.human_prompt_normalization import normalize_human_prompt
 from lmola.schema_export import export_all_schemas, export_planner_schema_bundle, export_tool_registry_schema, export_workflow_catalog_schema
 from lmola.backends.capabilities import list_backend_capabilities, resolve_backend_capability
 from lmola.workflows.catalog import get_workflow_entry, list_workflows
@@ -52,6 +53,7 @@ RUNTIME_ALLOWED_TOOLS = {
     "lmola.get_artifact_compatibility",
     "lmola.get_compact_contract_catalog",
     "lmola.recommend_next_actions",
+    "lmola.normalize_human_prompt",
 }
 
 
@@ -177,6 +179,7 @@ def list_mcp_tools_runtime() -> list[dict[str, Any]]:
         "lmola.get_artifact_compatibility": {"description": "Return compact compatibility hints from runtime artifact_manifest.json.", "inputSchema": {"type": "object", "additionalProperties": False, "properties": {"path": {"type": "string"}}, "required": ["path"]}},
         "lmola.get_compact_contract_catalog": {"description": "Return compact LLM-facing contract catalog.", "inputSchema": {"type": "object", "additionalProperties": False, "properties": {"compact": {"type": "boolean", "default": True}}}},
         "lmola.recommend_next_actions": {"description": "Read-only manifest-aware next-action recommendations.", "inputSchema": {"type": "object", "additionalProperties": False, "properties": {"path": {"type": "string"}, "compact": {"type": "boolean", "default": True}}, "required": ["path"]}},
+        "lmola.normalize_human_prompt": {"description": "Normalize human prompt into safe, read-only intent.", "inputSchema": {"type": "object", "additionalProperties": False, "properties": {"prompt": {"type": "string"}, "language": {"type": ["string", "null"], "enum": ["ja", "en", "auto", None]}, "compact": {"type": "boolean", "default": False}}, "required": ["prompt"]}},
     }
     runtime_tools: list[dict[str, Any]] = []
     for name in sorted(RUNTIME_ALLOWED_TOOLS):
@@ -303,6 +306,16 @@ def call_mcp_tool(name: str, arguments: dict[str, Any] | None = None) -> dict[st
             if not isinstance(path, str) or not path:
                 return _runtime_error("invalid_arguments", "path is required.")
             return recommend_next_actions(path, compact=bool(args.get("compact", True)))
+        if name == "lmola.normalize_human_prompt":
+            prompt = args.get("prompt")
+            if not isinstance(prompt, str) or not prompt.strip():
+                return _runtime_error("invalid_arguments", "prompt is required.")
+            language = args.get("language", "auto")
+            if language is None:
+                language = "auto"
+            if language not in {"ja", "en", "auto"}:
+                return _runtime_error("invalid_arguments", "language must be ja, en, auto, or null.")
+            return normalize_human_prompt(prompt=prompt, language=language, compact=bool(args.get("compact", False)))
         if name == "lmola.validate_workflow":
             req = WorkflowRequest.model_validate(args)
             return {"status": "ok", "canonical_workflow_json": _canonicalize_workflow(req)}
