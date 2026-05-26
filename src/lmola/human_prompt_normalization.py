@@ -76,7 +76,8 @@ def normalize_human_prompt(*, prompt: str, language: str = "auto", compact: bool
     op = intent.get("operation")
     if any(k in text for k in ["rmsd"]):
         op = "rmsd_calculation"
-    if any(k in text for k in ["compare two structures", "compare two geometries", "構造", "比較"]) and "rmsd" not in text and (".xyz" in text or "2つ" in raw or "two" in text):
+    explicit_compare = any(k in text for k in ["compare", "comparison", "compare two structures", "compare two geometries", "比較", "比べる", "2つの構造", "two xyz files"])
+    if explicit_compare and "rmsd" not in text and (".xyz" in text or "2つ" in raw or "two" in text):
         op = "structure_comparison"
     if any(k in text for k in ["count", "数を数える"]) and any(e in raw for e in ["Ni", "Fe", "C", "N", "O"]):
         op = "element_counting"
@@ -126,6 +127,18 @@ def normalize_human_prompt(*, prompt: str, language: str = "auto", compact: bool
     if "singlepoint result" in text or "singlepoint_result" in text or "xtb_singlepoint_result" in text:
         wf_hints = []
 
+    workflow_operation_map = {
+        "xyz_to_xtb_singlepoint": "singlepoint_energy",
+        "xyz_to_rmsd": "rmsd_calculation",
+        "compare_two_geometries": "structure_comparison",
+    }
+    wf_op = workflow_operation_map.get(wf_hints[0]) if wf_hints else None
+    if status == "ok" and wf_op and op != wf_op:
+        op = wf_op
+    if status == "ok" and wf_op and op != wf_op:
+        status = "ambiguous"
+        wf_hints = []
+
     wf_map = {w.workflow_id: w for w in list_workflows()}
     cands: list[CandidateWorkflow] = []
     for idx, wid in enumerate(wf_hints):
@@ -158,7 +171,7 @@ def normalize_human_prompt(*, prompt: str, language: str = "auto", compact: bool
             method_family=_method_family(intent.get("method"), op),
             requested_backend=intent.get("method"),
             input_kind=input_kind,
-            input_artifact_type="xtb_singlepoint_result" if "singlepoint_result" in text else None,
+            input_artifact_type="xtb_singlepoint_result" if ("singlepoint_result" in text or "xtb_singlepoint_result" in text or "singlepoint result" in text) else None,
             geometry_modification_allowed=gma,
             constraints=constraints,
             atom_selection=atom_selection,
