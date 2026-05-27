@@ -186,7 +186,7 @@ def export_planner_schema_bundle() -> dict:
                     "Parameter binding reports missing_parameters, assumed_defaults, clarification_recommended, unsupported_parameters, backend_specific.",
                     "Optional backend controls use workflow/backend defaults.",
                     "Clarification handling available via lmola.generate_clarification_plan and lmola workflow clarify-parameters.",
-                    "Dry-run execution plan available via lmola.create_dry_run_execution_plan and lmola workflow dry-run-plan.",
+                    "dry-run execution plan available via lmola.create_dry_run_execution_plan and lmola workflow dry-run-plan.",
                     "Dry-run plans do not execute chemistry.",
                     "Dry-run plan includes selected_workflow, expected_artifacts, and artifact_manifest_preview.",
                     "needs_clarification/unsupported do not select executable workflows.",
