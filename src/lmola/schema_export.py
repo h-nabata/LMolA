@@ -18,6 +18,7 @@ from lmola.workflows.schemas import WorkflowInput, WorkflowOutputs, WorkflowRequ
 from lmola.human_prompt_normalization import CandidateWorkflow, HumanPromptNormalizedIntent, HumanPromptNormalizationResult
 from lmola.parameter_binding import ParameterValue, InputFileBinding, ElectronicStateBinding, SolventBinding, PeriodicBinding, AtomSelectionBinding, CalculationControlsBinding, GeometryOptimizationControls, BoundParameterSet, ParameterBindingResult
 from lmola.clarification import ClarificationQuestion, ClarificationPlan
+from lmola.dry_run_plan import DryRunInputBinding, DryRunParameterBinding, DryRunExpectedArtifact, DryRunWorkflowSelection, DryRunExecutionPlan
 
 MODEL_REGISTRY = {
     "WorkflowRequest": WorkflowRequest,
@@ -185,6 +186,11 @@ def export_planner_schema_bundle() -> dict:
                     "Parameter binding reports missing_parameters, assumed_defaults, clarification_recommended, unsupported_parameters, backend_specific.",
                     "Optional backend controls use workflow/backend defaults.",
                     "Clarification handling available via lmola.generate_clarification_plan and lmola workflow clarify-parameters.",
+                    "dry-run execution plan available via lmola.create_dry_run_execution_plan and lmola workflow dry-run-plan.",
+                    "Dry-run plans do not execute chemistry.",
+                    "Dry-run plan includes selected_workflow, expected_artifacts, and artifact_manifest_preview.",
+                    "needs_clarification/unsupported do not select executable workflows.",
+                    "execution_allowed remains false in dry-run plans.",
                     "missing_parameters become required_questions.",
                     "clarification_recommended become recommended_questions.",
                     "assumed_defaults should not block planning.",
@@ -253,6 +259,12 @@ def export_all_schemas() -> dict:
             "clarification_question_schema": ClarificationQuestion.model_json_schema(),
             "clarification_plan_schema": ClarificationPlan.model_json_schema(),
             "clarification_eval_schema": {"schema_version": "lmola.clarification_eval.v1", "required_fields": ["required_questions", "recommended_questions", "optional_questions", "unsupported_notes", "can_create_dry_run_plan", "can_execute", "execution_allowed", "dry_run_recommended"]},
+            "dry_run_input_binding_schema": DryRunInputBinding.model_json_schema(),
+            "dry_run_parameter_binding_schema": DryRunParameterBinding.model_json_schema(),
+            "dry_run_expected_artifact_schema": DryRunExpectedArtifact.model_json_schema(),
+            "dry_run_workflow_selection_schema": DryRunWorkflowSelection.model_json_schema(),
+            "dry_run_execution_plan_schema": DryRunExecutionPlan.model_json_schema(),
+            "dry_run_plan_eval_schema": {"schema_version": "lmola.dry_run_plan_eval.v1", "required_fields": ["selected_workflow", "input_bindings", "parameter_bindings", "expected_artifacts", "artifact_manifest_preview", "blocking_reasons", "unsupported_reasons", "can_create_dry_run_plan", "can_execute", "execution_allowed", "dry_run_recommended"]},
             "backend_capabilities": {k: v.model_dump() for k, v in list_backend_capabilities().items()},
         }
     )
