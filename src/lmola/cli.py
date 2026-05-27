@@ -32,6 +32,7 @@ from lmola.mcp_llm_execution_smoke import run_llm_execution_smoke
 from lmola.mcp_llm_orchestration_smoke import run_llm_orchestration_smoke
 from lmola.human_prompt_eval import run_human_prompt_eval
 from lmola.parameter_binding import bind_human_prompt_parameters, run_parameter_binding_eval
+from lmola.clarification import generate_clarification_plan, run_clarification_eval
 from lmola.mcp_human_prompt_normalization_smoke import run_mcp_human_prompt_normalization_smoke
 from lmola.llm.request_normalization import normalize_request
 from lmola.mcp_runtime import RUNTIME_PHASE, call_mcp_tool, handle_jsonrpc_message, list_mcp_tools_runtime, run_mcp_stdio_server
@@ -481,6 +482,24 @@ def workflow_eval_human_prompts(cases_yaml: str, backend: str = typer.Option("mo
         raise typer.Exit(code=1)
 
 
+
+@workflow_app.command("clarify-parameters")
+def workflow_clarify_parameters(prompt: str = typer.Option("", "--prompt"), language: str = typer.Option("auto", "--language"), binding_json: str = typer.Option("", "--binding-json"), fmt: str = typer.Option("json", "--format")) -> None:
+    if binding_json:
+        from lmola.parameter_binding import ParameterBindingResult
+        payload = generate_clarification_plan(prompt=prompt or "", language=language, binding=ParameterBindingResult.model_validate(json.loads(Path(binding_json).read_text(encoding="utf-8"))))
+    else:
+        payload = generate_clarification_plan(prompt=prompt, language=language)
+    typer.echo(json.dumps(payload, indent=2, sort_keys=True) if fmt == "json" else payload)
+
+
+@workflow_app.command("eval-clarifications")
+def workflow_eval_clarifications(cases: str = typer.Argument(...), backend: str = typer.Option("mock", "--backend"), model: str = typer.Option("", "--model"), base_url: str = typer.Option("http://127.0.0.1:11434", "--base-url"), temperature: float = typer.Option(0.0, "--temperature"), timeout_seconds: int = typer.Option(20, "--timeout-seconds"), max_tokens: int = typer.Option(800, "--max-tokens"), fmt: str = typer.Option("json", "--format")) -> None:
+    result = run_clarification_eval(cases, backend=backend, model=model, base_url=base_url, temperature=temperature, timeout_seconds=timeout_seconds, max_tokens=max_tokens)
+    typer.echo(json.dumps(result, indent=2, sort_keys=True) if fmt == "json" else result)
+    if result.get("status") != "ok":
+        raise typer.Exit(code=1)
+
 @workflow_app.command("bind-parameters")
 def workflow_bind_parameters(prompt: str = typer.Option(..., "--prompt"), language: str = typer.Option("auto", "--language"), fmt: str = typer.Option("json", "--format")) -> None:
     payload = bind_human_prompt_parameters(prompt=prompt, language=language)
@@ -824,3 +843,14 @@ def relax(structure: str, method: str = "xtb") -> None:
     artifact_files.append("README_run.md")
     dump_json(run_dir / "relaxation_result.json", result_payload | {"artifact_files": sorted(set(artifact_files))})
     print(json.dumps({"status": result.status, "message": result.message, "method": method, "run_dir": str(run_dir)}, indent=2))
+
+
+@mcp_app.command("clarification-smoke")
+def mcp_clarification_smoke(backend: str = typer.Option("mock", "--backend"), model: str = typer.Option("", "--model"), base_url: str = typer.Option("http://127.0.0.1:11434", "--base-url"), temperature: float = typer.Option(0.0, "--temperature"), timeout_seconds: int = typer.Option(20, "--timeout-seconds"), max_tokens: int = typer.Option(800, "--max-tokens"), cases: str = typer.Option("examples/phase16_2_clarification_cases.yaml", "--cases"), fmt: str = typer.Option("json", "--format")) -> None:
+    result = run_clarification_eval(cases, backend=backend, model=model, base_url=base_url, temperature=temperature, timeout_seconds=timeout_seconds, max_tokens=max_tokens)
+    if fmt == "json":
+        typer.echo(json.dumps(result, indent=2, sort_keys=True))
+    else:
+        typer.echo(str(result))
+    if result.get("status") != "ok":
+        raise typer.Exit(code=1)
