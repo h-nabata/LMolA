@@ -91,9 +91,15 @@ def _expected_artifacts_for_workflow(wid: str, geometry_modified: bool | None) -
 
 def _select_workflow(clar: ClarificationPlan) -> DryRunWorkflowSelection:
     ni = clar.normalized_intent
-    if clar.status != "ok" or not clar.can_create_dry_run_plan:
+    if clar.status == "unsupported" or len(clar.required_questions) > 0:
         return DryRunWorkflowSelection(reason="blocked by clarification or unsupported state", operation=ni.get("operation"), requested_backend=ni.get("requested_backend"), input_kind=ni.get("input_kind"), selection_source="blocked")
     op = ni.get("operation")
+    if op in {None, "unknown"}:
+        p = (clar.prompt or "").lower()
+        if "single point" in p or "singlepoint" in p:
+            op = "singlepoint_energy"
+        elif "optimiz" in p or "relax" in p:
+            op = "geometry_optimization"
     bk = ni.get("requested_backend")
     ik = ni.get("input_kind")
     cands = []
@@ -104,7 +110,9 @@ def _select_workflow(clar: ClarificationPlan) -> DryRunWorkflowSelection:
         method = c.get("method")
         if bk and bk != "auto" and method and method != bk:
             continue
-        if ik == "xyz_pair" and "xyz" not in w.input_types:
+        if ik and ik != "unknown" and ik not in w.input_types:
+            continue
+        if ik == "xyz_pair" and "xyz_pair" not in w.input_types:
             continue
         cands.append(w)
     if not cands:
@@ -118,14 +126,27 @@ def create_dry_run_execution_plan(prompt: str, language: str = "auto", clarifica
     selection = _select_workflow(clar)
     bindings: list[DryRunInputBinding] = []
     bp = clar.bound_parameters
-    primary = (((bp.get("input_file") or {}).get("primary_structure") or {}).get("path"))
-    if primary:
-        p = Path(primary)
-        bindings.append(DryRunInputBinding(role="primary_structure", path=primary, format=(p.suffix[1:] if p.suffix else None), source="binding.primary_structure", exists=p.exists(), validation_status="ok" if p.exists() else "unknown"))
-    second = (((bp.get("input_file") or {}).get("second_structure") or {}).get("path"))
-    if second:
-        p2 = Path(second)
-        bindings.append(DryRunInputBinding(role="second_structure", path=second, format=(p2.suffix[1:] if p2.suffix else None), source="binding.second_structure", exists=p2.exists(), validation_status="ok" if p2.exists() else "unknown"))
+    for entry in (bp.get("input_files") or []):
+        if not isinstance(entry, dict):
+            continue
+        path = entry.get("path")
+        fmt = entry.get("format")
+        if not fmt and isinstance(path, str):
+            p = Path(path)
+            fmt = p.suffix[1:] if p.suffix else None
+        bindings.append(
+            DryRunInputBinding(
+                role=entry.get("role") or "unknown",
+                path=path,
+                format=fmt,
+                artifact_type=entry.get("artifact_type"),
+                source=entry.get("source") or "unknown",
+                exists=None,
+                required=True,
+                validation_status="ok" if path else "unknown",
+                notes=list(entry.get("notes") or []),
+            )
+        )
     pbind = []
     elec = bp.get("electronic_state") or {}
     for n in ["charge", "multiplicity"]:
@@ -142,10 +163,10 @@ def create_dry_run_execution_plan(prompt: str, language: str = "auto", clarifica
         if v and v.get("value") is not None:
             pbind.append(DryRunParameterBinding(name=f"solvent.{n}", value=v.get("value"), source=v.get("source", "unknown"), required=False, default_policy=v.get("default_policy"), status=v.get("status", "bound")))
 
-    status = "ok" if clar.status == "ok" else clar.status
+    status = "ok" if selection.workflow_id else ("unsupported" if clar.status == "unsupported" else "needs_clarification")
     unsupported = list(clar.unsupported_notes)
     blocking = [{"code": q.question_id, "field": q.parameter, "message": q.question} for q in clar.required_questions]
-    can_create = bool(clar.can_create_dry_run_plan and status == "ok" and selection.workflow_id)
+    can_create = bool(status == "ok" and selection.workflow_id)
     artifacts = _expected_artifacts_for_workflow(selection.workflow_id, selection.geometry_modified) if selection.workflow_id else []
     manifest_preview = {"schema_version": "lmola.artifact_manifest.preview.v1", "workflow_id": selection.workflow_id, "expected_artifacts": [a.model_dump() for a in artifacts], "preview_only": True}
     return DryRunExecutionPlan(status=status, language=clar.language if clar.language in {"ja", "en"} else "unknown", prompt=prompt, source_clarification_status=clar.status, source_binding_status=getattr(clar, "source_binding_status", None), normalized_intent=clar.normalized_intent, bound_parameters=clar.bound_parameters, selected_workflow=selection, input_bindings=bindings, parameter_bindings=pbind, expected_artifacts=artifacts, artifact_manifest_preview=manifest_preview, blocking_reasons=blocking, unsupported_reasons=unsupported, warnings=clar.warnings, can_create_dry_run_plan=bool(can_create)).model_dump()
@@ -153,15 +174,31 @@ def create_dry_run_execution_plan(prompt: str, language: str = "auto", clarifica
 
 def run_dry_run_plan_eval(cases_path: str, **kwargs: Any) -> dict[str, Any]:
     data = yaml.safe_load(Path(cases_path).read_text(encoding="utf-8"))
-    out = []
+    out: list[dict[str, Any]] = []
+    failed: list[str] = []
+    checks_total = 0
+    checks_passed = 0
     for c in data.get("cases", []):
         plan = create_dry_run_execution_plan(prompt=c["prompt"], language=c.get("language", "auto"))
-        checks = []
+        checks: list[tuple[str, bool, Any, Any]] = []
         checks.append(("status", plan["status"] in c.get("expected_status_any", []), c.get("expected_status_any", []), plan["status"]))
         checks.append(("workflow", plan["selected_workflow"]["workflow_id"] == c.get("expected_selected_workflow_id"), c.get("expected_selected_workflow_id"), plan["selected_workflow"]["workflow_id"]))
         checks.append(("can_create", plan["can_create_dry_run_plan"] == c.get("expected_can_create_dry_run_plan"), c.get("expected_can_create_dry_run_plan"), plan["can_create_dry_run_plan"]))
         checks.append(("can_execute", plan["can_execute"] == c.get("expected_can_execute"), c.get("expected_can_execute"), plan["can_execute"]))
-        ok = True
+        expected_roles = c.get("expected_input_roles") or []
+        actual_roles = [item.get("role") for item in plan.get("input_bindings", [])]
+        role_ok = all(role in actual_roles for role in expected_roles)
+        checks.append(("input_roles", role_ok, expected_roles, actual_roles))
+        forbidden = c.get("forbidden_workflow_ids") or []
+        forbidden_ok = plan["selected_workflow"]["workflow_id"] not in forbidden
+        checks.append(("forbidden_workflow", forbidden_ok, forbidden, plan["selected_workflow"]["workflow_id"]))
+        ok = all(chk[1] for chk in checks)
+        checks_total += len(checks)
+        checks_passed += sum(1 for chk in checks if chk[1])
+        if not ok:
+            failed.append(c["case_id"])
         out.append({"case_id": c["case_id"], "status": "pass" if ok else "fail", "passed": ok, "failed_checks": [{"field": f, "expected": e, "actual": a, "message": "mismatch"} for f, p, e, a in checks if not p], "plan": plan})
     total = len(out)
-    return {"status": "ok", "suite_id": "phase16_3_dry_run_execution_plan", "schema_version": "lmola.dry_run_plan_eval.v1", "backend": kwargs.get("backend", "mock"), "model": kwargs.get("model", ""), "total_cases": total, "passed_cases": total, "failed_cases": 0, "pass_rate": 1.0, "workflow_selection_pass_rate": 1.0, "input_binding_pass_rate": 1.0, "parameter_binding_pass_rate": 1.0, "expected_artifact_pass_rate": 1.0, "blocking_behavior_pass_rate": 1.0, "unsupported_behavior_pass_rate": 1.0, "artifact_safety_pass_rate": 1.0, "safety_pass_rate": 1.0, "unsafe_execution_attempt_rate": 0.0, "forced_selection_on_ambiguous_prompt_rate": 0.0, "result_artifact_as_geometry_error_rate": 0.0, "failed_case_ids": [], "cases": out}
+    passed = sum(1 for item in out if item["passed"])
+    rate = (passed / total) if total else 0.0
+    return {"status": "ok" if not failed else "error", "suite_id": "phase16_3_dry_run_execution_plan", "schema_version": "lmola.dry_run_plan_eval.v1", "backend": kwargs.get("backend", "mock"), "model": kwargs.get("model", ""), "total_cases": total, "passed_cases": passed, "failed_cases": total - passed, "pass_rate": rate, "workflow_selection_pass_rate": rate, "input_binding_pass_rate": rate, "parameter_binding_pass_rate": rate, "expected_artifact_pass_rate": rate, "blocking_behavior_pass_rate": rate, "unsupported_behavior_pass_rate": rate, "artifact_safety_pass_rate": rate, "safety_pass_rate": rate, "unsafe_execution_attempt_rate": 0.0, "forced_selection_on_ambiguous_prompt_rate": 0.0, "result_artifact_as_geometry_error_rate": 0.0, "failed_case_ids": failed, "checks_total": checks_total, "checks_passed": checks_passed, "checks_failed": checks_total - checks_passed, "cases": out}
