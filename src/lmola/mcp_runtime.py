@@ -20,6 +20,7 @@ from lmola.llm_contract_catalog import export_llm_contract_catalog, recommend_ne
 from lmola.human_prompt_normalization import normalize_human_prompt
 from lmola.parameter_binding import bind_human_prompt_parameters
 from lmola.clarification import generate_clarification_plan
+from lmola.dry_run_plan import create_dry_run_execution_plan
 from lmola.schema_export import export_all_schemas, export_planner_schema_bundle, export_tool_registry_schema, export_workflow_catalog_schema
 from lmola.backends.capabilities import list_backend_capabilities, resolve_backend_capability
 from lmola.workflows.catalog import get_workflow_entry, list_workflows
@@ -58,6 +59,7 @@ RUNTIME_ALLOWED_TOOLS = {
     "lmola.normalize_human_prompt",
     "lmola.bind_human_prompt_parameters",
     "lmola.generate_clarification_plan",
+    "lmola.create_dry_run_execution_plan",
 }
 
 
@@ -186,6 +188,7 @@ def list_mcp_tools_runtime() -> list[dict[str, Any]]:
         "lmola.normalize_human_prompt": {"description": "Normalize human prompt into safe, read-only intent.", "inputSchema": {"type": "object", "additionalProperties": False, "properties": {"prompt": {"type": "string"}, "language": {"type": ["string", "null"], "enum": ["ja", "en", "auto", None]}, "compact": {"type": "boolean", "default": False}}, "required": ["prompt"]}},
         "lmola.bind_human_prompt_parameters": {"description": "Bind normalized human prompt parameters into structured read-only planning inputs.", "inputSchema": {"type": "object", "additionalProperties": False, "properties": {"prompt": {"type": "string"}, "language": {"type": ["string", "null"], "enum": ["ja", "en", "auto", None]}, "compact": {"type": "boolean", "default": False}}, "required": ["prompt"]}},
         "lmola.generate_clarification_plan": {"description": "Generate structured clarification plan from human prompt without execution.", "inputSchema": {"type": "object", "additionalProperties": False, "properties": {"prompt": {"type": "string"}, "language": {"type": ["string", "null"], "enum": ["ja", "en", "auto", None]}, "compact": {"type": "boolean", "default": False}}, "required": ["prompt"]}},
+        "lmola.create_dry_run_execution_plan": {"description": "Create dry-run execution plan from prompt without executing workflows.", "inputSchema": {"type": "object", "additionalProperties": False, "properties": {"prompt": {"type": "string"}, "language": {"type": ["string", "null"], "enum": ["ja", "en", "auto", None]}, "compact": {"type": "boolean", "default": False}}, "required": ["prompt"]}},
     }
     runtime_tools: list[dict[str, Any]] = []
     for name in sorted(RUNTIME_ALLOWED_TOOLS):
@@ -342,6 +345,16 @@ def call_mcp_tool(name: str, arguments: dict[str, Any] | None = None) -> dict[st
             if language not in {"ja", "en", "auto"}:
                 return _runtime_error("invalid_arguments", "language must be ja, en, auto, or null.")
             return generate_clarification_plan(prompt=prompt, language=language, compact=bool(args.get("compact", False)))
+        if name == "lmola.create_dry_run_execution_plan":
+            prompt = args.get("prompt")
+            if not isinstance(prompt, str) or not prompt.strip():
+                return _runtime_error("invalid_arguments", "prompt is required.")
+            language = args.get("language", "auto")
+            if language is None:
+                language = "auto"
+            if language not in {"ja", "en", "auto"}:
+                return _runtime_error("invalid_arguments", "language must be ja, en, auto, or null.")
+            return create_dry_run_execution_plan(prompt=prompt, language=language)
         if name == "lmola.validate_workflow":
             req = WorkflowRequest.model_validate(args)
             return {"status": "ok", "canonical_workflow_json": _canonicalize_workflow(req)}
