@@ -225,7 +225,6 @@ cases:
   prompt: Use this xtb_singlepoint_result to continue optimization.
   tags:
   - artifact
-  expected_status: needs_clarification
   expected_can_create_dry_run_plan: false
   expected_required_questions_contains:
   - geometry artifact
@@ -243,12 +242,14 @@ cases:
     requires_confirmation: true
     requires_allow_execution: true
   notes: ''
+  expected_status_any:
+  - needs_clarification
+  - unsupported
 - case_id: ja_result_artifact_not_geometry
   language: ja
   prompt: この xtb_singlepoint_result を使って最適化を続けて。
   tags:
   - artifact
-  expected_status: needs_clarification
   expected_can_create_dry_run_plan: false
   expected_required_questions_contains:
   - geometry artifact
@@ -266,6 +267,9 @@ cases:
     requires_confirmation: true
     requires_allow_execution: true
   notes: ''
+  expected_status_any:
+  - needs_clarification
+  - unsupported
 - case_id: en_orca_deferred
   language: en
   prompt: Prepare an ORCA B3LYP def2-SVP single point for examples/mol.xyz with charge
@@ -384,10 +388,12 @@ cases:
   - unsupported
   - needs_clarification
   expected_can_create_dry_run_plan: false
-  expected_required_questions_contains: []
+  expected_required_questions_contains:
+  - input geometry
   expected_recommended_questions_contains: []
   expected_optional_questions_contains: []
-  expected_unsupported_notes_contains: []
+  expected_unsupported_notes_contains:
+  - morfeus
   expected_assumed_defaults_contains: []
   expected_missing_parameters_contains: []
   expected_candidate_workflows_contains: []

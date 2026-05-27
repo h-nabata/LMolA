@@ -67,6 +67,8 @@ def generate_clarification_plan(*, prompt: str, language: str = "auto", compact:
     optional: list[ClarificationQuestion] = []
     unsupported_notes = list(b.unsupported_parameters)
     candidate_workflows = list(b.candidate_workflows)
+    bound_parameters = b.bound_parameters.model_dump()
+    normalized_intent = dict(b.normalized_intent)
 
     if "operation" in b.missing_parameters:
         required.append(_q("calculation_controls.operation", "Do you want single-point energy or geometry optimization?", "Operation is ambiguous.", "required", "ambiguity", True, ["singlepoint_energy", "geometry_optimization"]))
@@ -86,6 +88,20 @@ def generate_clarification_plan(*, prompt: str, language: str = "auto", compact:
         required.append(_q("input_files.primary_structure", "Please provide a geometry artifact or XYZ structure before optimization.", "Result artifacts are not geometries.", "required", "artifact_incompatibility"))
         candidate_workflows = [w for w in candidate_workflows if w.get("workflow_id") != "xyz_to_xtb_relax"]
 
+    prompt_l = b.prompt.lower()
+    if "morfeus" in prompt_l or "buried volume" in prompt_l:
+        normalized_intent.setdefault("requested_backend", "morfeus")
+        normalized_intent.setdefault("operation", "steric_analysis")
+        bound_parameters.setdefault("calculation_controls", {}).setdefault("requested_backend", {}).update({"value": "morfeus", "source": "inferred_from_prompt", "status": "bound"})
+        bound_parameters.setdefault("calculation_controls", {}).setdefault("operation", {}).update({"value": "steric_analysis", "source": "inferred_from_prompt", "status": "bound"})
+        if "ni" in prompt_l:
+            bound_parameters.setdefault("atom_selection", {})["center_atom"] = "Ni"
+            bound_parameters.setdefault("atom_selection", {})["selection_type"] = "center_atom"
+        has_geometry = any((f.get("role") == "primary_structure" and f.get("path")) for f in bound_parameters.get("input_files", []))
+        if not has_geometry:
+            required.append(_q("input_files.primary_structure", "Please provide an input geometry file (e.g., XYZ) for buried-volume analysis.", "A structure file is required.", "required", "missing_parameter"))
+        unsupported_notes.append({"parameter": "requested_backend", "reason": "morfeus workflow/adapter is unavailable or deferred in this phase", "source": "backend_unavailable"})
+        candidate_workflows = [w for w in candidate_workflows if "morfeus" not in str(w).lower()]
     if b.bound_parameters.periodic.periodic.value is True and b.bound_parameters.periodic.cell_required is not False:
         recommended.append(_q("periodic.cell", "Please provide cell/PBC details for periodic calculation.", "Periodic setup needs cell information.", "recommended", "clarification_recommended", False))
 
@@ -104,8 +120,8 @@ def generate_clarification_plan(*, prompt: str, language: str = "auto", compact:
         language=b.language,
         prompt=b.prompt,
         source_binding_status=b.status,
-        normalized_intent=b.normalized_intent,
-        bound_parameters=b.bound_parameters.model_dump(),
+        normalized_intent=normalized_intent,
+        bound_parameters=bound_parameters,
         required_questions=required,
         recommended_questions=recommended,
         optional_questions=optional,
@@ -130,7 +146,11 @@ def run_clarification_eval(cases_path: str, **kwargs: Any) -> dict[str, Any]:
         plan = generate_clarification_plan(prompt=case["prompt"], language=case.get("language", "auto"))
         checks = []
         exp_status = case.get("expected_status")
-        if exp_status:
+        exp_status_any = case.get("expected_status_any")
+        if exp_status_any:
+            ok = plan["status"] in exp_status_any
+            checks.append(("status_any", ok, exp_status_any, plan["status"]))
+        elif exp_status:
             ok = plan["status"] in exp_status if isinstance(exp_status, list) else plan["status"] == exp_status
             checks.append(("status", ok, exp_status, plan["status"]))
         for f in case.get("forbidden_candidate_workflows", []):
