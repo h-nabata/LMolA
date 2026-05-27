@@ -995,3 +995,81 @@ cases:
   notes: ''
   tags:
   - core
+- case_id: no_solvent_from_water_filename
+  language: en
+  prompt: Run an xTB single point for examples/water.xyz with charge 0 and multiplicity
+    1. Do not optimize geometry.
+  tags:
+  - core
+  - xtb
+  - solvent
+  expected_status: ok
+  expected_operation: singlepoint_energy
+  expected_input_file_roles:
+  - primary_structure
+  expected_input_kind: xyz
+  expected_backend: xtb
+  expected_charge: null
+  expected_multiplicity: null
+  expected_spin: null
+  expected_spin_representation: null
+  expected_solvent: null
+  expected_solvent_model: null
+  expected_periodic: null
+  expected_pbc_axes: []
+  expected_atom_selection: null
+  expected_atom_ranges: []
+  expected_requested_outputs_contains: []
+  expected_constraints_contains: []
+  expected_assumed_defaults_contains: []
+  expected_missing_parameters_contains: []
+  expected_clarification_recommended_contains: []
+  expected_unsupported_parameters_contains: []
+  forbidden_candidate_workflows: []
+  expected_candidate_workflows_contains:
+  - xyz_to_xtb_singlepoint
+  expected_safety:
+    execution_allowed: false
+    dry_run_recommended: true
+    requires_confirmation: true
+    requires_allow_execution: true
+  notes: ''
+- case_id: explicit_alpb_water_solvent
+  language: en
+  prompt: Run an xTB single point for examples/mol.xyz in ALPB water without optimizing
+    geometry.
+  tags:
+  - core
+  - xtb
+  - solvent
+  expected_status: ok
+  expected_operation: singlepoint_energy
+  expected_input_file_roles:
+  - primary_structure
+  expected_input_kind: xyz
+  expected_backend: xtb
+  expected_charge: null
+  expected_multiplicity: null
+  expected_spin: null
+  expected_spin_representation: null
+  expected_solvent: water
+  expected_solvent_model: alpb
+  expected_periodic: null
+  expected_pbc_axes: []
+  expected_atom_selection: null
+  expected_atom_ranges: []
+  expected_requested_outputs_contains: []
+  expected_constraints_contains: []
+  expected_assumed_defaults_contains: []
+  expected_missing_parameters_contains: []
+  expected_clarification_recommended_contains: []
+  expected_unsupported_parameters_contains: []
+  forbidden_candidate_workflows: []
+  expected_candidate_workflows_contains:
+  - xyz_to_xtb_singlepoint
+  expected_safety:
+    execution_allowed: false
+    dry_run_recommended: true
+    requires_confirmation: true
+    requires_allow_execution: true
+  notes: ''

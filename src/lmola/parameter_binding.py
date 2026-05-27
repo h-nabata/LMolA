@@ -135,6 +135,10 @@ def _file_bindings(prompt: str) -> list[InputFileBinding]:
     return out
 
 
+def _nl_text_without_paths(prompt: str) -> str:
+    return re.sub(r"[\w./-]+\.(?:xyz|csv|json)", " ", prompt, flags=re.IGNORECASE)
+
+
 def _extract_max_steps(txt: str, prompt: str) -> int | None:
     patterns = [r"(?:max(?:imum)?\s*steps?|at\s+most)\s*(\d+)", r"最大\s*(\d+)\s*ステップ", r"(\d+)\s*steps"]
     joined = f"{txt} {prompt}"
@@ -173,8 +177,15 @@ def bind_human_prompt_parameters(*, prompt: str, language: str = "auto", compact
     if not mult:
         clar.append({"parameter": "electronic_state.multiplicity", "reason": "chemically important"})
 
-    solvent = ParameterValue(value="water" if "water" in txt else ("acetonitrile" if "acetonitrile" in txt else None), source="inferred_from_prompt" if ("water" in txt or "acetonitrile" in txt) else "not_specified", confidence="high" if ("water" in txt or "acetonitrile" in txt) else "unknown", default_policy="backend_default" if "water" not in txt and "acetonitrile" not in txt else "ask_user", status="bound" if ("water" in txt or "acetonitrile" in txt) else "not_applicable")
-    smodel = ParameterValue(value="alpb" if "alpb" in txt else ("gbsa" if "gbsa" in txt else None), source="inferred_from_prompt" if ("alpb" in txt or "gbsa" in txt) else "not_specified", confidence="high" if ("alpb" in txt or "gbsa" in txt) else "unknown", default_policy="backend_default", status="bound" if ("alpb" in txt or "gbsa" in txt) else "not_applicable")
+    nl_txt = _nl_text_without_paths(prompt).lower()
+    explicit_water = bool(re.search(r"\b(in\s+water|water\s+solvent|aqueous|alpb\s+water|gbsa\s+water)\b", nl_txt))
+    explicit_mecn = bool(re.search(r"\b(in\s+acetonitrile|with\s+solvent\s+acetonitrile)\b", nl_txt))
+    explicit_solvent = explicit_water or explicit_mecn
+    solvent_value = "water" if explicit_water else ("acetonitrile" if explicit_mecn else None)
+    has_smodel = "alpb" in nl_txt or "gbsa" in nl_txt
+    smodel_value = "alpb" if "alpb" in nl_txt else ("gbsa" if "gbsa" in nl_txt else None)
+    solvent = ParameterValue(value=solvent_value, source="inferred_from_prompt" if explicit_solvent else "not_specified", confidence="high" if explicit_solvent else "unknown", default_policy="ask_user" if explicit_solvent else "backend_default", status="bound" if explicit_solvent else "not_applicable")
+    smodel = ParameterValue(value=smodel_value, source="inferred_from_prompt" if has_smodel else "not_specified", confidence="high" if has_smodel else "unknown", default_policy="backend_default", status="bound" if has_smodel else "not_applicable")
 
     op = ni.get("operation")
     backend = ni.get("requested_backend")
