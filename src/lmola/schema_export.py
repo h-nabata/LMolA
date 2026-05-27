@@ -17,6 +17,7 @@ from lmola.workflows.catalog import WorkflowArtifactOutputDescriptor, WorkflowCo
 from lmola.workflows.schemas import WorkflowInput, WorkflowOutputs, WorkflowRequest, WorkflowStep
 from lmola.human_prompt_normalization import CandidateWorkflow, HumanPromptNormalizedIntent, HumanPromptNormalizationResult
 from lmola.parameter_binding import ParameterValue, InputFileBinding, ElectronicStateBinding, SolventBinding, PeriodicBinding, AtomSelectionBinding, CalculationControlsBinding, GeometryOptimizationControls, BoundParameterSet, ParameterBindingResult
+from lmola.clarification import ClarificationQuestion, ClarificationPlan
 
 MODEL_REGISTRY = {
     "WorkflowRequest": WorkflowRequest,
@@ -183,6 +184,10 @@ def export_planner_schema_bundle() -> dict:
                     "Parameter binding available via lmola.bind_human_prompt_parameters and lmola workflow bind-parameters.",
                     "Parameter binding reports missing_parameters, assumed_defaults, clarification_recommended, unsupported_parameters, backend_specific.",
                     "Optional backend controls use workflow/backend defaults.",
+                    "Clarification handling available via lmola.generate_clarification_plan and lmola workflow clarify-parameters.",
+                    "missing_parameters become required_questions.",
+                    "clarification_recommended become recommended_questions.",
+                    "assumed_defaults should not block planning.",
                 ],
             },
             "human_prompt_normalization": {
@@ -244,6 +249,10 @@ def export_all_schemas() -> dict:
             "bound_parameter_set_schema": BoundParameterSet.model_json_schema(),
             "parameter_binding_result_schema": ParameterBindingResult.model_json_schema(),
             "parameter_binding_eval_schema": {"schema_version": "lmola.parameter_binding_eval.v1", "required_fields": ["bound_parameters", "missing_parameters", "assumed_defaults", "clarification_recommended", "unsupported_parameters", "backend_specific", "execution_allowed", "dry_run_recommended"]},
+
+            "clarification_question_schema": ClarificationQuestion.model_json_schema(),
+            "clarification_plan_schema": ClarificationPlan.model_json_schema(),
+            "clarification_eval_schema": {"schema_version": "lmola.clarification_eval.v1", "required_fields": ["required_questions", "recommended_questions", "optional_questions", "unsupported_notes", "can_create_dry_run_plan", "can_execute", "execution_allowed", "dry_run_recommended"]},
             "backend_capabilities": {k: v.model_dump() for k, v in list_backend_capabilities().items()},
         }
     )
