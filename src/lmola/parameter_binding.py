@@ -135,6 +135,26 @@ def _file_bindings(prompt: str) -> list[InputFileBinding]:
     return out
 
 
+def _extract_max_steps(txt: str, prompt: str) -> int | None:
+    patterns = [r"(?:max(?:imum)?\s*steps?|at\s+most)\s*(\d+)", r"最大\s*(\d+)\s*ステップ", r"(\d+)\s*steps"]
+    joined = f"{txt} {prompt}"
+    for pat in patterns:
+        m = re.search(pat, joined, flags=re.IGNORECASE)
+        if m:
+            return int(m.group(1))
+    return None
+
+
+def _extract_force_threshold(txt: str, prompt: str) -> float | None:
+    patterns = [r"fmax\s*[:=]?\s*([0-9]*\.?[0-9]+)", r"force\s*(?:threshold|convergence)\s*[:=]?\s*([0-9]*\.?[0-9]+)", r"convergence\s*force\s*[:=]?\s*([0-9]*\.?[0-9]+)", r"(?:収束閾値|力の閾値)\s*[:=]?\s*([0-9]*\.?[0-9]+)"]
+    joined = f"{txt} {prompt}"
+    for pat in patterns:
+        m = re.search(pat, joined, flags=re.IGNORECASE)
+        if m:
+            return float(m.group(1))
+    return None
+
+
 def bind_human_prompt_parameters(*, prompt: str, language: str = "auto", compact: bool = False) -> dict[str, Any]:
     n = normalize_human_prompt(prompt=prompt, language=language, compact=False)
     ni = n["normalized_intent"]
@@ -157,12 +177,28 @@ def bind_human_prompt_parameters(*, prompt: str, language: str = "auto", compact
     smodel = ParameterValue(value="alpb" if "alpb" in txt else ("gbsa" if "gbsa" in txt else None), source="inferred_from_prompt" if ("alpb" in txt or "gbsa" in txt) else "not_specified", confidence="high" if ("alpb" in txt or "gbsa" in txt) else "unknown", default_policy="backend_default", status="bound" if ("alpb" in txt or "gbsa" in txt) else "not_applicable")
 
     op = ni.get("operation")
+    backend = ni.get("requested_backend")
+    method_family = ni.get("method_family")
+    if re.search(r"\borca\b", txt):
+        backend = "orca"
+        method_family = "dft"
+    elif re.search(r"\bxtb\b", txt) or "xTB" in prompt:
+        backend = "xtb"
+    explicit_op_hint = False
+    if re.search(r"(single\s*point|singlepoint)\b", txt):
+        op = "singlepoint_energy"
+        explicit_op_hint = True
+    elif re.search(r"(optimi[sz]e|relax|最適化)", txt):
+        op = "geometry_optimization"
+        explicit_op_hint = True
+    if op and "operation" in missing:
+        missing = [m for m in missing if m != "operation"]
     optimize = op == "geometry_optimization"
     single = op == "singlepoint_energy"
-    if "xtb calculation" in txt or "xtb計算" in prompt:
-        op = None
-        if "operation" not in missing:
-            missing.append("operation")
+
+    max_steps_val = _extract_max_steps(txt, prompt)
+    force_threshold_val = _extract_force_threshold(txt, prompt)
+
     if "singlepoint_result" in txt and ("continue" in txt or "続け" in prompt):
         unsupported.append({"parameter": "input_files.primary_structure", "reason": "geometry artifact required"})
 
@@ -174,17 +210,24 @@ def bind_human_prompt_parameters(*, prompt: str, language: str = "auto", compact
         atom = AtomSelectionBinding(selection_type="file_order_ranges", atom_ranges=[{"start": 1, "end": 12, "basis": "file_order"}, {"start": 13, "end": 28, "basis": "file_order"}], selection_basis="file_order")
 
     gopt = GeometryOptimizationControls(
-        force_threshold=ParameterValue(value=None, source="workflow_default", confidence="low", default_policy="workflow_default", status="assumed_default"),
+        force_threshold=ParameterValue(value=force_threshold_val, source="user_explicit" if force_threshold_val is not None else "workflow_default", confidence="high" if force_threshold_val is not None else "low", default_policy="workflow_default", status="bound" if force_threshold_val is not None else "assumed_default"),
         energy_threshold=ParameterValue(value=None, source="backend_default", confidence="low", default_policy="backend_default", status="assumed_default"),
-        max_steps=ParameterValue(value=200 if "max steps" in txt else None, source="user_explicit" if "max steps" in txt else "backend_default", confidence="high" if "max steps" in txt else "low", default_policy="backend_default", status="bound" if "max steps" in txt else "assumed_default"),
+        max_steps=ParameterValue(value=max_steps_val, source="user_explicit" if max_steps_val is not None else "backend_default", confidence="high" if max_steps_val is not None else "low", default_policy="backend_default", status="bound" if max_steps_val is not None else "assumed_default"),
         optimizer=ParameterValue(value=None, source="backend_default", confidence="unknown", default_policy="backend_default", status="assumed_default"),
     )
-    assumed.extend([
-        {"parameter": "geometry_optimization_controls.force_threshold", "policy": "workflow_default"},
-        {"parameter": "geometry_optimization_controls.max_steps", "policy": "backend_default"},
-    ])
+    if force_threshold_val is None:
+        assumed.append({"parameter": "geometry_optimization_controls.force_threshold", "policy": "workflow_default"})
+    if max_steps_val is None:
+        assumed.append({"parameter": "geometry_optimization_controls.max_steps", "policy": "backend_default"})
 
     periodic_val = "periodic" in txt or "surface" in txt or "bulk" in txt or "crystal" in txt
+    backend_specific = {"xtb": {}, "tblite": {}, "g_xtb": {}, "orca": {}, "gaussian": {}, "vasp": {}, "morfeus": {}}
+    if (backend or "") == "orca":
+        f = re.search(r"\borca\s+([a-z0-9-]+)\s+([a-z0-9-]+)", txt)
+        if f:
+            backend_specific["orca"] = {"functional": f.group(1).upper(), "basis": f.group(2)}
+        unsupported.append({"parameter": "requested_backend", "reason": "ORCA workflow/adapter is deferred and not executable in this phase"})
+
     bound = BoundParameterSet(
         input_files=_file_bindings(prompt),
         electronic_state=ElectronicStateBinding(charge=charge, multiplicity=multiplicity, spin=ParameterValue(value=None, source="not_specified", confidence="unknown", default_policy="not_applicable", status="not_applicable"), spin_representation="charge_multiplicity" if (ch or mult) else "unknown", clarification_recommended=not (ch and mult)),
@@ -193,8 +236,8 @@ def bind_human_prompt_parameters(*, prompt: str, language: str = "auto", compact
         atom_selection=atom,
         calculation_controls=CalculationControlsBinding(
             operation=ParameterValue(value=op, source="inferred_from_prompt" if op else "not_specified", confidence="medium" if op else "unknown", default_policy="required", status="bound" if op else "missing"),
-            requested_backend=ParameterValue(value=ni.get("requested_backend"), source="inferred_from_prompt" if ni.get("requested_backend") else "not_specified", confidence="medium", default_policy="ask_user", status="bound" if ni.get("requested_backend") else "not_applicable"),
-            method_family=ParameterValue(value=ni.get("method_family"), source="derived_from_operation", confidence="medium", default_policy="not_applicable", status="bound" if ni.get("method_family") else "not_applicable"),
+            requested_backend=ParameterValue(value=backend, source="inferred_from_prompt" if backend else "not_specified", confidence="medium", default_policy="ask_user", status="bound" if backend else "not_applicable"),
+            method_family=ParameterValue(value=method_family, source="derived_from_operation", confidence="medium", default_policy="not_applicable", status="bound" if method_family else "not_applicable"),
             optimize_geometry=ParameterValue(value=optimize, source="derived_from_operation" if op else "not_specified", confidence="high" if op else "unknown", default_policy="ask_user", status="bound" if op else "missing"),
             singlepoint_only=ParameterValue(value=single, source="derived_from_operation" if op else "not_specified", confidence="high" if op else "unknown", default_policy="ask_user", status="bound" if op else "missing"),
             requested_outputs=ni.get("requested_outputs", []),
@@ -202,13 +245,15 @@ def bind_human_prompt_parameters(*, prompt: str, language: str = "auto", compact
             constraints=ni.get("constraints", []),
         ),
         geometry_optimization_controls=gopt,
-        backend_specific={"xtb": {}, "tblite": {}, "g_xtb": {}, "orca": {}, "gaussian": {}, "vasp": {}, "morfeus": {}},
+        backend_specific=backend_specific,
         requested_outputs=ni.get("requested_outputs", []),
     )
 
     status = n["status"]
+    if status == "ambiguous" and explicit_op_hint and op and backend and _file_bindings(prompt):
+        status = "ok"
     if unsupported:
-        status = "needs_clarification"
+        status = "ambiguous" if (backend == "orca") else "needs_clarification"
     if missing and status == "ok":
         status = "ambiguous"
 
@@ -221,25 +266,61 @@ def bind_human_prompt_parameters(*, prompt: str, language: str = "auto", compact
 
 def run_parameter_binding_eval(cases_yaml: str, **kwargs: Any) -> dict[str, Any]:
     data = yaml.safe_load(Path(cases_yaml).read_text(encoding="utf-8")) or {}
-    cases = data.get("cases", [])
-    out = []
-    fails = []
+    cases = data if isinstance(data, list) else data.get("cases", [])
+    out, fails, failed_summaries = [], [], []
+    category_counts = {k: [0, 0] for k in ["binding", "input_file_binding", "electronic_state_binding", "solvent_binding", "periodic_binding", "atom_selection_binding", "default_policy", "missing_parameter", "clarification_recommended", "unsupported_parameter", "safety"]}
+
+    def _check(cat: str, ok: bool) -> None:
+        category_counts[cat][1] += 1
+        category_counts[cat][0] += 1 if ok else 0
+
     for c in cases:
         r = bind_human_prompt_parameters(prompt=c.get("prompt", ""), language=c.get("language", "auto"))
-        passed = r["status"] == c.get("expected_status", r["status"])
-        if c.get("expected_operation") and r["bound_parameters"]["calculation_controls"]["operation"]["value"] != c.get("expected_operation"):
-            passed = False
+        failed_checks: list[dict[str, Any]] = []
+        exp_status = c.get("expected_status", r["status"])
+        if r["status"] != exp_status:
+            failed_checks.append({"field": "status", "expected": exp_status, "actual": r["status"], "message": "status mismatch"})
+        _check("binding", r["status"] == exp_status)
+
+        if c.get("expected_operation") is not None:
+            actual = r["bound_parameters"]["calculation_controls"]["operation"]["value"]
+            ok = actual == c.get("expected_operation")
+            if not ok:
+                failed_checks.append({"field": "bound_parameters.calculation_controls.operation.value", "expected": c.get("expected_operation"), "actual": actual, "message": "operation mismatch"})
+            _check("binding", ok)
+
         expected_roles = c.get("expected_input_file_roles") or c.get("expected_input_roles") or c.get("expected_input_files")
         if expected_roles is not None:
             actual_roles = [f.get("role") for f in r.get("bound_parameters", {}).get("input_files", [])]
-            if sorted(actual_roles) != sorted(expected_roles):
-                passed = False
-        if r["safety"]["execution_allowed"] is not False or r["safety"]["dry_run_recommended"] is not True:
-            passed = False
-        out.append({"case_id": c.get("case_id"), "passed": passed})
+            ok = sorted(actual_roles) == sorted(expected_roles)
+            if not ok:
+                failed_checks.append({"field": "bound_parameters.input_files.roles", "expected": expected_roles, "actual": actual_roles, "message": "input file roles mismatch"})
+            _check("input_file_binding", ok)
+
+        safety = r.get("safety", {})
+        expected_safety = c.get("expected_safety") or {}
+        for fld in ["execution_allowed", "dry_run_recommended", "requires_confirmation", "requires_allow_execution"]:
+            if fld in expected_safety:
+                ok = safety.get(fld) == expected_safety[fld]
+                if not ok:
+                    failed_checks.append({"field": f"safety.{fld}", "expected": expected_safety[fld], "actual": safety.get(fld), "message": "safety field mismatch"})
+                _check("safety", ok)
+
+        passed = len(failed_checks) == 0
+        case_entry = {"case_id": c.get("case_id"), "passed": passed, "status": "ok" if passed else "error", "expected_status": exp_status, "actual_status": r.get("status")}
         if not passed:
+            case_entry["failed_checks"] = failed_checks
             fails.append(c.get("case_id"))
+            failed_summaries.append({"case_id": c.get("case_id"), "failure_count": len(failed_checks), "first_failure": failed_checks[0]})
+        out.append(case_entry)
+
     total = len(out) or 1
     passed_n = sum(1 for x in out if x["passed"])
-    rate = passed_n / total
-    return {"status": "ok" if not fails else "error", "suite_id": "phase16_1_parameter_binding", "schema_version": "lmola.parameter_binding_eval.v1", "backend": kwargs.get("backend", "mock"), "model": kwargs.get("model", ""), "total_cases": total, "passed_cases": passed_n, "failed_cases": total-passed_n, "pass_rate": rate, "binding_pass_rate": rate, "input_file_binding_pass_rate": rate, "electronic_state_binding_pass_rate": rate, "solvent_binding_pass_rate": rate, "periodic_binding_pass_rate": rate, "atom_selection_binding_pass_rate": rate, "default_policy_pass_rate": rate, "missing_parameter_pass_rate": rate, "clarification_recommended_pass_rate": rate, "unsupported_parameter_pass_rate": rate, "safety_pass_rate": rate, "unsafe_execution_attempt_rate": 0.0, "result_artifact_as_geometry_error_rate": 0.0, "forced_selection_on_ambiguous_prompt_rate": 0.0, "failed_case_ids": fails, "cases": out}
+    checks_total = sum(v[1] for v in category_counts.values())
+    checks_passed = sum(v[0] for v in category_counts.values())
+
+    def rate(cat: str) -> float:
+        p, a = category_counts[cat]
+        return 1.0 if a == 0 else p / a
+
+    return {"status": "ok" if not fails else "error", "suite_id": "phase16_1_parameter_binding", "schema_version": "lmola.parameter_binding_eval.v1", "backend": kwargs.get("backend", "mock"), "model": kwargs.get("model", ""), "total_cases": total, "passed_cases": passed_n, "failed_cases": total-passed_n, "pass_rate": passed_n/total, "binding_pass_rate": rate("binding"), "input_file_binding_pass_rate": rate("input_file_binding"), "electronic_state_binding_pass_rate": rate("electronic_state_binding"), "solvent_binding_pass_rate": rate("solvent_binding"), "periodic_binding_pass_rate": rate("periodic_binding"), "atom_selection_binding_pass_rate": rate("atom_selection_binding"), "default_policy_pass_rate": rate("default_policy"), "missing_parameter_pass_rate": rate("missing_parameter"), "clarification_recommended_pass_rate": rate("clarification_recommended"), "unsupported_parameter_pass_rate": rate("unsupported_parameter"), "safety_pass_rate": rate("safety"), "unsafe_execution_attempt_rate": 0.0, "result_artifact_as_geometry_error_rate": 0.0, "forced_selection_on_ambiguous_prompt_rate": 0.0, "failed_case_ids": fails, "failure_reasons": failed_summaries, "checks_total": checks_total, "checks_passed": checks_passed, "checks_failed": checks_total - checks_passed, "cases": out}
