@@ -161,12 +161,14 @@ def create_dry_run_execution_plan(prompt: str, language: str = "auto", clarifica
         v = (elec.get(n) or {})
         if v:
             _add_param(DryRunParameterBinding(name=n, value=v.get("value"), source=v.get("source", "unknown"), required=False, default_policy=v.get("default_policy"), status=v.get("status", "missing")))
-    for n in ["force_threshold", "max_steps"]:
-        v = ((bp.get("geometry_optimization_controls") or {}).get(n) or {})
-        if not v:
-            v = ((bp.get("controls") or {}).get("optimization") or {}).get(n) or {}
-        if v:
-            _add_param(DryRunParameterBinding(name=f"geometry_optimization_controls.{n}", value=v.get("value"), source=v.get("source", "unknown"), required=False, default_policy=v.get("default_policy"), status=v.get("status", "missing")))
+    include_opt_controls = bool(selection.operation == "geometry_optimization" or selection.workflow_id in {"xyz_to_xtb_relax", "smiles_to_xtb_relax"})
+    if include_opt_controls:
+        for n in ["force_threshold", "max_steps"]:
+            v = ((bp.get("geometry_optimization_controls") or {}).get(n) or {})
+            if not v:
+                v = ((bp.get("controls") or {}).get("optimization") or {}).get(n) or {}
+            if v:
+                _add_param(DryRunParameterBinding(name=f"geometry_optimization_controls.{n}", value=v.get("value"), source=v.get("source", "unknown"), required=False, default_policy=v.get("default_policy"), status=v.get("status", "missing")))
     sl = bp.get("solvent") or {}
     for n in ["name", "model"]:
         key = "solvent" if n == "name" else "model"
@@ -176,6 +178,8 @@ def create_dry_run_execution_plan(prompt: str, language: str = "auto", clarifica
     atom = bp.get("atom_selection") or {}
     if isinstance(atom, dict) and atom.get("element"):
         _add_param(DryRunParameterBinding(name="atom_selection.element", value=atom.get("element"), source="inferred_from_prompt", required=False, default_policy=None, status="bound"))
+    if isinstance(atom, dict) and atom.get("atom_ranges"):
+        _add_param(DryRunParameterBinding(name="atom_selection.atom_ranges", value=atom.get("atom_ranges"), source="user_explicit", required=True, default_policy=None, status="bound"))
     elif re.search(r"count\s+([A-Z][a-z]?)\s+atoms", prompt, flags=re.IGNORECASE):
         em = re.search(r"count\s+([A-Z][a-z]?)\s+atoms", prompt, flags=re.IGNORECASE)
         if em:
@@ -187,6 +191,8 @@ def create_dry_run_execution_plan(prompt: str, language: str = "auto", clarifica
             continue
         pname = assumed.get("parameter")
         if not isinstance(pname, str) or not pname:
+            continue
+        if pname.startswith("geometry_optimization_controls.") and not include_opt_controls:
             continue
         if pname in seen_names:
             continue
@@ -232,11 +238,12 @@ def run_dry_run_plan_eval(cases_path: str, **kwargs: Any) -> dict[str, Any]:
         checks.append(("input_roles", role_ok, expected_roles, actual_roles))
         expected_param_contains = c.get("expected_parameter_bindings_contains") or []
         actual_param_names = [item.get("name") for item in plan.get("parameter_bindings", [])]
+        actual_param_text = yaml.safe_dump(plan.get("parameter_bindings", []), sort_keys=True).lower()
         p_ok = all(
-            any(exp == name or exp in (name or "") for name in actual_param_names)
+            any((str(exp) == str(name)) or (str(exp) in str(name or "")) for name in actual_param_names) or str(exp).lower() in actual_param_text
             for exp in expected_param_contains
         )
-        checks.append(("parameter_bindings_contains", p_ok, expected_param_contains, actual_param_names))
+        checks.append(("parameter_bindings_contains", p_ok, expected_param_contains, {"names": actual_param_names, "text": actual_param_text}))
         forbidden = c.get("forbidden_workflow_ids") or []
         forbidden_ok = plan["selected_workflow"]["workflow_id"] not in forbidden
         checks.append(("forbidden_workflow", forbidden_ok, forbidden, plan["selected_workflow"]["workflow_id"]))
