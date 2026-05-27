@@ -1,23 +1,423 @@
 schema_version: lmola.clarification_cases.v1
 suite_id: clarification_core_v1
 description: Core clarification-handling cases for Phase 16.2.
-tags: [phase16_2, clarification, core]
+tags:
+- phase16_2
+- clarification
+- core
 cases:
-- {case_id: en_generic_xtb_ambiguous, language: en, prompt: "Run an xTB calculation for examples/mol.xyz.", tags: [xtb,ambiguous], expected_status: needs_clarification, expected_can_create_dry_run_plan: false, expected_required_questions_contains: [single-point, geometry optimization], expected_recommended_questions_contains: [], expected_optional_questions_contains: [], expected_unsupported_notes_contains: [], expected_assumed_defaults_contains: [], expected_missing_parameters_contains: [operation], expected_candidate_workflows_contains: [], forbidden_candidate_workflows: [xyz_to_xtb_relax], expected_safety: {execution_allowed: false}, notes: ""}
-- {case_id: ja_generic_xtb_ambiguous, language: ja, prompt: "examples/mol.xyz で xTB 計算を実行して。", tags: [xtb,ambiguous], expected_status: needs_clarification, expected_can_create_dry_run_plan: false, expected_required_questions_contains: [single-point, geometry optimization], expected_recommended_questions_contains: [], expected_optional_questions_contains: [], expected_unsupported_notes_contains: [], expected_assumed_defaults_contains: [], expected_missing_parameters_contains: [operation], expected_candidate_workflows_contains: [], forbidden_candidate_workflows: [xyz_to_xtb_relax], expected_safety: {execution_allowed: false}, notes: ""}
-- {case_id: en_singlepoint_complete_no_required_questions, language: en, prompt: "Run an xTB single point for examples/water.xyz with charge 0 and multiplicity 1. Do not optimize geometry.", tags: [xtb,singlepoint], expected_status: ok, expected_can_create_dry_run_plan: true, expected_required_questions_contains: [], expected_recommended_questions_contains: [], expected_optional_questions_contains: [], expected_unsupported_notes_contains: [], expected_assumed_defaults_contains: [], expected_missing_parameters_contains: [], expected_candidate_workflows_contains: [], forbidden_candidate_workflows: [], expected_safety: {execution_allowed: false}, notes: ""}
-- {case_id: en_relax_default_thresholds_recommended_only, language: en, prompt: "Optimize examples/mol.xyz with xTB.", tags: [xtb,relax], expected_status: ok, expected_can_create_dry_run_plan: true, expected_required_questions_contains: [], expected_recommended_questions_contains: [multiplicity], expected_optional_questions_contains: [], expected_unsupported_notes_contains: [], expected_assumed_defaults_contains: [force_threshold,max_steps], expected_missing_parameters_contains: [], expected_candidate_workflows_contains: [], forbidden_candidate_workflows: [], expected_safety: {execution_allowed: false}, notes: ""}
-- {case_id: ja_relax_default_thresholds_recommended_only, language: ja, prompt: "examples/mol.xyz を xTB で最適化して。", tags: [xtb,relax], expected_status: ok, expected_can_create_dry_run_plan: true, expected_required_questions_contains: [], expected_recommended_questions_contains: [multiplicity], expected_optional_questions_contains: [], expected_unsupported_notes_contains: [], expected_assumed_defaults_contains: [force_threshold,max_steps], expected_missing_parameters_contains: [], expected_candidate_workflows_contains: [], forbidden_candidate_workflows: [], expected_safety: {execution_allowed: false}, notes: ""}
-- {case_id: en_relax_with_explicit_max_steps, language: en, prompt: "Optimize examples/mol.xyz with xTB for at most 200 steps.", tags: [xtb,relax], expected_status: ok, expected_can_create_dry_run_plan: true, expected_required_questions_contains: [], expected_recommended_questions_contains: [], expected_optional_questions_contains: [], expected_unsupported_notes_contains: [], expected_assumed_defaults_contains: [], expected_missing_parameters_contains: [], expected_candidate_workflows_contains: [], forbidden_candidate_workflows: [], expected_safety: {execution_allowed: false}, notes: ""}
-- {case_id: en_relax_with_explicit_fmax, language: en, prompt: "Optimize examples/mol.xyz with xTB using fmax 0.05.", tags: [xtb,relax], expected_status: ok, expected_can_create_dry_run_plan: true, expected_required_questions_contains: [], expected_recommended_questions_contains: [], expected_optional_questions_contains: [], expected_unsupported_notes_contains: [], expected_assumed_defaults_contains: [], expected_missing_parameters_contains: [], expected_candidate_workflows_contains: [], forbidden_candidate_workflows: [], expected_safety: {execution_allowed: false}, notes: ""}
-- {case_id: en_rmsd_missing_second_structure, language: en, prompt: "Calculate the RMSD for examples/geometry_a.xyz.", tags: [rmsd], expected_status: needs_clarification, expected_can_create_dry_run_plan: false, expected_required_questions_contains: [second_structure], expected_recommended_questions_contains: [], expected_optional_questions_contains: [], expected_unsupported_notes_contains: [], expected_assumed_defaults_contains: [], expected_missing_parameters_contains: [second_structure], expected_candidate_workflows_contains: [], forbidden_candidate_workflows: [], expected_safety: {execution_allowed: false}, notes: ""}
-- {case_id: en_rmsd_two_structures_complete, language: en, prompt: "Calculate the RMSD between examples/geometry_a.xyz and examples/geometry_b.xyz.", tags: [rmsd], expected_status: ok, expected_can_create_dry_run_plan: true, expected_required_questions_contains: [], expected_recommended_questions_contains: [], expected_optional_questions_contains: [], expected_unsupported_notes_contains: [], expected_assumed_defaults_contains: [], expected_missing_parameters_contains: [], expected_candidate_workflows_contains: [xyz_to_rmsd], forbidden_candidate_workflows: [], expected_safety: {execution_allowed: false}, notes: ""}
-- {case_id: en_result_artifact_not_geometry, language: en, prompt: "Use this xtb_singlepoint_result to continue optimization.", tags: [artifact], expected_status: needs_clarification, expected_can_create_dry_run_plan: false, expected_required_questions_contains: [geometry artifact], expected_recommended_questions_contains: [], expected_optional_questions_contains: [], expected_unsupported_notes_contains: [], expected_assumed_defaults_contains: [], expected_missing_parameters_contains: [], expected_candidate_workflows_contains: [], forbidden_candidate_workflows: [xyz_to_xtb_relax], expected_safety: {execution_allowed: false}, notes: ""}
-- {case_id: ja_result_artifact_not_geometry, language: ja, prompt: "この xtb_singlepoint_result を使って最適化を続けて。", tags: [artifact], expected_status: needs_clarification, expected_can_create_dry_run_plan: false, expected_required_questions_contains: [geometry artifact], expected_recommended_questions_contains: [], expected_optional_questions_contains: [], expected_unsupported_notes_contains: [], expected_assumed_defaults_contains: [], expected_missing_parameters_contains: [], expected_candidate_workflows_contains: [], forbidden_candidate_workflows: [xyz_to_xtb_relax], expected_safety: {execution_allowed: false}, notes: ""}
-- {case_id: en_orca_deferred, language: en, prompt: "Prepare an ORCA B3LYP def2-SVP single point for examples/mol.xyz with charge 0 and multiplicity 1.", tags: [orca], expected_status: unsupported, expected_can_create_dry_run_plan: false, expected_required_questions_contains: [], expected_recommended_questions_contains: [], expected_optional_questions_contains: [], expected_unsupported_notes_contains: [ORCA], expected_assumed_defaults_contains: [], expected_missing_parameters_contains: [], expected_candidate_workflows_contains: [], forbidden_candidate_workflows: [], expected_safety: {execution_allowed: false}, notes: ""}
-- {case_id: en_periodic_surface_cell_recommended, language: en, prompt: "Prepare a periodic surface calculation for examples/surface.xyz with PBC.", tags: [periodic], expected_status: ok, expected_can_create_dry_run_plan: true, expected_required_questions_contains: [], expected_recommended_questions_contains: [cell], expected_optional_questions_contains: [], expected_unsupported_notes_contains: [], expected_assumed_defaults_contains: [], expected_missing_parameters_contains: [], expected_candidate_workflows_contains: [], forbidden_candidate_workflows: [], expected_safety: {execution_allowed: false}, notes: ""}
-- {case_id: en_count_ni_complete, language: en, prompt: "Count Ni atoms in examples/complex.xyz.", tags: [analysis], expected_status: ok, expected_can_create_dry_run_plan: true, expected_required_questions_contains: [], expected_recommended_questions_contains: [], expected_optional_questions_contains: [], expected_unsupported_notes_contains: [], expected_assumed_defaults_contains: [], expected_missing_parameters_contains: [], expected_candidate_workflows_contains: [], forbidden_candidate_workflows: [], expected_safety: {execution_allowed: false}, notes: ""}
-- {case_id: en_split_ranges_complete, language: en, prompt: "Split examples/complex.xyz into atoms 1-12 and 13-28 using file order.", tags: [split], expected_status: ok, expected_can_create_dry_run_plan: true, expected_required_questions_contains: [], expected_recommended_questions_contains: [], expected_optional_questions_contains: [], expected_unsupported_notes_contains: [], expected_assumed_defaults_contains: [], expected_missing_parameters_contains: [], expected_candidate_workflows_contains: [], forbidden_candidate_workflows: [], expected_safety: {execution_allowed: false}, notes: ""}
-- {case_id: en_smiles_filter_complete, language: en, prompt: "Filter molecules in examples/molecules.csv to keep HBD 0 and molecular weight below 300.", tags: [filter], expected_status: ok, expected_can_create_dry_run_plan: true, expected_required_questions_contains: [], expected_recommended_questions_contains: [], expected_optional_questions_contains: [], expected_unsupported_notes_contains: [], expected_assumed_defaults_contains: [], expected_missing_parameters_contains: [], expected_candidate_workflows_contains: [], forbidden_candidate_workflows: [], expected_safety: {execution_allowed: false}, notes: ""}
-- {case_id: en_morfeus_deferred_or_clarify, language: en, prompt: "Calculate buried volume around the Ni center using morfeus.", tags: [morfeus], expected_status: [unsupported, needs_clarification], expected_can_create_dry_run_plan: false, expected_required_questions_contains: [], expected_recommended_questions_contains: [], expected_optional_questions_contains: [], expected_unsupported_notes_contains: [], expected_assumed_defaults_contains: [], expected_missing_parameters_contains: [], expected_candidate_workflows_contains: [], forbidden_candidate_workflows: [], expected_safety: {execution_allowed: false}, notes: ""}
-- {case_id: ja_charge_multiplicity_recommended, language: ja, prompt: "examples/mol.xyz を xTB で最適化して。", tags: [xtb,ja], expected_status: ok, expected_can_create_dry_run_plan: true, expected_required_questions_contains: [], expected_recommended_questions_contains: [multiplicity], expected_optional_questions_contains: [], expected_unsupported_notes_contains: [], expected_assumed_defaults_contains: [], expected_missing_parameters_contains: [], expected_candidate_workflows_contains: [], forbidden_candidate_workflows: [], expected_safety: {execution_allowed: false}, notes: ""}
+- case_id: en_generic_xtb_ambiguous
+  language: en
+  prompt: Run an xTB calculation for examples/mol.xyz.
+  tags:
+  - xtb
+  - ambiguous
+  expected_status: needs_clarification
+  expected_can_create_dry_run_plan: false
+  expected_required_questions_contains:
+  - single-point
+  - geometry optimization
+  expected_recommended_questions_contains: []
+  expected_optional_questions_contains: []
+  expected_unsupported_notes_contains: []
+  expected_assumed_defaults_contains: []
+  expected_missing_parameters_contains:
+  - operation
+  expected_candidate_workflows_contains: []
+  forbidden_candidate_workflows:
+  - xyz_to_xtb_relax
+  expected_safety:
+    execution_allowed: false
+    dry_run_recommended: true
+    requires_confirmation: true
+    requires_allow_execution: true
+  notes: ''
+- case_id: ja_generic_xtb_ambiguous
+  language: ja
+  prompt: examples/mol.xyz で xTB 計算を実行して。
+  tags:
+  - xtb
+  - ambiguous
+  expected_status: needs_clarification
+  expected_can_create_dry_run_plan: false
+  expected_required_questions_contains:
+  - single-point
+  - geometry optimization
+  expected_recommended_questions_contains: []
+  expected_optional_questions_contains: []
+  expected_unsupported_notes_contains: []
+  expected_assumed_defaults_contains: []
+  expected_missing_parameters_contains:
+  - operation
+  expected_candidate_workflows_contains: []
+  forbidden_candidate_workflows:
+  - xyz_to_xtb_relax
+  expected_safety:
+    execution_allowed: false
+    dry_run_recommended: true
+    requires_confirmation: true
+    requires_allow_execution: true
+  notes: ''
+- case_id: en_singlepoint_complete_no_required_questions
+  language: en
+  prompt: Run an xTB single point for examples/water.xyz with charge 0 and multiplicity
+    1. Do not optimize geometry.
+  tags:
+  - xtb
+  - singlepoint
+  expected_status: ok
+  expected_can_create_dry_run_plan: true
+  expected_required_questions_contains: []
+  expected_recommended_questions_contains: []
+  expected_optional_questions_contains: []
+  expected_unsupported_notes_contains: []
+  expected_assumed_defaults_contains: []
+  expected_missing_parameters_contains: []
+  expected_candidate_workflows_contains: []
+  forbidden_candidate_workflows: []
+  expected_safety:
+    execution_allowed: false
+    dry_run_recommended: true
+    requires_confirmation: true
+    requires_allow_execution: true
+  notes: ''
+- case_id: en_relax_default_thresholds_recommended_only
+  language: en
+  prompt: Optimize examples/mol.xyz with xTB.
+  tags:
+  - xtb
+  - relax
+  expected_status: ok
+  expected_can_create_dry_run_plan: true
+  expected_required_questions_contains: []
+  expected_recommended_questions_contains:
+  - multiplicity
+  expected_optional_questions_contains: []
+  expected_unsupported_notes_contains: []
+  expected_assumed_defaults_contains:
+  - force_threshold
+  - max_steps
+  expected_missing_parameters_contains: []
+  expected_candidate_workflows_contains: []
+  forbidden_candidate_workflows: []
+  expected_safety:
+    execution_allowed: false
+    dry_run_recommended: true
+    requires_confirmation: true
+    requires_allow_execution: true
+  notes: ''
+- case_id: ja_relax_default_thresholds_recommended_only
+  language: ja
+  prompt: examples/mol.xyz を xTB で最適化して。
+  tags:
+  - xtb
+  - relax
+  expected_status: ok
+  expected_can_create_dry_run_plan: true
+  expected_required_questions_contains: []
+  expected_recommended_questions_contains:
+  - multiplicity
+  expected_optional_questions_contains: []
+  expected_unsupported_notes_contains: []
+  expected_assumed_defaults_contains:
+  - force_threshold
+  - max_steps
+  expected_missing_parameters_contains: []
+  expected_candidate_workflows_contains: []
+  forbidden_candidate_workflows: []
+  expected_safety:
+    execution_allowed: false
+    dry_run_recommended: true
+    requires_confirmation: true
+    requires_allow_execution: true
+  notes: ''
+- case_id: en_relax_with_explicit_max_steps
+  language: en
+  prompt: Optimize examples/mol.xyz with xTB for at most 200 steps.
+  tags:
+  - xtb
+  - relax
+  expected_status: ok
+  expected_can_create_dry_run_plan: true
+  expected_required_questions_contains: []
+  expected_recommended_questions_contains: []
+  expected_optional_questions_contains: []
+  expected_unsupported_notes_contains: []
+  expected_assumed_defaults_contains: []
+  expected_missing_parameters_contains: []
+  expected_candidate_workflows_contains: []
+  forbidden_candidate_workflows: []
+  expected_safety:
+    execution_allowed: false
+    dry_run_recommended: true
+    requires_confirmation: true
+    requires_allow_execution: true
+  notes: ''
+- case_id: en_relax_with_explicit_fmax
+  language: en
+  prompt: Optimize examples/mol.xyz with xTB using fmax 0.05.
+  tags:
+  - xtb
+  - relax
+  expected_status: ok
+  expected_can_create_dry_run_plan: true
+  expected_required_questions_contains: []
+  expected_recommended_questions_contains: []
+  expected_optional_questions_contains: []
+  expected_unsupported_notes_contains: []
+  expected_assumed_defaults_contains: []
+  expected_missing_parameters_contains: []
+  expected_candidate_workflows_contains: []
+  forbidden_candidate_workflows: []
+  expected_safety:
+    execution_allowed: false
+    dry_run_recommended: true
+    requires_confirmation: true
+    requires_allow_execution: true
+  notes: ''
+- case_id: en_rmsd_missing_second_structure
+  language: en
+  prompt: Calculate the RMSD for examples/geometry_a.xyz.
+  tags:
+  - rmsd
+  expected_status: needs_clarification
+  expected_can_create_dry_run_plan: false
+  expected_required_questions_contains:
+  - second_structure
+  expected_recommended_questions_contains: []
+  expected_optional_questions_contains: []
+  expected_unsupported_notes_contains: []
+  expected_assumed_defaults_contains: []
+  expected_missing_parameters_contains:
+  - second_structure
+  expected_candidate_workflows_contains: []
+  forbidden_candidate_workflows: []
+  expected_safety:
+    execution_allowed: false
+    dry_run_recommended: true
+    requires_confirmation: true
+    requires_allow_execution: true
+  notes: ''
+- case_id: en_rmsd_two_structures_complete
+  language: en
+  prompt: Calculate the RMSD between examples/geometry_a.xyz and examples/geometry_b.xyz.
+  tags:
+  - rmsd
+  expected_status: ok
+  expected_can_create_dry_run_plan: true
+  expected_required_questions_contains: []
+  expected_recommended_questions_contains: []
+  expected_optional_questions_contains: []
+  expected_unsupported_notes_contains: []
+  expected_assumed_defaults_contains: []
+  expected_missing_parameters_contains: []
+  expected_candidate_workflows_contains:
+  - xyz_to_rmsd
+  forbidden_candidate_workflows: []
+  expected_safety:
+    execution_allowed: false
+    dry_run_recommended: true
+    requires_confirmation: true
+    requires_allow_execution: true
+  notes: ''
+- case_id: en_result_artifact_not_geometry
+  language: en
+  prompt: Use this xtb_singlepoint_result to continue optimization.
+  tags:
+  - artifact
+  expected_status: needs_clarification
+  expected_can_create_dry_run_plan: false
+  expected_required_questions_contains:
+  - geometry artifact
+  expected_recommended_questions_contains: []
+  expected_optional_questions_contains: []
+  expected_unsupported_notes_contains: []
+  expected_assumed_defaults_contains: []
+  expected_missing_parameters_contains: []
+  expected_candidate_workflows_contains: []
+  forbidden_candidate_workflows:
+  - xyz_to_xtb_relax
+  expected_safety:
+    execution_allowed: false
+    dry_run_recommended: true
+    requires_confirmation: true
+    requires_allow_execution: true
+  notes: ''
+- case_id: ja_result_artifact_not_geometry
+  language: ja
+  prompt: この xtb_singlepoint_result を使って最適化を続けて。
+  tags:
+  - artifact
+  expected_status: needs_clarification
+  expected_can_create_dry_run_plan: false
+  expected_required_questions_contains:
+  - geometry artifact
+  expected_recommended_questions_contains: []
+  expected_optional_questions_contains: []
+  expected_unsupported_notes_contains: []
+  expected_assumed_defaults_contains: []
+  expected_missing_parameters_contains: []
+  expected_candidate_workflows_contains: []
+  forbidden_candidate_workflows:
+  - xyz_to_xtb_relax
+  expected_safety:
+    execution_allowed: false
+    dry_run_recommended: true
+    requires_confirmation: true
+    requires_allow_execution: true
+  notes: ''
+- case_id: en_orca_deferred
+  language: en
+  prompt: Prepare an ORCA B3LYP def2-SVP single point for examples/mol.xyz with charge
+    0 and multiplicity 1.
+  tags:
+  - orca
+  expected_status: unsupported
+  expected_can_create_dry_run_plan: false
+  expected_required_questions_contains: []
+  expected_recommended_questions_contains: []
+  expected_optional_questions_contains: []
+  expected_unsupported_notes_contains:
+  - ORCA
+  expected_assumed_defaults_contains: []
+  expected_missing_parameters_contains: []
+  expected_candidate_workflows_contains: []
+  forbidden_candidate_workflows: []
+  expected_safety:
+    execution_allowed: false
+    dry_run_recommended: true
+    requires_confirmation: true
+    requires_allow_execution: true
+  notes: ''
+- case_id: en_periodic_surface_cell_recommended
+  language: en
+  prompt: Prepare a periodic surface calculation for examples/surface.xyz with PBC.
+  tags:
+  - periodic
+  expected_status: ok
+  expected_can_create_dry_run_plan: true
+  expected_required_questions_contains: []
+  expected_recommended_questions_contains:
+  - cell
+  expected_optional_questions_contains: []
+  expected_unsupported_notes_contains: []
+  expected_assumed_defaults_contains: []
+  expected_missing_parameters_contains: []
+  expected_candidate_workflows_contains: []
+  forbidden_candidate_workflows: []
+  expected_safety:
+    execution_allowed: false
+    dry_run_recommended: true
+    requires_confirmation: true
+    requires_allow_execution: true
+  notes: ''
+- case_id: en_count_ni_complete
+  language: en
+  prompt: Count Ni atoms in examples/complex.xyz.
+  tags:
+  - analysis
+  expected_status: ok
+  expected_can_create_dry_run_plan: true
+  expected_required_questions_contains: []
+  expected_recommended_questions_contains: []
+  expected_optional_questions_contains: []
+  expected_unsupported_notes_contains: []
+  expected_assumed_defaults_contains: []
+  expected_missing_parameters_contains: []
+  expected_candidate_workflows_contains: []
+  forbidden_candidate_workflows: []
+  expected_safety:
+    execution_allowed: false
+    dry_run_recommended: true
+    requires_confirmation: true
+    requires_allow_execution: true
+  notes: ''
+- case_id: en_split_ranges_complete
+  language: en
+  prompt: Split examples/complex.xyz into atoms 1-12 and 13-28 using file order.
+  tags:
+  - split
+  expected_status: ok
+  expected_can_create_dry_run_plan: true
+  expected_required_questions_contains: []
+  expected_recommended_questions_contains: []
+  expected_optional_questions_contains: []
+  expected_unsupported_notes_contains: []
+  expected_assumed_defaults_contains: []
+  expected_missing_parameters_contains: []
+  expected_candidate_workflows_contains: []
+  forbidden_candidate_workflows: []
+  expected_safety:
+    execution_allowed: false
+    dry_run_recommended: true
+    requires_confirmation: true
+    requires_allow_execution: true
+  notes: ''
+- case_id: en_smiles_filter_complete
+  language: en
+  prompt: Filter molecules in examples/molecules.csv to keep HBD 0 and molecular weight
+    below 300.
+  tags:
+  - filter
+  expected_status: ok
+  expected_can_create_dry_run_plan: true
+  expected_required_questions_contains: []
+  expected_recommended_questions_contains: []
+  expected_optional_questions_contains: []
+  expected_unsupported_notes_contains: []
+  expected_assumed_defaults_contains: []
+  expected_missing_parameters_contains: []
+  expected_candidate_workflows_contains: []
+  forbidden_candidate_workflows: []
+  expected_safety:
+    execution_allowed: false
+    dry_run_recommended: true
+    requires_confirmation: true
+    requires_allow_execution: true
+  notes: ''
+- case_id: en_morfeus_deferred_or_clarify
+  language: en
+  prompt: Calculate buried volume around the Ni center using morfeus.
+  tags:
+  - morfeus
+  expected_status:
+  - unsupported
+  - needs_clarification
+  expected_can_create_dry_run_plan: false
+  expected_required_questions_contains: []
+  expected_recommended_questions_contains: []
+  expected_optional_questions_contains: []
+  expected_unsupported_notes_contains: []
+  expected_assumed_defaults_contains: []
+  expected_missing_parameters_contains: []
+  expected_candidate_workflows_contains: []
+  forbidden_candidate_workflows: []
+  expected_safety:
+    execution_allowed: false
+    dry_run_recommended: true
+    requires_confirmation: true
+    requires_allow_execution: true
+  notes: ''
+- case_id: ja_charge_multiplicity_recommended
+  language: ja
+  prompt: examples/mol.xyz を xTB で最適化して。
+  tags:
+  - xtb
+  - ja
+  expected_status: ok
+  expected_can_create_dry_run_plan: true
+  expected_required_questions_contains: []
+  expected_recommended_questions_contains:
+  - multiplicity
+  expected_optional_questions_contains: []
+  expected_unsupported_notes_contains: []
+  expected_assumed_defaults_contains: []
+  expected_missing_parameters_contains: []
+  expected_candidate_workflows_contains: []
+  forbidden_candidate_workflows: []
+  expected_safety:
+    execution_allowed: false
+    dry_run_recommended: true
+    requires_confirmation: true
+    requires_allow_execution: true
+  notes: ''
