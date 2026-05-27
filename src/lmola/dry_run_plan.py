@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+import re
 from typing import Any, Literal
 
 import yaml
@@ -147,21 +148,61 @@ def create_dry_run_execution_plan(prompt: str, language: str = "auto", clarifica
                 notes=list(entry.get("notes") or []),
             )
         )
-    pbind = []
+    pbind: list[DryRunParameterBinding] = []
+    seen_names: set[str] = set()
+
+    def _add_param(binding: DryRunParameterBinding) -> None:
+        if binding.name in seen_names:
+            return
+        seen_names.add(binding.name)
+        pbind.append(binding)
     elec = bp.get("electronic_state") or {}
     for n in ["charge", "multiplicity"]:
         v = (elec.get(n) or {})
         if v:
-            pbind.append(DryRunParameterBinding(name=n, value=v.get("value"), source=v.get("source", "unknown"), required=False, default_policy=v.get("default_policy"), status=v.get("status", "missing")))
+            _add_param(DryRunParameterBinding(name=n, value=v.get("value"), source=v.get("source", "unknown"), required=False, default_policy=v.get("default_policy"), status=v.get("status", "missing")))
     for n in ["force_threshold", "max_steps"]:
-        v = ((bp.get("controls") or {}).get("optimization") or {}).get(n) or {}
+        v = ((bp.get("geometry_optimization_controls") or {}).get(n) or {})
+        if not v:
+            v = ((bp.get("controls") or {}).get("optimization") or {}).get(n) or {}
         if v:
-            pbind.append(DryRunParameterBinding(name=n, value=v.get("value"), source=v.get("source", "unknown"), required=False, default_policy=v.get("default_policy"), status=v.get("status", "missing")))
+            _add_param(DryRunParameterBinding(name=f"geometry_optimization_controls.{n}", value=v.get("value"), source=v.get("source", "unknown"), required=False, default_policy=v.get("default_policy"), status=v.get("status", "missing")))
     sl = bp.get("solvent") or {}
     for n in ["name", "model"]:
-        v = sl.get(n) or {}
+        key = "solvent" if n == "name" else "model"
+        v = sl.get(key) or sl.get(n) or {}
         if v and v.get("value") is not None:
-            pbind.append(DryRunParameterBinding(name=f"solvent.{n}", value=v.get("value"), source=v.get("source", "unknown"), required=False, default_policy=v.get("default_policy"), status=v.get("status", "bound")))
+            _add_param(DryRunParameterBinding(name=f"solvent.{n}", value=v.get("value"), source=v.get("source", "unknown"), required=False, default_policy=v.get("default_policy"), status=v.get("status", "bound")))
+    atom = bp.get("atom_selection") or {}
+    if isinstance(atom, dict) and atom.get("element"):
+        _add_param(DryRunParameterBinding(name="atom_selection.element", value=atom.get("element"), source="inferred_from_prompt", required=False, default_policy=None, status="bound"))
+    elif re.search(r"count\s+([A-Z][a-z]?)\s+atoms", prompt, flags=re.IGNORECASE):
+        em = re.search(r"count\s+([A-Z][a-z]?)\s+atoms", prompt, flags=re.IGNORECASE)
+        if em:
+            _add_param(DryRunParameterBinding(name="atom_selection.element", value=em.group(1), source="inferred_from_prompt", required=False, default_policy=None, status="bound"))
+
+    # propagate assumed defaults from clarification / parameter-binding layers
+    for assumed in (clar.assumed_defaults or []):
+        if not isinstance(assumed, dict):
+            continue
+        pname = assumed.get("parameter")
+        if not isinstance(pname, str) or not pname:
+            continue
+        if pname in seen_names:
+            continue
+        policy = assumed.get("policy") or "workflow_default"
+        note = f"User did not specify {pname.split('.')[-1]}; {policy} will be used."
+        _add_param(
+            DryRunParameterBinding(
+                name=pname,
+                value=None,
+                source=policy if policy in {"workflow_default", "backend_default"} else "workflow_default",
+                required=False,
+                default_policy=policy,
+                status="assumed_default",
+                notes=[note],
+            )
+        )
 
     status = "ok" if selection.workflow_id else ("unsupported" if clar.status == "unsupported" else "needs_clarification")
     unsupported = list(clar.unsupported_notes)
@@ -189,6 +230,13 @@ def run_dry_run_plan_eval(cases_path: str, **kwargs: Any) -> dict[str, Any]:
         actual_roles = [item.get("role") for item in plan.get("input_bindings", [])]
         role_ok = all(role in actual_roles for role in expected_roles)
         checks.append(("input_roles", role_ok, expected_roles, actual_roles))
+        expected_param_contains = c.get("expected_parameter_bindings_contains") or []
+        actual_param_names = [item.get("name") for item in plan.get("parameter_bindings", [])]
+        p_ok = all(
+            any(exp == name or exp in (name or "") for name in actual_param_names)
+            for exp in expected_param_contains
+        )
+        checks.append(("parameter_bindings_contains", p_ok, expected_param_contains, actual_param_names))
         forbidden = c.get("forbidden_workflow_ids") or []
         forbidden_ok = plan["selected_workflow"]["workflow_id"] not in forbidden
         checks.append(("forbidden_workflow", forbidden_ok, forbidden, plan["selected_workflow"]["workflow_id"]))
