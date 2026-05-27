@@ -848,6 +848,9 @@ def relax(structure: str, method: str = "xtb") -> None:
 @mcp_app.command("clarification-smoke")
 def mcp_clarification_smoke(backend: str = typer.Option("mock", "--backend"), model: str = typer.Option("", "--model"), base_url: str = typer.Option("http://127.0.0.1:11434", "--base-url"), temperature: float = typer.Option(0.0, "--temperature"), timeout_seconds: int = typer.Option(20, "--timeout-seconds"), max_tokens: int = typer.Option(800, "--max-tokens"), cases: str = typer.Option("examples/phase16_2_clarification_cases.yaml", "--cases"), fmt: str = typer.Option("json", "--format")) -> None:
     result = run_clarification_eval(cases, backend=backend, model=model, base_url=base_url, temperature=temperature, timeout_seconds=timeout_seconds, max_tokens=max_tokens)
-    print(json.dumps(result, indent=2) if fmt == "json" else result)
+    if fmt == "json":
+        typer.echo(json.dumps(result, indent=2, sort_keys=True))
+    else:
+        typer.echo(str(result))
     if result.get("status") != "ok":
         raise typer.Exit(code=1)
