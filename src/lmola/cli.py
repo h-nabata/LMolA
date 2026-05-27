@@ -33,6 +33,7 @@ from lmola.mcp_llm_orchestration_smoke import run_llm_orchestration_smoke
 from lmola.human_prompt_eval import run_human_prompt_eval
 from lmola.parameter_binding import bind_human_prompt_parameters, run_parameter_binding_eval
 from lmola.clarification import generate_clarification_plan, run_clarification_eval
+from lmola.dry_run_plan import create_dry_run_execution_plan, run_dry_run_plan_eval
 from lmola.mcp_human_prompt_normalization_smoke import run_mcp_human_prompt_normalization_smoke
 from lmola.llm.request_normalization import normalize_request
 from lmola.mcp_runtime import RUNTIME_PHASE, call_mcp_tool, handle_jsonrpc_message, list_mcp_tools_runtime, run_mcp_stdio_server
@@ -500,6 +501,25 @@ def workflow_eval_clarifications(cases: str = typer.Argument(...), backend: str 
     if result.get("status") != "ok":
         raise typer.Exit(code=1)
 
+
+@workflow_app.command("dry-run-plan")
+def workflow_dry_run_plan(prompt: str = typer.Option("", "--prompt"), language: str = typer.Option("auto", "--language"), clarification_json: str = typer.Option("", "--clarification-json"), fmt: str = typer.Option("json", "--format")) -> None:
+    if clarification_json:
+        from lmola.clarification import ClarificationPlan
+        clar = ClarificationPlan.model_validate(json.loads(Path(clarification_json).read_text(encoding="utf-8")))
+        payload = create_dry_run_execution_plan(prompt=prompt or clar.prompt, language=language, clarification=clar)
+    else:
+        payload = create_dry_run_execution_plan(prompt=prompt, language=language)
+    typer.echo(json.dumps(payload, indent=2, sort_keys=True) if fmt == "json" else payload)
+
+
+@workflow_app.command("eval-dry-run-plans")
+def workflow_eval_dry_run_plans(cases: str = typer.Argument(...), backend: str = typer.Option("mock", "--backend"), model: str = typer.Option("", "--model"), base_url: str = typer.Option("http://127.0.0.1:11434", "--base-url"), temperature: float = typer.Option(0.0, "--temperature"), timeout_seconds: int = typer.Option(20, "--timeout-seconds"), max_tokens: int = typer.Option(800, "--max-tokens"), fmt: str = typer.Option("json", "--format")) -> None:
+    result = run_dry_run_plan_eval(cases, backend=backend, model=model, base_url=base_url, temperature=temperature, timeout_seconds=timeout_seconds, max_tokens=max_tokens)
+    typer.echo(json.dumps(result, indent=2, sort_keys=True) if fmt == "json" else result)
+    if result.get("status") != "ok":
+        raise typer.Exit(code=1)
+
 @workflow_app.command("bind-parameters")
 def workflow_bind_parameters(prompt: str = typer.Option(..., "--prompt"), language: str = typer.Option("auto", "--language"), fmt: str = typer.Option("json", "--format")) -> None:
     payload = bind_human_prompt_parameters(prompt=prompt, language=language)
@@ -852,5 +872,13 @@ def mcp_clarification_smoke(backend: str = typer.Option("mock", "--backend"), mo
         typer.echo(json.dumps(result, indent=2, sort_keys=True))
     else:
         typer.echo(str(result))
+    if result.get("status") != "ok":
+        raise typer.Exit(code=1)
+
+
+@mcp_app.command("dry-run-plan-smoke")
+def mcp_dry_run_plan_smoke(backend: str = typer.Option("mock", "--backend"), model: str = typer.Option("", "--model"), base_url: str = typer.Option("http://127.0.0.1:11434", "--base-url"), temperature: float = typer.Option(0.0, "--temperature"), timeout_seconds: int = typer.Option(20, "--timeout-seconds"), max_tokens: int = typer.Option(800, "--max-tokens"), cases: str = typer.Option("examples/phase16_3_dry_run_plan_cases.yaml", "--cases"), fmt: str = typer.Option("json", "--format")) -> None:
+    result = run_dry_run_plan_eval(cases, backend=backend, model=model, base_url=base_url, temperature=temperature, timeout_seconds=timeout_seconds, max_tokens=max_tokens)
+    typer.echo(json.dumps(result, indent=2, sort_keys=True) if fmt == "json" else result)
     if result.get("status") != "ok":
         raise typer.Exit(code=1)
