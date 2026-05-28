@@ -189,6 +189,7 @@ def export_planner_schema_bundle() -> dict:
                     "dry-run execution plan available via lmola.create_dry_run_execution_plan and lmola workflow dry-run-plan.",
                     "Dry-run plans do not execute chemistry.",
                     "Dry-run plan includes selected_workflow, expected_artifacts, and artifact_manifest_preview.",
+                    "Phase 16.4 existing tool expansion supports validate_xyz, xyz_to_geometry_analysis, smiles_to_rdkit_descriptors, smiles_to_conformers_rdkit, and openbabel_convert_structure; low-level tools remain hidden.",
                     "needs_clarification/unsupported do not select executable workflows.",
                     "execution_allowed remains false in dry-run plans.",
                     "missing_parameters become required_questions.",
