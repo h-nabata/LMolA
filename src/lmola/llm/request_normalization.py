@@ -147,7 +147,7 @@ def normalize_request(request: str, language: str = "auto") -> dict[str, Any]:
         notes.append("backend_unavailable if molSimplify backend is not available")
     elif _contains_any(text, ["分子量", "水素結合ドナー", "水素結合アクセプター", "hbd", "hba", "lipinski", "donor", "acceptor"]):
         operation = "descriptor_filtering"
-        if input_kind == "unknown":
+        if input_kind == "unknown" or "csv" in text:
             input_kind = "smiles_csv"
     elif _contains_any(text, ["rmsdだけ", "rmsdのみ", "rmsd only"]) or _is_explicit_rmsd_request(text):
         operation = "rmsd_calculation"
@@ -167,7 +167,7 @@ def normalize_request(request: str, language: str = "auto") -> dict[str, Any]:
         operation = "structure_validation"
         if input_kind == "unknown":
             input_kind = "xyz"
-    elif _contains_any(text, ["analyze the geometry", "geometry analysis", "幾何", "ジオメトリ解析"]):
+    elif _contains_any(text, ["analyze the geometry", "geometry analysis", "ジオメトリ解析"]) or ("幾何" in text and "最適化" not in text):
         operation = "geometry_analysis"
         if input_kind == "unknown":
             input_kind = "xyz"
@@ -179,7 +179,7 @@ def normalize_request(request: str, language: str = "auto") -> dict[str, Any]:
         operation = "conformer_generation"
         if input_kind == "unknown":
             input_kind = "smiles_csv" if _has_csv_path(raw) else "smiles"
-    elif _contains_any(text, ["openbabel", "open babel", "convert", "変換"]) and _contains_any(text, [" to ", "へ", "from", "から"]):
+    elif _contains_any(text, ["openbabel", "open babel", "convert", "変換"]):
         operation = "format_conversion"
     elif _contains_any(text, ["元素数", "原子数", "fe原子の数", "炭素原子数", "指定元素"]):
         operation = "element_counting"

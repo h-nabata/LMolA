@@ -14,6 +14,7 @@ from lmola.workflows import list_workflows
 class DryRunInputBinding(BaseModel):
     role: str
     path: str | None = None
+    value: str | None = None
     format: str | None = None
     artifact_type: str | None = None
     source: str
@@ -75,6 +76,33 @@ class DryRunExecutionPlan(BaseModel):
     can_create_dry_run_plan: bool = False
     can_execute: Literal[False] = False
     safety: dict[str, Any] = Field(default_factory=lambda: {"dry_run_recommended": True, "execution_allowed": False, "requires_confirmation": True, "requires_allow_execution": True})
+
+
+def _extract_int(patterns: list[str], text: str) -> int | None:
+    for pattern in patterns:
+        match = re.search(pattern, text, flags=re.IGNORECASE)
+        if match:
+            return int(match.group(1))
+    return None
+
+
+def _extract_output_format(prompt: str) -> str | None:
+    text = prompt.lower()
+    patterns = [r"\bto\s+(?:3d\s+)?(xyz|sdf|mol|pdb)\b", r"\b(?:3d\s+)?(xyz|sdf|mol|pdb)\b\s*(?:format)?\s*[.。!！]?\s*$"]
+    for pattern in patterns:
+        match = re.search(pattern, text, flags=re.IGNORECASE)
+        if match:
+            return match.group(1).lower()
+    if "へ" in prompt:
+        for fmt in ["xyz", "sdf", "mol", "pdb"]:
+            if fmt in text:
+                return fmt
+    return None
+
+
+def _has_generate_3d(prompt: str) -> bool:
+    text = prompt.lower()
+    return bool(re.search(r"\b3d\b", text) or "3d" in prompt or "三次元" in prompt or "3次元" in prompt)
 
 
 def _expected_artifacts_for_workflow(wid: str, geometry_modified: bool | None) -> list[DryRunExpectedArtifact]:
@@ -144,6 +172,7 @@ def create_dry_run_execution_plan(prompt: str, language: str = "auto", clarifica
             DryRunInputBinding(
                 role=entry.get("role") or "unknown",
                 path=path,
+                value=entry.get("value"),
                 format=fmt,
                 artifact_type=entry.get("artifact_type"),
                 source=entry.get("source") or "unknown",
@@ -153,6 +182,20 @@ def create_dry_run_execution_plan(prompt: str, language: str = "auto", clarifica
                 notes=list(entry.get("notes") or []),
             )
         )
+    generate_3d = _has_generate_3d(prompt)
+    essential_blocking: list[dict[str, Any]] = []
+    has_input_binding = bool(bindings)
+    if selection.operation == "conformer_generation" and not has_input_binding:
+        essential_blocking.append({"code": "missing_conformer_input", "field": "input_files.smiles_input", "message": "Please provide a SMILES literal or SMILES file for RDKit conformer generation."})
+    if selection.operation == "descriptor_calculation" and not has_input_binding:
+        essential_blocking.append({"code": "missing_descriptor_input", "field": "input_files.smiles_table", "message": "Please provide a SMILES, SMILES CSV, or molecule table input for RDKit descriptors."})
+    if selection.operation == "format_conversion" and not _extract_output_format(prompt):
+        essential_blocking.append({"code": "missing_output_format", "field": "output_format", "message": "Please provide the desired output format for OpenBabel conversion."})
+    if essential_blocking:
+        selection = DryRunWorkflowSelection(reason="blocked by missing required existing-tool input or output parameter", operation=selection.operation, requested_backend=selection.requested_backend, input_kind=selection.input_kind, selection_source="blocked")
+    elif selection.workflow_id == "openbabel_convert_structure" and generate_3d:
+        selection.geometry_modified = True
+
     pbind: list[DryRunParameterBinding] = []
     seen_names: set[str] = set()
 
@@ -181,6 +224,29 @@ def create_dry_run_execution_plan(prompt: str, language: str = "auto", clarifica
         if v and v.get("value") is not None:
             _add_param(DryRunParameterBinding(name=f"solvent.{n}", value=v.get("value"), source=v.get("source", "unknown"), required=False, default_policy=v.get("default_policy"), status=v.get("status", "bound")))
     atom = bp.get("atom_selection") or {}
+    if selection.workflow_id == "smiles_to_conformers_rdkit":
+        num_conformers = _extract_int([r"generate\s+(\d+)\s+rdkit\s+conformers", r"generate\s+(\d+)\s+.*conformers", r"(\d+)\s*個のコンフォマー"], prompt)
+        if num_conformers is not None:
+            _add_param(DryRunParameterBinding(name="num_conformers", value=num_conformers, source="user_explicit", required=False, default_policy=None, status="bound"))
+        random_seed = _extract_int([r"random\s+seed\s+(\d+)", r"seed\s+(\d+)"], prompt)
+        if random_seed is not None:
+            _add_param(DryRunParameterBinding(name="random_seed", value=random_seed, source="user_explicit", required=False, default_policy=None, status="bound"))
+    if selection.workflow_id == "openbabel_convert_structure":
+        first_binding = bindings[0] if bindings else None
+        smiles_binding = next((b for b in bindings if b.role == "smiles_input" and b.value), None)
+        input_format = first_binding.format if first_binding and first_binding.format else ("smiles" if smiles_binding else None)
+        output_format = _extract_output_format(prompt)
+        if smiles_binding:
+            _add_param(DryRunParameterBinding(name="smiles_input", value=smiles_binding.value, source="user_explicit", required=True, default_policy=None, status="bound"))
+        if input_format:
+            _add_param(DryRunParameterBinding(name="input_format", value=input_format, source="user_explicit", required=True, default_policy=None, status="bound"))
+        if output_format:
+            _add_param(DryRunParameterBinding(name="output_format", value=output_format, source="user_explicit", required=True, default_policy=None, status="bound"))
+        if generate_3d:
+            _add_param(DryRunParameterBinding(name="generate_3d", value=True, source="user_explicit", required=False, default_policy=None, status="bound"))
+        if re.search(r"open\s*babel", prompt, flags=re.IGNORECASE):
+            _add_param(DryRunParameterBinding(name="requested_backend", value="openbabel", source="user_explicit", required=False, default_policy=None, status="bound"))
+
     if isinstance(atom, dict) and atom.get("element"):
         _add_param(DryRunParameterBinding(name="atom_selection.element", value=atom.get("element"), source="inferred_from_prompt", required=False, default_policy=None, status="bound"))
     if isinstance(atom, dict) and atom.get("atom_ranges"):
@@ -217,7 +283,7 @@ def create_dry_run_execution_plan(prompt: str, language: str = "auto", clarifica
 
     status = "ok" if selection.workflow_id else ("unsupported" if clar.status == "unsupported" else "needs_clarification")
     unsupported = list(clar.unsupported_notes)
-    blocking = [{"code": q.question_id, "field": q.parameter, "message": q.question} for q in clar.required_questions]
+    blocking = [{"code": q.question_id, "field": q.parameter, "message": q.question} for q in clar.required_questions] + essential_blocking
     can_create = bool(status == "ok" and selection.workflow_id)
     artifacts = _expected_artifacts_for_workflow(selection.workflow_id, selection.geometry_modified) if selection.workflow_id else []
     manifest_preview = {"schema_version": "lmola.artifact_manifest.preview.v1", "workflow_id": selection.workflow_id, "expected_artifacts": [a.model_dump() for a in artifacts], "preview_only": True}
@@ -226,6 +292,7 @@ def create_dry_run_execution_plan(prompt: str, language: str = "auto", clarifica
 
 def run_dry_run_plan_eval(cases_path: str, **kwargs: Any) -> dict[str, Any]:
     data = yaml.safe_load(Path(cases_path).read_text(encoding="utf-8"))
+    strict_existing_tool_checks = "existing_tool_expansion" in str(data.get("schema_version", "")) or "existing_tool_expansion" in str(data.get("suite_id", ""))
     out: list[dict[str, Any]] = []
     failed: list[str] = []
     checks_total = 0
@@ -241,6 +308,28 @@ def run_dry_run_plan_eval(cases_path: str, **kwargs: Any) -> dict[str, Any]:
         actual_roles = [item.get("role") for item in plan.get("input_bindings", [])]
         role_ok = all(role in actual_roles for role in expected_roles)
         checks.append(("input_roles", role_ok, expected_roles, actual_roles))
+        if strict_existing_tool_checks:
+            expected_formats = c.get("expected_input_formats") or []
+            actual_formats = [item.get("format") for item in plan.get("input_bindings", [])]
+            actual_param_text_for_formats = yaml.safe_dump(plan.get("parameter_bindings", []), sort_keys=True).lower()
+            format_ok = all(fmt in actual_formats or str(fmt).lower() in actual_param_text_for_formats for fmt in expected_formats)
+            checks.append(("input_formats", format_ok, expected_formats, {"input_formats": actual_formats, "parameter_bindings": actual_param_text_for_formats}))
+            expected_artifacts = c.get("expected_expected_artifacts_contains") or []
+            actual_artifact_types = [item.get("artifact_type") for item in plan.get("expected_artifacts", [])]
+            artifact_ok = all(artifact in actual_artifact_types for artifact in expected_artifacts)
+            checks.append(("expected_artifacts_contains", artifact_ok, expected_artifacts, actual_artifact_types))
+            if "expected_geometry_modified" in c:
+                expected_geometry = c.get("expected_geometry_modified")
+                actual_geometry = plan.get("selected_workflow", {}).get("geometry_modified")
+                checks.append(("geometry_modified", actual_geometry == expected_geometry, expected_geometry, actual_geometry))
+            expected_blocking = c.get("expected_blocking_reasons_contains") or []
+            blocking_text = yaml.safe_dump(plan.get("blocking_reasons", []), sort_keys=True).lower()
+            blocking_ok = all(str(term).lower() in blocking_text for term in expected_blocking)
+            checks.append(("blocking_reasons_contains", blocking_ok, expected_blocking, blocking_text))
+            expected_safety = c.get("expected_safety") or {}
+            safety = plan.get("safety", {})
+            for field, expected_value in expected_safety.items():
+                checks.append((f"safety.{field}", safety.get(field) == expected_value, expected_value, safety.get(field)))
         expected_param_contains = c.get("expected_parameter_bindings_contains") or []
         actual_param_names = [item.get("name") for item in plan.get("parameter_bindings", [])]
         actual_param_text = yaml.safe_dump(plan.get("parameter_bindings", []), sort_keys=True).lower()
