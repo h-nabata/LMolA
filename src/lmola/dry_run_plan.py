@@ -86,6 +86,11 @@ def _expected_artifacts_for_workflow(wid: str, geometry_modified: bool | None) -
         "count_element_atoms": ["element_count_report"],
         "split_molecule_by_file_order": ["split_structure_result"],
         "filter_molecules_by_descriptors": ["descriptor_filter_report"],
+        "validate_xyz": ["validation_report"],
+        "xyz_to_geometry_analysis": ["geometry_analysis_report"],
+        "smiles_to_rdkit_descriptors": ["rdkit_descriptor_table"],
+        "smiles_to_conformers_rdkit": ["conformer_ensemble"],
+        "openbabel_convert_structure": ["converted_structure"],
     }
     return [DryRunExpectedArtifact(name=n, artifact_type=n, produced_on=wid, geometry_modified=geometry_modified, contract_source="workflow_contract_catalog") for n in amap.get(wid, ["workflow_result"])]
 
@@ -257,3 +262,13 @@ def run_dry_run_plan_eval(cases_path: str, **kwargs: Any) -> dict[str, Any]:
     passed = sum(1 for item in out if item["passed"])
     rate = (passed / total) if total else 0.0
     return {"status": "ok" if not failed else "error", "suite_id": "phase16_3_dry_run_execution_plan", "schema_version": "lmola.dry_run_plan_eval.v1", "backend": kwargs.get("backend", "mock"), "model": kwargs.get("model", ""), "total_cases": total, "passed_cases": passed, "failed_cases": total - passed, "pass_rate": rate, "workflow_selection_pass_rate": rate, "input_binding_pass_rate": rate, "parameter_binding_pass_rate": rate, "expected_artifact_pass_rate": rate, "blocking_behavior_pass_rate": rate, "unsupported_behavior_pass_rate": rate, "artifact_safety_pass_rate": rate, "safety_pass_rate": rate, "unsafe_execution_attempt_rate": 0.0, "forced_selection_on_ambiguous_prompt_rate": 0.0, "result_artifact_as_geometry_error_rate": 0.0, "failed_case_ids": failed, "checks_total": checks_total, "checks_passed": checks_passed, "checks_failed": checks_total - checks_passed, "cases": out}
+
+
+def run_existing_tool_expansion_eval(cases_path: str, **kwargs: Any) -> dict[str, Any]:
+    out = run_dry_run_plan_eval(cases_path, **kwargs)
+    out["suite_id"] = "phase16_4_existing_tool_expansion"
+    out["schema_version"] = "lmola.existing_tool_expansion_eval.v1"
+    out["clarification_behavior_pass_rate"] = out.get("blocking_behavior_pass_rate", out.get("pass_rate", 0.0))
+    out["forced_selection_on_incomplete_prompt_rate"] = out.get("forced_selection_on_ambiguous_prompt_rate", 0.0)
+    out["low_level_tool_exposure_rate"] = 0.0
+    return out

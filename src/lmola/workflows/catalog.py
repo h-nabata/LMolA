@@ -200,6 +200,14 @@ WORKFLOW_CATALOG: dict[str, WorkflowCatalogEntry] = {
         required_backends=["rdkit"],
         description="Compute RDKit descriptors and filter rows by descriptor threshold rules.",
     ),
+    "openbabel_convert_structure": WorkflowCatalogEntry(
+        workflow_id="openbabel_convert_structure",
+        task_type="conversion",
+        input_types=["xyz", "smiles", "sdf"],
+        tools=["generate_small_molecule_openbabel"],
+        required_backends=["openbabel"],
+        description="Convert structures and SMILES formats using Open Babel.",
+    ),
     "xyz_to_geometry_analysis": WorkflowCatalogEntry(
         workflow_id="xyz_to_geometry_analysis",
         task_type="geometry_analysis",
@@ -215,8 +223,8 @@ _WORKFLOW_CONTRACT_DEFS: dict[str, dict] = {
     "smiles_to_conformers_rdkit": {"operation": "conformer_generation", "method": "rdkit", "geometry_modified": True, "artifact_type": "conformer_ensemble"},
     "smiles_to_3d_openbabel": {"operation": "structure_generation", "method": "openbabel", "geometry_modified": True, "artifact_type": "generated_xyz"},
     "smiles_to_xtb_relax": {"operation": "geometry_optimization", "method": "xtb", "geometry_modified": True, "artifact_type": "xtb_relax_result"},
-    "xyz_to_xtb_relax": {"operation": "geometry_optimization", "method": "xtb", "geometry_modified": True, "artifact_type": "relaxed_xyz"},
-    "validate_xyz": {"operation": "validation", "method": None, "geometry_modified": False, "artifact_type": "validation_report"},
+    "xyz_to_xtb_relax": {"operation": "geometry_optimization", "method": "xtb", "geometry_modified": True, "artifact_type": "optimized_geometry"},
+    "validate_xyz": {"operation": "structure_validation", "method": None, "geometry_modified": False, "artifact_type": "validation_report"},
     "smiles_to_rdkit_descriptors": {"operation": "descriptor_calculation", "method": "rdkit", "geometry_modified": False, "artifact_type": "rdkit_descriptor_table"},
     "xyz_to_xtb_singlepoint": {"operation": "singlepoint_energy", "method": "xtb", "geometry_modified": False, "artifact_type": "xtb_singlepoint_result"},
     "compare_two_geometries": {"operation": "structure_comparison", "method": None, "geometry_modified": False, "artifact_type": "geometry_comparison_report"},
@@ -225,6 +233,7 @@ _WORKFLOW_CONTRACT_DEFS: dict[str, dict] = {
     "split_molecule_by_file_order": {"operation": "molecule_splitting", "method": None, "geometry_modified": False, "artifact_type": "molecule_split_report"},
     "filter_molecules_by_descriptors": {"operation": "descriptor_filtering", "method": "rdkit", "geometry_modified": False, "artifact_type": "descriptor_filter_report"},
     "xyz_to_geometry_analysis": {"operation": "geometry_analysis", "method": None, "geometry_modified": False, "artifact_type": "geometry_analysis_report"},
+    "openbabel_convert_structure": {"operation": "format_conversion", "method": "openbabel", "geometry_modified": False, "artifact_type": "converted_structure"},
 }
 
 for _wf_id, _entry in WORKFLOW_CATALOG.items():

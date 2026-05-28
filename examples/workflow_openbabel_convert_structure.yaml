@@ -1,0 +1,7 @@
+schema_version: lmola.workflow_request.v1
+workflow_id: openbabel_convert_structure
+inputs:
+  - role: input
+    path: examples/mol.xyz
+outputs:
+  directory: outputs

@@ -67,6 +67,14 @@ def _derive_workflow_hints(intent: dict[str, Any]) -> list[str]:
         hints.append("split_molecule_by_file_order")
     if operation == "geometry_analysis":
         hints.append("xyz_to_geometry_analysis")
+    if operation == "structure_validation":
+        hints.append("validate_xyz")
+    if operation == "descriptor_calculation" and input_kind in {"smiles", "smiles_csv"}:
+        hints.append("smiles_to_rdkit_descriptors")
+    if operation == "conformer_generation" and input_kind in {"smiles", "smiles_csv"}:
+        hints.append("smiles_to_conformers_rdkit")
+    if operation == "format_conversion":
+        hints.append("openbabel_convert_structure")
     if operation == "unsupported":
         return []
     return sorted(set(hints))
@@ -115,6 +123,8 @@ def normalize_request(request: str, language: str = "auto") -> dict[str, Any]:
         input_kind = "xyz"
     elif _has_csv_path(raw):
         input_kind = "smiles_csv"
+    elif _contains_any(text, ["smiles ", "smiles:", "smiles", "スマイルズ"]) and not _has_xyz_path(raw):
+        input_kind = "smiles"
 
     no_optimize_requested = _contains_any(text, ["構造最適化しない", "最適化は行わない", "入力構造を変更しない", "構造を変更しない", "without optimization", "without changing geometry"])
     if no_optimize_requested:
@@ -152,6 +162,25 @@ def normalize_request(request: str, language: str = "auto") -> dict[str, Any]:
             notes.append("pair input implied but no explicit XYZ paths found")
         else:
             input_kind = "xyz_pair"
+
+    elif _contains_any(text, ["validate", "valid xyz", "is a valid xyz", "検証", "妥当", "有効なxyz"]):
+        operation = "structure_validation"
+        if input_kind == "unknown":
+            input_kind = "xyz"
+    elif _contains_any(text, ["analyze the geometry", "geometry analysis", "幾何", "ジオメトリ解析"]):
+        operation = "geometry_analysis"
+        if input_kind == "unknown":
+            input_kind = "xyz"
+    elif _contains_any(text, ["rdkit descriptor", "descriptors", "記述子"]) and "filter" not in text:
+        operation = "descriptor_calculation"
+        if input_kind == "unknown":
+            input_kind = "smiles_csv" if _has_csv_path(raw) else "smiles"
+    elif _contains_any(text, ["conformer", "配座", "コンフォマー"]) and _contains_any(text, ["rdkit", "smiles", "スマイルズ"]):
+        operation = "conformer_generation"
+        if input_kind == "unknown":
+            input_kind = "smiles_csv" if _has_csv_path(raw) else "smiles"
+    elif _contains_any(text, ["openbabel", "open babel", "convert", "変換"]) and _contains_any(text, [" to ", "へ", "from", "から"]):
+        operation = "format_conversion"
     elif _contains_any(text, ["元素数", "原子数", "fe原子の数", "炭素原子数", "指定元素"]):
         operation = "element_counting"
         if input_kind == "unknown":
