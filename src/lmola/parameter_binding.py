@@ -8,6 +8,7 @@ import yaml
 from pydantic import BaseModel, Field
 
 from lmola.human_prompt_normalization import normalize_human_prompt
+from lmola.molsimplify_pilot import parse_molsimplify_prompt
 
 
 class ParameterValue(BaseModel):
@@ -222,6 +223,7 @@ def _extract_center_index(prompt: str) -> int | None:
 
 def bind_human_prompt_parameters(*, prompt: str, language: str = "auto", compact: bool = False) -> dict[str, Any]:
     n = normalize_human_prompt(prompt=prompt, language=language, compact=False)
+    mols = parse_molsimplify_prompt(prompt)
     ni = n["normalized_intent"]
     txt = prompt.lower()
     missing: list[str] = list(n.get("missing_parameters", []))
@@ -254,6 +256,9 @@ def bind_human_prompt_parameters(*, prompt: str, language: str = "auto", compact
     if re.search(r"\borca\b", txt):
         backend = "orca"
         method_family = "dft"
+    elif mols.get("requested"):
+        backend = "molsimplify"
+        method_family = "structure_generation"
     elif re.search(r"\bxtb\b", txt) or "xTB" in prompt:
         backend = "xtb"
     explicit_op_hint = False
@@ -267,6 +272,10 @@ def bind_human_prompt_parameters(*, prompt: str, language: str = "auto", compact
         missing = [m for m in missing if m != "operation"]
     optimize = op == "geometry_optimization"
     single = op == "singlepoint_energy"
+    if mols.get("requested") and not mols.get("artifact_issue") and not mols.get("geometry_issue"):
+        op = "metal_complex_generation"
+        optimize = False
+        single = False
 
     max_steps_val = _extract_max_steps(txt, prompt)
     force_threshold_val = _extract_force_threshold(txt, prompt)
@@ -316,8 +325,33 @@ def bind_human_prompt_parameters(*, prompt: str, language: str = "auto", compact
         assumed.append({"parameter": "geometry_optimization_controls.max_steps", "policy": "backend_default"})
 
     periodic_val = "periodic" in txt or "surface" in txt or "bulk" in txt or "crystal" in txt
-    backend_specific = {"xtb": {}, "tblite": {}, "g_xtb": {}, "orca": {}, "gaussian": {}, "vasp": {}, "morfeus": {}}
+    backend_specific = {"xtb": {}, "tblite": {}, "g_xtb": {}, "orca": {}, "gaussian": {}, "vasp": {}, "morfeus": {}, "molsimplify": {}}
     morfeus_missing_required = False
+
+    molsimplify_missing_required = False
+    if backend == "molsimplify" or mols.get("requested"):
+        backend_specific["molsimplify"] = {
+            "requested_backend": "molsimplify",
+            "target_artifact_type": "molsimplify_complex_structure",
+            "metal": mols.get("metal"),
+            "oxidation_state": mols.get("oxidation_state"),
+            "charge": mols.get("charge"),
+            "spin_state": mols.get("spin_state"),
+            "multiplicity": mols.get("multiplicity"),
+            "coordination_geometry": mols.get("coordination_geometry"),
+            "coordination_number": mols.get("coordination_number"),
+            "ligands": mols.get("ligands") or [],
+            "output_format": mols.get("output_format") or "xyz",
+            "generate_3d": True,
+        }
+        if mols.get("artifact_issue"):
+            unsupported.append({"parameter": "input_files.primary_structure", "reason": mols.get("artifact_issue")})
+        elif mols.get("geometry_issue"):
+            unsupported.append({"parameter": "coordination_geometry", "reason": mols.get("geometry_issue")})
+        else:
+            for req in mols.get("missing") or []:
+                missing.append(req)
+                molsimplify_missing_required = True
     if backend == "morfeus":
         target_property = (ni.get("target_properties") or [None])[0]
         backend_specific["morfeus"] = {
@@ -366,7 +400,7 @@ def bind_human_prompt_parameters(*, prompt: str, language: str = "auto", compact
             optimize_geometry=ParameterValue(value=optimize, source="derived_from_operation" if op else "not_specified", confidence="high" if op else "unknown", default_policy="ask_user", status="bound" if op else "missing"),
             singlepoint_only=ParameterValue(value=single, source="derived_from_operation" if op else "not_specified", confidence="high" if op else "unknown", default_policy="ask_user", status="bound" if op else "missing"),
             requested_outputs=ni.get("requested_outputs", []),
-            geometry_modification_allowed=ParameterValue(value=False if single else (True if optimize else None), source="derived_from_operation" if op else "not_specified", confidence="high" if op else "unknown", default_policy="required", status="bound" if op else "missing"),
+            geometry_modification_allowed=ParameterValue(value=True if op == "metal_complex_generation" else (False if single else (True if optimize else None)), source="derived_from_operation" if op else "not_specified", confidence="high" if op else "unknown", default_policy="required", status="bound" if op else "missing"),
             constraints=ni.get("constraints", []),
         ),
         geometry_optimization_controls=gopt,
@@ -379,6 +413,8 @@ def bind_human_prompt_parameters(*, prompt: str, language: str = "auto", compact
         status = "ok"
     if unsupported:
         status = "ambiguous" if (backend == "orca") else "needs_clarification"
+    if molsimplify_missing_required:
+        status = "needs_clarification"
     if morfeus_missing_required:
         status = "needs_clarification"
     elif missing and status == "ok":

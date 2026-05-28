@@ -119,11 +119,29 @@ def _expected_artifacts_for_workflow(wid: str, geometry_modified: bool | None) -
         "smiles_to_rdkit_descriptors": ["rdkit_descriptor_table"],
         "smiles_to_conformers_rdkit": ["conformer_ensemble"],
         "openbabel_convert_structure": ["converted_structure"],
+        "molsimplify_build_metal_complex": ["molsimplify_complex_structure", "molsimplify_build_report", "molsimplify_input_deck"],
         "xyz_to_morfeus_buried_volume": ["morfeus_buried_volume_report"],
         "xyz_to_morfeus_cone_angle": ["morfeus_cone_angle_report"],
         "xyz_to_morfeus_sterimol": ["morfeus_sterimol_report"],
     }
-    return [DryRunExpectedArtifact(name=n, artifact_type=n, produced_on=wid, geometry_modified=geometry_modified, contract_source="workflow_contract_catalog") for n in amap.get(wid, ["workflow_result"])]
+    artifact_geometry = {
+        "molsimplify_complex_structure": True,
+        "molsimplify_build_report": False,
+        "molsimplify_input_deck": False,
+        "morfeus_buried_volume_report": False,
+        "morfeus_cone_angle_report": False,
+        "morfeus_sterimol_report": False,
+    }
+    return [
+        DryRunExpectedArtifact(
+            name=n,
+            artifact_type=n,
+            produced_on=wid,
+            geometry_modified=artifact_geometry.get(n, geometry_modified),
+            contract_source="workflow_contract_catalog",
+        )
+        for n in amap.get(wid, ["workflow_result"])
+    ]
 
 
 def _select_workflow(clar: ClarificationPlan) -> DryRunWorkflowSelection:
@@ -198,6 +216,8 @@ def create_dry_run_execution_plan(prompt: str, language: str = "auto", clarifica
         essential_blocking.append({"code": "missing_conformer_input", "field": "input_files.smiles_input", "message": "Please provide a SMILES literal or SMILES file for RDKit conformer generation."})
     if selection.operation == "descriptor_calculation" and not has_input_binding:
         essential_blocking.append({"code": "missing_descriptor_input", "field": "input_files.smiles_table", "message": "Please provide a SMILES, SMILES CSV, or molecule table input for RDKit descriptors."})
+    if selection.operation == "metal_complex_generation" and selection.workflow_id == "molsimplify_build_metal_complex":
+        bindings.append(DryRunInputBinding(role="metal_complex_build_request", format="metal_complex_build_request", source="derived_from_prompt", exists=None, required=True, validation_status="ok", notes=["Structured molSimplify build request; not a geometry input."]))
     if selection.operation == "format_conversion" and not _extract_output_format(prompt):
         essential_blocking.append({"code": "missing_output_format", "field": "output_format", "message": "Please provide the desired output format for OpenBabel conversion."})
     if essential_blocking:
@@ -214,7 +234,10 @@ def create_dry_run_execution_plan(prompt: str, language: str = "auto", clarifica
         seen_names.add(binding.name)
         pbind.append(binding)
     elec = bp.get("electronic_state") or {}
+    mols_backend = bp.get("backend_specific", {}).get("molsimplify", {}) if isinstance(bp.get("backend_specific"), dict) else {}
     for n in ["charge", "multiplicity"]:
+        if n == "multiplicity" and mols_backend.get("multiplicity") is not None:
+            continue
         v = (elec.get(n) or {})
         if v:
             _add_param(DryRunParameterBinding(name=n, value=v.get("value"), source=v.get("source", "unknown"), required=False, default_policy=v.get("default_policy"), status=v.get("status", "missing")))
@@ -295,6 +318,22 @@ def create_dry_run_execution_plan(prompt: str, language: str = "auto", clarifica
         if morfeus.get("radius") is not None:
             _add_param(DryRunParameterBinding(name="radius", value=morfeus.get("radius"), source="user_explicit", required=False, default_policy=None, status="bound"))
 
+
+    if selection.workflow_id == "molsimplify_build_metal_complex" or clar.normalized_intent.get("requested_backend") == "molsimplify":
+        mols = bp.get("backend_specific", {}).get("molsimplify", {}) if isinstance(bp.get("backend_specific"), dict) else {}
+        _add_param(DryRunParameterBinding(name="requested_backend", value="molsimplify", source="user_explicit", required=True, default_policy=None, status="bound"))
+        _add_param(DryRunParameterBinding(name="target_artifact_type", value="molsimplify_complex_structure", source="derived_from_workflow", required=True, default_policy=None, status="bound"))
+        for key in ["metal", "oxidation_state", "charge", "spin_state", "multiplicity", "coordination_geometry", "coordination_number", "output_format", "generate_3d"]:
+            if mols.get(key) is not None:
+                _add_param(DryRunParameterBinding(name=key, value=mols.get(key), source="user_explicit" if key not in {"coordination_number", "generate_3d"} else "inferred_from_prompt", required=key in {"metal", "coordination_geometry"}, default_policy=None, status="bound"))
+        ligands = mols.get("ligands") or []
+        if ligands:
+            _add_param(DryRunParameterBinding(name="ligands", value=ligands, source="user_explicit", required=True, default_policy=None, status="bound"))
+            for idx, ligand in enumerate(ligands):
+                for key, suffix in [("name", "name"), ("count", "count"), ("denticity", "denticity"), ("smiles", "smiles")]:
+                    if ligand.get(key) is not None:
+                        _add_param(DryRunParameterBinding(name=f"ligands[{idx}].{suffix}", value=ligand.get(key), source="user_explicit" if key != "denticity" else "inferred_from_ligand_name", required=key in {"name", "count"}, default_policy=None, status="bound"))
+
     # propagate assumed defaults from clarification / parameter-binding layers
     for assumed in (clar.assumed_defaults or []):
         if not isinstance(assumed, dict):
@@ -331,7 +370,7 @@ def create_dry_run_execution_plan(prompt: str, language: str = "auto", clarifica
 
 def run_dry_run_plan_eval(cases_path: str, **kwargs: Any) -> dict[str, Any]:
     data = yaml.safe_load(Path(cases_path).read_text(encoding="utf-8"))
-    strict_existing_tool_checks = any(token in str(data.get("schema_version", "")) or token in str(data.get("suite_id", "")) for token in ["existing_tool_expansion", "morfeus_pilot"])
+    strict_existing_tool_checks = any(token in str(data.get("schema_version", "")) or token in str(data.get("suite_id", "")) for token in ["existing_tool_expansion", "morfeus_pilot", "molsimplify_pilot"])
     out: list[dict[str, Any]] = []
     failed: list[str] = []
     checks_total = 0
@@ -365,6 +404,16 @@ def run_dry_run_plan_eval(cases_path: str, **kwargs: Any) -> dict[str, Any]:
             blocking_text = yaml.safe_dump(plan.get("blocking_reasons", []), sort_keys=True).lower()
             blocking_ok = all(str(term).lower() in blocking_text for term in expected_blocking)
             checks.append(("blocking_reasons_contains", blocking_ok, expected_blocking, blocking_text))
+            expected_unsupported = c.get("expected_unsupported_reasons_contains") or []
+            unsupported_text = yaml.safe_dump(plan.get("unsupported_reasons", []), sort_keys=True).lower()
+            unsupported_ok = all(str(term).lower() in unsupported_text for term in expected_unsupported)
+            checks.append(("unsupported_reasons_contains", unsupported_ok, expected_unsupported, unsupported_text))
+            if c.get("expected_operation") is not None:
+                checks.append(("operation", plan.get("selected_workflow", {}).get("operation") == c.get("expected_operation"), c.get("expected_operation"), plan.get("selected_workflow", {}).get("operation")))
+            if c.get("expected_requested_backend") is not None:
+                checks.append(("requested_backend", plan.get("selected_workflow", {}).get("requested_backend") == c.get("expected_requested_backend"), c.get("expected_requested_backend"), plan.get("selected_workflow", {}).get("requested_backend")))
+            if c.get("expected_input_kind") is not None:
+                checks.append(("input_kind", plan.get("selected_workflow", {}).get("input_kind") == c.get("expected_input_kind"), c.get("expected_input_kind"), plan.get("selected_workflow", {}).get("input_kind")))
             expected_safety = c.get("expected_safety") or {}
             safety = plan.get("safety", {})
             for field, expected_value in expected_safety.items():
@@ -396,6 +445,16 @@ def run_existing_tool_expansion_eval(cases_path: str, **kwargs: Any) -> dict[str
     out = run_dry_run_plan_eval(cases_path, **kwargs)
     out["suite_id"] = "phase16_4_existing_tool_expansion"
     out["schema_version"] = "lmola.existing_tool_expansion_eval.v1"
+    out["clarification_behavior_pass_rate"] = out.get("blocking_behavior_pass_rate", out.get("pass_rate", 0.0))
+    out["forced_selection_on_incomplete_prompt_rate"] = out.get("forced_selection_on_ambiguous_prompt_rate", 0.0)
+    out["low_level_tool_exposure_rate"] = 0.0
+    return out
+
+
+def run_molsimplify_pilot_eval(cases_path: str, **kwargs: Any) -> dict[str, Any]:
+    out = run_dry_run_plan_eval(cases_path, **kwargs)
+    out["suite_id"] = "phase16_6_molsimplify_pilot"
+    out["schema_version"] = "lmola.molsimplify_pilot_eval.v1"
     out["clarification_behavior_pass_rate"] = out.get("blocking_behavior_pass_rate", out.get("pass_rate", 0.0))
     out["forced_selection_on_incomplete_prompt_rate"] = out.get("forced_selection_on_ambiguous_prompt_rate", 0.0)
     out["low_level_tool_exposure_rate"] = 0.0

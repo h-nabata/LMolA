@@ -89,6 +89,30 @@ def generate_clarification_plan(*, prompt: str, language: str = "auto", compact:
         candidate_workflows = [w for w in candidate_workflows if w.get("workflow_id") != "xyz_to_xtb_relax"]
 
     prompt_l = b.prompt.lower()
+    is_molsimplify = normalized_intent.get("requested_backend") == "molsimplify" or "molsimplify" in prompt_l
+    if is_molsimplify:
+        normalized_intent["requested_backend"] = "molsimplify"
+        if normalized_intent.get("operation") != "unsupported":
+            normalized_intent["operation"] = "metal_complex_generation"
+        normalized_intent["input_kind"] = "metal_complex_build_request"
+        normalized_intent["target_artifact_type"] = "molsimplify_complex_structure"
+        bound_parameters.setdefault("calculation_controls", {}).setdefault("requested_backend", {}).update({"value": "molsimplify", "source": "inferred_from_prompt", "status": "bound"})
+        bound_parameters.setdefault("calculation_controls", {}).setdefault("operation", {}).update({"value": normalized_intent.get("operation"), "source": "inferred_from_prompt", "status": "bound"})
+        backend_specific = bound_parameters.setdefault("backend_specific", {}).setdefault("molsimplify", {})
+        if "molsimplify_build_report" in prompt_l and ("geometry input" in prompt_l or "primary_structure" in prompt_l or "primary structure" in prompt_l):
+            unsupported_notes.append({"parameter": "input_files.primary_structure", "reason": "molsimplify_build_report is not geometry and must not be used as primary_structure input.", "source": "artifact_incompatibility"})
+        elif "dry-run" in prompt_l and "molsimplify_complex_structure" in prompt_l and ("primary_structure" in prompt_l or "primary structure" in prompt_l or "xtb" in prompt_l):
+            unsupported_notes.append({"parameter": "input_files.primary_structure", "reason": "dry-run molsimplify_complex_structure preview is not an existing generated structure artifact or geometry.", "source": "artifact_incompatibility"})
+        elif backend_specific.get("coordination_geometry") is None and "banana" in prompt_l:
+            unsupported_notes.append({"parameter": "coordination_geometry", "reason": "Unsupported or unknown coordination geometry for molSimplify metal-complex generation.", "source": "unsupported_geometry"})
+        else:
+            if not backend_specific.get("metal"):
+                required.append(_q("metal", "Please provide the metal for molSimplify metal-complex generation.", "Metal is required.", "required", "missing_parameter"))
+            if not backend_specific.get("ligands"):
+                required.append(_q("ligands", "Please provide ligands for molSimplify metal-complex generation.", "Ligands are required.", "required", "missing_parameter"))
+            if not (backend_specific.get("coordination_geometry") or backend_specific.get("coordination_number")):
+                required.append(_q("coordination_geometry", "Please provide coordination geometry or coordination number for molSimplify metal-complex generation.", "Coordination geometry or number is required.", "required", "missing_parameter"))
+
     is_morfeus = normalized_intent.get("requested_backend") == "morfeus" or any(term in prompt_l for term in ["morfeus", "buried volume", "cone angle", "sterimol"])
     if is_morfeus:
         normalized_intent["requested_backend"] = "morfeus"

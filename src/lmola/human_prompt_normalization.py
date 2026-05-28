@@ -7,6 +7,7 @@ from pydantic import BaseModel, Field
 
 from lmola.llm.request_normalization import normalize_request
 from lmola.workflows.catalog import list_workflows
+from lmola.molsimplify_pilot import parse_molsimplify_prompt
 
 
 class CandidateWorkflow(BaseModel):
@@ -63,6 +64,8 @@ def _method_family(method: str | None, operation: str | None) -> str | None:
         return "geometry_analysis"
     if operation == "next_action_recommendation":
         return "workflow_management"
+    if operation == "metal_complex_generation" or method == "molsimplify":
+        return "structure_generation"
     if operation in {"unsupported", "unknown"}:
         return "unknown"
     return None
@@ -158,7 +161,13 @@ def normalize_human_prompt(*, prompt: str, language: str = "auto", compact: bool
     if not op:
         op = "unknown"
 
+    mols = parse_molsimplify_prompt(raw)
     morfeus_requested, morfeus_target, morfeus_atom_selection, morfeus_issue = _morfeus_intent(raw)
+    if mols.get("requested"):
+        if mols.get("artifact_issue") or mols.get("geometry_issue"):
+            op = "unsupported"
+        else:
+            op = "metal_complex_generation"
     if morfeus_requested:
         if morfeus_issue:
             op = "unsupported"
@@ -178,10 +187,14 @@ def normalize_human_prompt(*, prompt: str, language: str = "auto", compact: bool
         input_kind = "xyz"
     if morfeus_requested and ".xyz" in text:
         input_kind = "xyz"
+    if mols.get("requested"):
+        input_kind = "metal_complex_build_request"
 
     constraints = list(intent.get("constraints", []))
     if "do_not_optimize_geometry" in constraints:
         gma = False
+    elif op == "metal_complex_generation":
+        gma = True
     elif op == "geometry_optimization":
         gma = True
     else:
@@ -194,13 +207,20 @@ def normalize_human_prompt(*, prompt: str, language: str = "auto", compact: bool
         status = "unsupported"
     if morfeus_requested and morfeus_target:
         status = "ok"
+    if mols.get("requested"):
+        if mols.get("artifact_issue") or mols.get("geometry_issue"):
+            status = "unsupported"
+        elif mols.get("missing"):
+            status = "needs_clarification"
+        else:
+            status = "ok"
     if ("singlepoint result" in text or "singlepoint_result" in text or "xtb_singlepoint_result" in text) and ("continu" in text or "続け" in raw):
         status = "needs_clarification"
         op = "unknown"
 
     wf_hints = base.get("workflow_hints", [])
     if not wf_hints:
-        wf_hints = {"rmsd_calculation": ["xyz_to_rmsd"], "structure_comparison": ["compare_two_geometries"], "element_counting": ["count_element_atoms"], "molecule_splitting": ["split_molecule_by_file_order"], "descriptor_filtering": ["filter_molecules_by_descriptors"], "singlepoint_energy": ["xyz_to_xtb_singlepoint"], "geometry_optimization": ["xyz_to_xtb_relax"], "steric_descriptor_calculation": [{"buried_volume": "xyz_to_morfeus_buried_volume", "cone_angle": "xyz_to_morfeus_cone_angle", "sterimol": "xyz_to_morfeus_sterimol"}.get(morfeus_target, "")]}.get(op, [])
+        wf_hints = {"rmsd_calculation": ["xyz_to_rmsd"], "structure_comparison": ["compare_two_geometries"], "element_counting": ["count_element_atoms"], "molecule_splitting": ["split_molecule_by_file_order"], "descriptor_filtering": ["filter_molecules_by_descriptors"], "singlepoint_energy": ["xyz_to_xtb_singlepoint"], "geometry_optimization": ["xyz_to_xtb_relax"], "steric_descriptor_calculation": [{"buried_volume": "xyz_to_morfeus_buried_volume", "cone_angle": "xyz_to_morfeus_cone_angle", "sterimol": "xyz_to_morfeus_sterimol"}.get(morfeus_target, "")], "metal_complex_generation": ["molsimplify_build_metal_complex"]}.get(op, [])
     wf_hints = [w for w in wf_hints if w]
     if status in {"ambiguous", "unsupported", "needs_clarification"}:
         wf_hints = []
@@ -248,15 +268,16 @@ def normalize_human_prompt(*, prompt: str, language: str = "auto", compact: bool
         prompt=raw,
         normalized_intent=HumanPromptNormalizedIntent(
             operation=op,
-            method_family=_method_family("morfeus" if morfeus_requested else intent.get("method"), op),
-            requested_backend="morfeus" if morfeus_requested else intent.get("method"),
+            method_family=_method_family("molsimplify" if mols.get("requested") else ("morfeus" if morfeus_requested else intent.get("method")), op),
+            requested_backend="molsimplify" if mols.get("requested") else ("morfeus" if morfeus_requested else intent.get("method")),
             input_kind=input_kind,
+            target_artifact_type="molsimplify_complex_structure" if mols.get("requested") and not mols.get("artifact_issue") else None,
             input_artifact_type="xtb_singlepoint_result" if ("singlepoint_result" in text or "xtb_singlepoint_result" in text or "singlepoint result" in text) else None,
-            geometry_modification_allowed=False if morfeus_requested and morfeus_target else gma,
+            geometry_modification_allowed=True if mols.get("requested") and not mols.get("artifact_issue") else (False if morfeus_requested and morfeus_target else gma),
             target_properties=[morfeus_target] if morfeus_requested and morfeus_target else [],
             constraints=constraints,
             atom_selection=atom_selection,
-            notes=base.get("notes", []) + ([morfeus_issue] if morfeus_issue else []),
+            notes=base.get("notes", []) + ([morfeus_issue] if morfeus_issue else []) + ([mols.get("artifact_issue") or mols.get("geometry_issue")] if mols.get("artifact_issue") or mols.get("geometry_issue") else []),
         ),
         candidate_workflows=cands,
         missing_parameters=missing,
