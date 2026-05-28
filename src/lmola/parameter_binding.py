@@ -22,6 +22,7 @@ class ParameterValue(BaseModel):
 class InputFileBinding(BaseModel):
     role: str = "unknown"
     path: str | None = None
+    value: str | None = None
     format: str | None = "unknown"
     artifact_type: str | None = None
     source: str = "not_specified"
@@ -112,7 +113,7 @@ class ParameterBindingResult(BaseModel):
 
 def _file_bindings(prompt: str) -> list[InputFileBinding]:
     lower = prompt.lower()
-    paths = re.findall(r"([\w./-]+\.(?:xyz|csv|json))", prompt)
+    paths = re.findall(r"([\w./-]+\.(?:xyz|sdf|mol|pdb|csv|json))", prompt, flags=re.IGNORECASE)
     out: list[InputFileBinding] = []
 
     if "xtb_singlepoint_result" in lower or "singlepoint_result" in lower:
@@ -132,11 +133,28 @@ def _file_bindings(prompt: str) -> list[InputFileBinding]:
         out.append(InputFileBinding(role="primary_structure", path=paths[0], format=paths[0].split(".")[-1], source="user_explicit"))
     if len(paths) >= 2:
         out.append(InputFileBinding(role="second_structure", path=paths[1], format=paths[1].split(".")[-1], source="user_explicit"))
+    smiles = _extract_smiles_literal(prompt)
+    if smiles and not out:
+        out.append(InputFileBinding(role="smiles_input", value=smiles, format="smiles", source="user_explicit"))
     return out
 
 
+def _extract_smiles_literal(prompt: str) -> str | None:
+    patterns = [
+        r"\bSMILES\s*[:=]?\s*([A-Za-z0-9@+\-\[\]\(\)=#$\\/%.]+)",
+        r"スマイルズ\s*[:=]?\s*([A-Za-z0-9@+\-\[\]\(\)=#$\\/%.]+)",
+    ]
+    for pat in patterns:
+        m = re.search(pat, prompt, flags=re.IGNORECASE)
+        if m:
+            value = m.group(1).rstrip(".,。")
+            if "." not in value or not re.search(r"\.(?:xyz|sdf|mol|pdb|csv|json)$", value, flags=re.IGNORECASE):
+                return value
+    return None
+
+
 def _nl_text_without_paths(prompt: str) -> str:
-    return re.sub(r"[\w./-]+\.(?:xyz|csv|json)", " ", prompt, flags=re.IGNORECASE)
+    return re.sub(r"[\w./-]+\.(?:xyz|sdf|mol|pdb|csv|json)", " ", prompt, flags=re.IGNORECASE)
 
 
 def _extract_max_steps(txt: str, prompt: str) -> int | None:
