@@ -233,8 +233,11 @@ def create_dry_run_execution_plan(prompt: str, language: str = "auto", clarifica
             _add_param(DryRunParameterBinding(name="random_seed", value=random_seed, source="user_explicit", required=False, default_policy=None, status="bound"))
     if selection.workflow_id == "openbabel_convert_structure":
         first_binding = bindings[0] if bindings else None
-        input_format = first_binding.format if first_binding and first_binding.format else ("smiles" if any(b.role == "smiles_input" for b in bindings) else None)
+        smiles_binding = next((b for b in bindings if b.role == "smiles_input" and b.value), None)
+        input_format = first_binding.format if first_binding and first_binding.format else ("smiles" if smiles_binding else None)
         output_format = _extract_output_format(prompt)
+        if smiles_binding:
+            _add_param(DryRunParameterBinding(name="smiles_input", value=smiles_binding.value, source="user_explicit", required=True, default_policy=None, status="bound"))
         if input_format:
             _add_param(DryRunParameterBinding(name="input_format", value=input_format, source="user_explicit", required=True, default_policy=None, status="bound"))
         if output_format:
