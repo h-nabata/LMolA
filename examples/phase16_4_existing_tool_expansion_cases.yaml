@@ -1,0 +1,513 @@
+schema_version: lmola.existing_tool_expansion_cases.v1
+suite_id: existing_tool_expansion_core_v1
+description: Existing-tool workflow expansion cases for Phase 16.4.
+tags:
+- phase16_4
+- existing_tools
+- workflow_expansion
+- core
+cases:
+- case_id: en_validate_xyz
+  language: en
+  prompt: Validate examples/mol.xyz.
+  tags:
+  - validate
+  expected_status_any:
+  - ok
+  expected_selected_workflow_id: validate_xyz
+  expected_operation: structure_validation
+  expected_input_roles:
+  - primary_structure
+  expected_input_formats:
+  - xyz
+  expected_parameter_bindings_contains: []
+  expected_expected_artifacts_contains:
+  - validation_report
+  expected_geometry_modified: false
+  expected_can_create_dry_run_plan: true
+  expected_can_execute: false
+  expected_blocking_reasons_contains: []
+  expected_unsupported_reasons_contains: []
+  forbidden_workflow_ids: []
+  expected_safety:
+    execution_allowed: false
+    dry_run_recommended: true
+    requires_confirmation: true
+    requires_allow_execution: true
+  notes: null
+- case_id: ja_validate_xyz
+  language: ja
+  prompt: examples/mol.xyz が有効なXYZか検証して。
+  tags:
+  - validate
+  expected_status_any:
+  - ok
+  expected_selected_workflow_id: validate_xyz
+  expected_operation: structure_validation
+  expected_input_roles:
+  - primary_structure
+  expected_input_formats:
+  - xyz
+  expected_parameter_bindings_contains: []
+  expected_expected_artifacts_contains:
+  - validation_report
+  expected_geometry_modified: false
+  expected_can_create_dry_run_plan: true
+  expected_can_execute: false
+  expected_blocking_reasons_contains: []
+  expected_unsupported_reasons_contains: []
+  forbidden_workflow_ids: []
+  expected_safety:
+    execution_allowed: false
+    dry_run_recommended: true
+    requires_confirmation: true
+    requires_allow_execution: true
+  notes: null
+- case_id: en_geometry_analysis_xyz
+  language: en
+  prompt: Analyze the geometry of examples/mol.xyz.
+  tags:
+  - geometry
+  expected_status_any:
+  - ok
+  expected_selected_workflow_id: xyz_to_geometry_analysis
+  expected_operation: geometry_analysis
+  expected_input_roles:
+  - primary_structure
+  expected_input_formats:
+  - xyz
+  expected_parameter_bindings_contains: []
+  expected_expected_artifacts_contains:
+  - geometry_analysis_report
+  expected_geometry_modified: false
+  expected_can_create_dry_run_plan: true
+  expected_can_execute: false
+  expected_blocking_reasons_contains: []
+  expected_unsupported_reasons_contains: []
+  forbidden_workflow_ids: []
+  expected_safety:
+    execution_allowed: false
+    dry_run_recommended: true
+    requires_confirmation: true
+    requires_allow_execution: true
+  notes: null
+- case_id: ja_geometry_analysis_xyz
+  language: ja
+  prompt: examples/mol.xyz の幾何を解析して。
+  tags:
+  - geometry
+  expected_status_any:
+  - ok
+  expected_selected_workflow_id: xyz_to_geometry_analysis
+  expected_operation: geometry_analysis
+  expected_input_roles:
+  - primary_structure
+  expected_input_formats:
+  - xyz
+  expected_parameter_bindings_contains: []
+  expected_expected_artifacts_contains:
+  - geometry_analysis_report
+  expected_geometry_modified: false
+  expected_can_create_dry_run_plan: true
+  expected_can_execute: false
+  expected_blocking_reasons_contains: []
+  expected_unsupported_reasons_contains: []
+  forbidden_workflow_ids: []
+  expected_safety:
+    execution_allowed: false
+    dry_run_recommended: true
+    requires_confirmation: true
+    requires_allow_execution: true
+  notes: null
+- case_id: en_rdkit_descriptors_csv
+  language: en
+  prompt: Calculate RDKit descriptors for molecules in examples/molecules.csv.
+  tags:
+  - rdkit
+  expected_status_any:
+  - ok
+  expected_selected_workflow_id: smiles_to_rdkit_descriptors
+  expected_operation: descriptor_calculation
+  expected_input_roles:
+  - smiles_table
+  expected_input_formats:
+  - csv
+  expected_parameter_bindings_contains: []
+  expected_expected_artifacts_contains:
+  - rdkit_descriptor_table
+  expected_geometry_modified: false
+  expected_can_create_dry_run_plan: true
+  expected_can_execute: false
+  expected_blocking_reasons_contains: []
+  expected_unsupported_reasons_contains: []
+  forbidden_workflow_ids: []
+  expected_safety:
+    execution_allowed: false
+    dry_run_recommended: true
+    requires_confirmation: true
+    requires_allow_execution: true
+  notes: null
+- case_id: ja_rdkit_descriptors_csv
+  language: ja
+  prompt: examples/molecules.csv の分子のRDKit記述子を計算して。
+  tags:
+  - rdkit
+  expected_status_any:
+  - ok
+  expected_selected_workflow_id: smiles_to_rdkit_descriptors
+  expected_operation: descriptor_calculation
+  expected_input_roles:
+  - smiles_table
+  expected_input_formats:
+  - csv
+  expected_parameter_bindings_contains: []
+  expected_expected_artifacts_contains:
+  - rdkit_descriptor_table
+  expected_geometry_modified: false
+  expected_can_create_dry_run_plan: true
+  expected_can_execute: false
+  expected_blocking_reasons_contains: []
+  expected_unsupported_reasons_contains: []
+  forbidden_workflow_ids: []
+  expected_safety:
+    execution_allowed: false
+    dry_run_recommended: true
+    requires_confirmation: true
+    requires_allow_execution: true
+  notes: null
+- case_id: en_rdkit_conformers_smiles
+  language: en
+  prompt: Generate 10 RDKit conformers for SMILES CCO.
+  tags:
+  - rdkit
+  expected_status_any:
+  - ok
+  expected_selected_workflow_id: smiles_to_conformers_rdkit
+  expected_operation: conformer_generation
+  expected_input_roles: []
+  expected_input_formats: []
+  expected_parameter_bindings_contains:
+  - num_conformers
+  expected_expected_artifacts_contains:
+  - conformer_ensemble
+  expected_geometry_modified: true
+  expected_can_create_dry_run_plan: true
+  expected_can_execute: false
+  expected_blocking_reasons_contains: []
+  expected_unsupported_reasons_contains: []
+  forbidden_workflow_ids: []
+  expected_safety:
+    execution_allowed: false
+    dry_run_recommended: true
+    requires_confirmation: true
+    requires_allow_execution: true
+  notes: null
+- case_id: en_openbabel_missing_output_format
+  language: en
+  prompt: Convert examples/mol.xyz using OpenBabel.
+  tags:
+  - openbabel
+  expected_status_any:
+  - needs_clarification
+  expected_selected_workflow_id: null
+  expected_operation: format_conversion
+  expected_input_roles:
+  - primary_structure
+  expected_input_formats:
+  - xyz
+  expected_parameter_bindings_contains: []
+  expected_expected_artifacts_contains: []
+  expected_geometry_modified: null
+  expected_can_create_dry_run_plan: false
+  expected_can_execute: false
+  expected_blocking_reasons_contains: []
+  expected_unsupported_reasons_contains: []
+  forbidden_workflow_ids:
+  - openbabel_convert_structure
+  expected_safety:
+    execution_allowed: false
+    dry_run_recommended: true
+    requires_confirmation: true
+    requires_allow_execution: true
+  notes: null
+- case_id: en_openbabel_xyz_to_sdf
+  language: en
+  prompt: Convert examples/mol.xyz to SDF using OpenBabel.
+  tags:
+  - openbabel
+  expected_status_any:
+  - ok
+  expected_selected_workflow_id: openbabel_convert_structure
+  expected_operation: format_conversion
+  expected_input_roles:
+  - primary_structure
+  expected_input_formats:
+  - xyz
+  expected_parameter_bindings_contains:
+  - output_format
+  expected_expected_artifacts_contains:
+  - converted_structure
+  expected_geometry_modified: false
+  expected_can_create_dry_run_plan: true
+  expected_can_execute: false
+  expected_blocking_reasons_contains: []
+  expected_unsupported_reasons_contains: []
+  forbidden_workflow_ids: []
+  expected_safety:
+    execution_allowed: false
+    dry_run_recommended: true
+    requires_confirmation: true
+    requires_allow_execution: true
+  notes: null
+- case_id: en_xtb_singlepoint_regression
+  language: en
+  prompt: Run an xTB single point for examples/water.xyz with charge 0 and multiplicity
+    1. Do not optimize geometry.
+  tags:
+  - xtb
+  expected_status_any:
+  - ok
+  expected_selected_workflow_id: xyz_to_xtb_singlepoint
+  expected_operation: singlepoint_energy
+  expected_input_roles:
+  - primary_structure
+  expected_input_formats:
+  - xyz
+  expected_parameter_bindings_contains:
+  - charge
+  - multiplicity
+  expected_expected_artifacts_contains:
+  - xtb_singlepoint_result
+  expected_geometry_modified: false
+  expected_can_create_dry_run_plan: true
+  expected_can_execute: false
+  expected_blocking_reasons_contains: []
+  expected_unsupported_reasons_contains: []
+  forbidden_workflow_ids: []
+  expected_safety:
+    execution_allowed: false
+    dry_run_recommended: true
+    requires_confirmation: true
+    requires_allow_execution: true
+  notes: null
+- case_id: en_xtb_relax_regression
+  language: en
+  prompt: Optimize examples/mol.xyz with xTB.
+  tags:
+  - xtb
+  expected_status_any:
+  - ok
+  expected_selected_workflow_id: xyz_to_xtb_relax
+  expected_operation: geometry_optimization
+  expected_input_roles:
+  - primary_structure
+  expected_input_formats:
+  - xyz
+  expected_parameter_bindings_contains: []
+  expected_expected_artifacts_contains:
+  - optimized_geometry
+  expected_geometry_modified: true
+  expected_can_create_dry_run_plan: true
+  expected_can_execute: false
+  expected_blocking_reasons_contains: []
+  expected_unsupported_reasons_contains: []
+  forbidden_workflow_ids: []
+  expected_safety:
+    execution_allowed: false
+    dry_run_recommended: true
+    requires_confirmation: true
+    requires_allow_execution: true
+  notes: null
+- case_id: en_filter_descriptors_regression
+  language: en
+  prompt: Filter molecules in examples/molecules.csv to keep HBD 0 and molecular weight
+    below 300.
+  tags:
+  - regression
+  expected_status_any:
+  - ok
+  expected_selected_workflow_id: filter_molecules_by_descriptors
+  expected_operation: descriptor_filtering
+  expected_input_roles:
+  - smiles_table
+  expected_input_formats:
+  - csv
+  expected_parameter_bindings_contains: []
+  expected_expected_artifacts_contains:
+  - descriptor_filter_report
+  expected_geometry_modified: false
+  expected_can_create_dry_run_plan: true
+  expected_can_execute: false
+  expected_blocking_reasons_contains: []
+  expected_unsupported_reasons_contains: []
+  forbidden_workflow_ids: []
+  expected_safety:
+    execution_allowed: false
+    dry_run_recommended: true
+    requires_confirmation: true
+    requires_allow_execution: true
+  notes: null
+- case_id: en_openbabel_sdf_to_xyz
+  language: en
+  prompt: Convert examples/mol.sdf to XYZ using OpenBabel.
+  tags:
+  - openbabel
+  expected_status_any:
+  - ok
+  expected_selected_workflow_id: openbabel_convert_structure
+  expected_operation: format_conversion
+  expected_input_roles:
+  - primary_structure
+  expected_input_formats:
+  - sdf
+  expected_parameter_bindings_contains: []
+  expected_expected_artifacts_contains:
+  - converted_structure
+  expected_geometry_modified: false
+  expected_can_create_dry_run_plan: true
+  expected_can_execute: false
+  expected_blocking_reasons_contains: []
+  expected_unsupported_reasons_contains: []
+  forbidden_workflow_ids: []
+  expected_safety:
+    execution_allowed: false
+    dry_run_recommended: true
+    requires_confirmation: true
+    requires_allow_execution: true
+  notes: null
+- case_id: en_openbabel_smiles_to_xyz_3d
+  language: en
+  prompt: Use OpenBabel to convert SMILES CCO to 3D XYZ.
+  tags:
+  - openbabel
+  expected_status_any:
+  - ok
+  expected_selected_workflow_id: openbabel_convert_structure
+  expected_operation: format_conversion
+  expected_input_roles: []
+  expected_input_formats: []
+  expected_parameter_bindings_contains:
+  - generate_3d
+  expected_expected_artifacts_contains:
+  - converted_structure
+  expected_geometry_modified: true
+  expected_can_create_dry_run_plan: true
+  expected_can_execute: false
+  expected_blocking_reasons_contains: []
+  expected_unsupported_reasons_contains: []
+  forbidden_workflow_ids: []
+  expected_safety:
+    execution_allowed: false
+    dry_run_recommended: true
+    requires_confirmation: true
+    requires_allow_execution: true
+  notes: null
+- case_id: en_conformer_missing_input
+  language: en
+  prompt: Generate RDKit conformers.
+  tags:
+  - rdkit
+  expected_status_any:
+  - needs_clarification
+  expected_selected_workflow_id: null
+  expected_operation: conformer_generation
+  expected_input_roles: []
+  expected_input_formats: []
+  expected_parameter_bindings_contains: []
+  expected_expected_artifacts_contains: []
+  expected_geometry_modified: null
+  expected_can_create_dry_run_plan: false
+  expected_can_execute: false
+  expected_blocking_reasons_contains: []
+  expected_unsupported_reasons_contains: []
+  forbidden_workflow_ids:
+  - smiles_to_conformers_rdkit
+  expected_safety:
+    execution_allowed: false
+    dry_run_recommended: true
+    requires_confirmation: true
+    requires_allow_execution: true
+  notes: null
+- case_id: en_descriptor_missing_input
+  language: en
+  prompt: Calculate RDKit descriptors.
+  tags:
+  - rdkit
+  expected_status_any:
+  - needs_clarification
+  expected_selected_workflow_id: null
+  expected_operation: descriptor_calculation
+  expected_input_roles: []
+  expected_input_formats: []
+  expected_parameter_bindings_contains: []
+  expected_expected_artifacts_contains: []
+  expected_geometry_modified: null
+  expected_can_create_dry_run_plan: false
+  expected_can_execute: false
+  expected_blocking_reasons_contains: []
+  expected_unsupported_reasons_contains: []
+  forbidden_workflow_ids:
+  - smiles_to_rdkit_descriptors
+  expected_safety:
+    execution_allowed: false
+    dry_run_recommended: true
+    requires_confirmation: true
+    requires_allow_execution: true
+  notes: null
+- case_id: en_rdkit_conformers_csv_seed
+  language: en
+  prompt: Generate 20 RDKit conformers from examples/smiles.csv with random seed 42.
+  tags:
+  - rdkit
+  expected_status_any:
+  - ok
+  expected_selected_workflow_id: smiles_to_conformers_rdkit
+  expected_operation: conformer_generation
+  expected_input_roles:
+  - smiles_table
+  expected_input_formats:
+  - csv
+  expected_parameter_bindings_contains:
+  - num_conformers
+  - random_seed
+  expected_expected_artifacts_contains:
+  - conformer_ensemble
+  expected_geometry_modified: true
+  expected_can_create_dry_run_plan: true
+  expected_can_execute: false
+  expected_blocking_reasons_contains: []
+  expected_unsupported_reasons_contains: []
+  forbidden_workflow_ids: []
+  expected_safety:
+    execution_allowed: false
+    dry_run_recommended: true
+    requires_confirmation: true
+    requires_allow_execution: true
+  notes: null
+- case_id: ja_rdkit_conformers_smiles
+  language: ja
+  prompt: SMILES CCO から RDKit で10個のコンフォマーを生成して。
+  tags:
+  - rdkit
+  expected_status_any:
+  - ok
+  expected_selected_workflow_id: smiles_to_conformers_rdkit
+  expected_operation: conformer_generation
+  expected_input_roles: []
+  expected_input_formats: []
+  expected_parameter_bindings_contains:
+  - num_conformers
+  expected_expected_artifacts_contains:
+  - conformer_ensemble
+  expected_geometry_modified: true
+  expected_can_create_dry_run_plan: true
+  expected_can_execute: false
+  expected_blocking_reasons_contains: []
+  expected_unsupported_reasons_contains: []
+  forbidden_workflow_ids: []
+  expected_safety:
+    execution_allowed: false
+    dry_run_recommended: true
+    requires_confirmation: true
+    requires_allow_execution: true
+  notes: null

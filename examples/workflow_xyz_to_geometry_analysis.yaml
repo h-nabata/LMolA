@@ -1,0 +1,7 @@
+schema_version: lmola.workflow_request.v1
+workflow_id: xyz_to_geometry_analysis
+inputs:
+  - role: input
+    path: examples/mol.xyz
+outputs:
+  directory: outputs
