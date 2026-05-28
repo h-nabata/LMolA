@@ -1,10 +1,12 @@
 from __future__ import annotations
 
+import json
 from pathlib import Path
 
 from lmola.artifact_contracts import export_artifact_registry
 from lmola.dry_run_plan import create_dry_run_execution_plan, run_molsimplify_pilot_eval
 from lmola.mcp_runtime import call_mcp_tool, list_mcp_tools_runtime
+from lmola.schema_export import export_planner_schema_bundle
 from lmola.workflows.catalog import get_workflow_entry
 
 CASES = Path("examples/phase16_6_molsimplify_pilot_cases.yaml")
@@ -56,6 +58,13 @@ def test_molsimplify_artifacts_geometry_safety_contracts() -> None:
     assert contracts["molsimplify_build_report"]["geometry_role"] == "non_geometry"
     assert contracts["molsimplify_build_report"]["geometry_modified"] is False
     assert contracts["molsimplify_input_deck"]["geometry_role"] == "non_geometry"
+
+
+def test_molsimplify_planner_context_exposes_build_report_safety_phrase() -> None:
+    text = json.dumps(export_planner_schema_bundle(), ensure_ascii=False)
+    assert "molsimplify_build_report" in text
+    assert "build reports are not geometries" in text
+    assert "dry-run molSimplify previews are not existing geometries" in text
 
 
 def test_molsimplify_low_level_mcp_tools_remain_hidden() -> None:
