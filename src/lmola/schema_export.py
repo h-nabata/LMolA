@@ -194,7 +194,7 @@ def export_planner_schema_bundle() -> dict:
                     "morfeus reports are not geometries and must not be treated as primary_structure inputs.",
                     "Phase 16.6 molSimplify pilot integration supports high-level workflow ID molsimplify_build_metal_complex for metal_complex_generation from metal_complex_build_request.",
                     "molsimplify_complex_structure is generated geometry only after execution; dry-run molSimplify previews are not existing geometries.",
-                    "molsimplify_build_report and molsimplify_input_deck are not geometries and must not be used as primary_structure inputs.",
+                    "molsimplify_build_report and molsimplify_input_deck are not geometries; build reports are not geometries and must not be used as primary_structure inputs.",
                     "Dry-run molSimplify planning should use high-level workflow IDs only; low-level molSimplify tools remain hidden.",
                     "Morfeus dry-run planning should use high-level workflow IDs only; low-level morfeus tools remain hidden.",
                     "needs_clarification/unsupported do not select executable workflows.",
