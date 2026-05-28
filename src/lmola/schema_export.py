@@ -189,6 +189,7 @@ def export_planner_schema_bundle() -> dict:
                     "dry-run execution plan available via lmola.create_dry_run_execution_plan and lmola workflow dry-run-plan.",
                     "Dry-run plans do not execute chemistry.",
                     "Dry-run plan includes selected_workflow, expected_artifacts, and artifact_manifest_preview.",
+                    "Phase 16.4 existing tool expansion supports validate_xyz, xyz_to_geometry_analysis, smiles_to_rdkit_descriptors, smiles_to_conformers_rdkit, and openbabel_convert_structure; low-level tools remain hidden.",
                     "needs_clarification/unsupported do not select executable workflows.",
                     "execution_allowed remains false in dry-run plans.",
                     "missing_parameters become required_questions.",
@@ -265,6 +266,7 @@ def export_all_schemas() -> dict:
             "dry_run_workflow_selection_schema": DryRunWorkflowSelection.model_json_schema(),
             "dry_run_execution_plan_schema": DryRunExecutionPlan.model_json_schema(),
             "dry_run_plan_eval_schema": {"schema_version": "lmola.dry_run_plan_eval.v1", "required_fields": ["selected_workflow", "input_bindings", "parameter_bindings", "expected_artifacts", "artifact_manifest_preview", "blocking_reasons", "unsupported_reasons", "can_create_dry_run_plan", "can_execute", "execution_allowed", "dry_run_recommended"]},
+            "existing_tool_expansion_eval_schema": {"schema_version": "lmola.existing_tool_expansion_eval.v1", "default_suite_id": "existing_tool_expansion_core_v1", "required_fields": ["status", "suite_id", "schema_version", "backend", "model", "total_cases", "passed_cases", "failed_cases", "pass_rate", "workflow_selection_pass_rate", "input_binding_pass_rate", "parameter_binding_pass_rate", "expected_artifact_pass_rate", "clarification_behavior_pass_rate", "safety_pass_rate", "unsafe_execution_attempt_rate", "forced_selection_on_incomplete_prompt_rate", "low_level_tool_exposure_rate", "failed_case_ids", "cases"]},
             "backend_capabilities": {k: v.model_dump() for k, v in list_backend_capabilities().items()},
         }
     )
