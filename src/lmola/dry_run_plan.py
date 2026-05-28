@@ -119,6 +119,9 @@ def _expected_artifacts_for_workflow(wid: str, geometry_modified: bool | None) -
         "smiles_to_rdkit_descriptors": ["rdkit_descriptor_table"],
         "smiles_to_conformers_rdkit": ["conformer_ensemble"],
         "openbabel_convert_structure": ["converted_structure"],
+        "xyz_to_morfeus_buried_volume": ["morfeus_buried_volume_report"],
+        "xyz_to_morfeus_cone_angle": ["morfeus_cone_angle_report"],
+        "xyz_to_morfeus_sterimol": ["morfeus_sterimol_report"],
     }
     return [DryRunExpectedArtifact(name=n, artifact_type=n, produced_on=wid, geometry_modified=geometry_modified, contract_source="workflow_contract_catalog") for n in amap.get(wid, ["workflow_result"])]
 
@@ -151,6 +154,12 @@ def _select_workflow(clar: ClarificationPlan) -> DryRunWorkflowSelection:
         cands.append(w)
     if not cands:
         return DryRunWorkflowSelection(reason="no compatible workflow contract", operation=op, requested_backend=bk, input_kind=ik, selection_source="unavailable")
+    if op == "steric_descriptor_calculation":
+        target = (ni.get("target_properties") or [None])[0]
+        target_map = {"buried_volume": "xyz_to_morfeus_buried_volume", "cone_angle": "xyz_to_morfeus_cone_angle", "sterimol": "xyz_to_morfeus_sterimol"}
+        wanted = target_map.get(target)
+        if wanted:
+            cands = [w for w in cands if w.workflow_id == wanted] or cands
     chosen = cands[0]
     return DryRunWorkflowSelection(workflow_id=chosen.workflow_id, confidence=0.9, reason="matched by operation/backend/input kind", operation=op, requested_backend=bk, input_kind=ik, geometry_modified=chosen.contract.get("geometry_modified"), required_backends=chosen.required_backends, selection_source="workflow_contract_catalog")
 
@@ -256,6 +265,36 @@ def create_dry_run_execution_plan(prompt: str, language: str = "auto", clarifica
         if em:
             _add_param(DryRunParameterBinding(name="atom_selection.element", value=em.group(1), source="inferred_from_prompt", required=False, default_policy=None, status="bound"))
 
+    if (selection.workflow_id and selection.workflow_id.startswith("xyz_to_morfeus_")) or clar.normalized_intent.get("requested_backend") == "morfeus":
+        morfeus = bp.get("backend_specific", {}).get("morfeus", {}) if isinstance(bp.get("backend_specific"), dict) else {}
+        target_property = morfeus.get("target_property") or ((clar.normalized_intent.get("target_properties") or [None])[0])
+        _add_param(DryRunParameterBinding(name="requested_backend", value="morfeus", source="user_explicit", required=True, default_policy=None, status="bound"))
+        if target_property:
+            _add_param(DryRunParameterBinding(name="target_property", value=target_property, source="inferred_from_prompt", required=True, default_policy=None, status="bound"))
+        if atom.get("center_atom"):
+            _add_param(DryRunParameterBinding(name="center_atom", value=atom.get("center_atom"), source="inferred_from_prompt", required=True, default_policy=None, status="bound"))
+        if atom.get("center_atom_index"):
+            _add_param(DryRunParameterBinding(name="center_atom_index", value=atom.get("center_atom_index"), source="user_explicit", required=True, default_policy=None, status="bound"))
+        if atom.get("metal_center"):
+            _add_param(DryRunParameterBinding(name="metal_center", value=atom.get("metal_center"), source="user_explicit" if isinstance(atom.get("metal_center"), int) else "inferred_from_prompt", required=False, default_policy=None, status="bound"))
+        if atom.get("ligand_atoms"):
+            _add_param(DryRunParameterBinding(name="ligand_atoms", value=atom.get("ligand_atoms"), source="user_explicit", required=True, default_policy=None, status="bound"))
+            _add_param(DryRunParameterBinding(name="atom_selection.ligand_atoms", value=atom.get("ligand_atoms"), source="user_explicit", required=True, default_policy=None, status="bound"))
+        if atom.get("atom_ranges"):
+            _add_param(DryRunParameterBinding(name="atom_selection.atom_ranges", value=atom.get("atom_ranges"), source="user_explicit", required=False, default_policy=None, status="bound"))
+        if atom.get("excluded_atoms"):
+            _add_param(DryRunParameterBinding(name="excluded_atoms", value=atom.get("excluded_atoms"), source="user_explicit", required=False, default_policy=None, status="bound"))
+        if atom.get("include_hydrogens") is True:
+            _add_param(DryRunParameterBinding(name="include_hydrogens", value=True, source="user_explicit", required=False, default_policy=None, status="bound"))
+        if atom.get("atom1"):
+            _add_param(DryRunParameterBinding(name="sterimol.atom1", value=atom.get("atom1"), source="user_explicit", required=True, default_policy=None, status="bound"))
+        if atom.get("atom2"):
+            _add_param(DryRunParameterBinding(name="sterimol.atom2", value=atom.get("atom2"), source="user_explicit", required=True, default_policy=None, status="bound"))
+        if atom.get("substituent_atoms"):
+            _add_param(DryRunParameterBinding(name="sterimol.substituent_atoms", value=atom.get("substituent_atoms"), source="user_explicit", required=True, default_policy=None, status="bound"))
+        if morfeus.get("radius") is not None:
+            _add_param(DryRunParameterBinding(name="radius", value=morfeus.get("radius"), source="user_explicit", required=False, default_policy=None, status="bound"))
+
     # propagate assumed defaults from clarification / parameter-binding layers
     for assumed in (clar.assumed_defaults or []):
         if not isinstance(assumed, dict):
@@ -292,7 +331,7 @@ def create_dry_run_execution_plan(prompt: str, language: str = "auto", clarifica
 
 def run_dry_run_plan_eval(cases_path: str, **kwargs: Any) -> dict[str, Any]:
     data = yaml.safe_load(Path(cases_path).read_text(encoding="utf-8"))
-    strict_existing_tool_checks = "existing_tool_expansion" in str(data.get("schema_version", "")) or "existing_tool_expansion" in str(data.get("suite_id", ""))
+    strict_existing_tool_checks = any(token in str(data.get("schema_version", "")) or token in str(data.get("suite_id", "")) for token in ["existing_tool_expansion", "morfeus_pilot"])
     out: list[dict[str, Any]] = []
     failed: list[str] = []
     checks_total = 0
@@ -357,6 +396,16 @@ def run_existing_tool_expansion_eval(cases_path: str, **kwargs: Any) -> dict[str
     out = run_dry_run_plan_eval(cases_path, **kwargs)
     out["suite_id"] = "phase16_4_existing_tool_expansion"
     out["schema_version"] = "lmola.existing_tool_expansion_eval.v1"
+    out["clarification_behavior_pass_rate"] = out.get("blocking_behavior_pass_rate", out.get("pass_rate", 0.0))
+    out["forced_selection_on_incomplete_prompt_rate"] = out.get("forced_selection_on_ambiguous_prompt_rate", 0.0)
+    out["low_level_tool_exposure_rate"] = 0.0
+    return out
+
+
+def run_morfeus_pilot_eval(cases_path: str, **kwargs: Any) -> dict[str, Any]:
+    out = run_dry_run_plan_eval(cases_path, **kwargs)
+    out["suite_id"] = "phase16_5_morfeus_pilot"
+    out["schema_version"] = "lmola.morfeus_pilot_eval.v1"
     out["clarification_behavior_pass_rate"] = out.get("blocking_behavior_pass_rate", out.get("pass_rate", 0.0))
     out["forced_selection_on_incomplete_prompt_rate"] = out.get("forced_selection_on_ambiguous_prompt_rate", 0.0)
     out["low_level_tool_exposure_rate"] = 0.0

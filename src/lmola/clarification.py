@@ -89,19 +89,33 @@ def generate_clarification_plan(*, prompt: str, language: str = "auto", compact:
         candidate_workflows = [w for w in candidate_workflows if w.get("workflow_id") != "xyz_to_xtb_relax"]
 
     prompt_l = b.prompt.lower()
-    if "morfeus" in prompt_l or "buried volume" in prompt_l:
-        normalized_intent.setdefault("requested_backend", "morfeus")
-        normalized_intent.setdefault("operation", "steric_analysis")
+    is_morfeus = normalized_intent.get("requested_backend") == "morfeus" or any(term in prompt_l for term in ["morfeus", "buried volume", "cone angle", "sterimol"])
+    if is_morfeus:
+        normalized_intent["requested_backend"] = "morfeus"
+        if normalized_intent.get("operation") != "unsupported":
+            normalized_intent["operation"] = "steric_descriptor_calculation"
         bound_parameters.setdefault("calculation_controls", {}).setdefault("requested_backend", {}).update({"value": "morfeus", "source": "inferred_from_prompt", "status": "bound"})
-        bound_parameters.setdefault("calculation_controls", {}).setdefault("operation", {}).update({"value": "steric_analysis", "source": "inferred_from_prompt", "status": "bound"})
-        if "ni" in prompt_l:
-            bound_parameters.setdefault("atom_selection", {})["center_atom"] = "Ni"
-            bound_parameters.setdefault("atom_selection", {})["selection_type"] = "center_atom"
-        has_geometry = any((f.get("role") == "primary_structure" and f.get("path")) for f in bound_parameters.get("input_files", []))
-        if not has_geometry:
-            required.append(_q("input_files.primary_structure", "Please provide an input geometry file (e.g., XYZ) for buried-volume analysis.", "A structure file is required.", "required", "missing_parameter"))
-        unsupported_notes.append({"parameter": "requested_backend", "reason": "morfeus workflow/adapter is unavailable or deferred in this phase", "source": "backend_unavailable"})
-        candidate_workflows = [w for w in candidate_workflows if "morfeus" not in str(w).lower()]
+        bound_parameters.setdefault("calculation_controls", {}).setdefault("operation", {}).update({"value": normalized_intent.get("operation"), "source": "inferred_from_prompt", "status": "bound"})
+        atom_selection = bound_parameters.setdefault("atom_selection", {})
+        target = (normalized_intent.get("target_properties") or [None])[0]
+        has_geometry = any((f.get("role") == "primary_structure" and f.get("path") and f.get("format") == "xyz") for f in bound_parameters.get("input_files", []))
+        if "morfeus_" in prompt_l and "report" in prompt_l and ("geometry input" in prompt_l or "primary_structure" in prompt_l):
+            unsupported_notes.append({"parameter": "input_files.primary_structure", "reason": "Morfeus descriptor report is not geometry and must not be used as primary_structure input.", "source": "artifact_incompatibility"})
+        elif target not in {"buried_volume", "cone_angle", "sterimol"}:
+            unsupported_notes.append({"parameter": "target_property", "reason": "Unsupported or unknown Morfeus descriptor. Supported pilot descriptors: buried_volume, cone_angle, sterimol.", "source": "unsupported_descriptor"})
+        else:
+            if not has_geometry:
+                required.append(_q("input_files.primary_structure", "Please provide an input structure / XYZ file for Morfeus steric descriptor planning.", "A structure file is required.", "required", "missing_parameter"))
+            if target == "buried_volume" and not (atom_selection.get("center_atom") or atom_selection.get("center_atom_index") or atom_selection.get("metal_center")):
+                required.append(_q("atom_selection.center_atom", "Please provide a center atom, center atom index, or metal center for buried volume.", "Center atom / metal center is required.", "required", "missing_parameter"))
+            if target == "cone_angle":
+                if not (atom_selection.get("center_atom") or atom_selection.get("center_atom_index") or atom_selection.get("metal_center")):
+                    required.append(_q("atom_selection.center_atom", "Please provide a center atom or metal center for cone angle.", "Center atom / metal center is required.", "required", "missing_parameter"))
+                if not atom_selection.get("ligand_atoms"):
+                    required.append(_q("atom_selection.ligand_atoms", "Please provide ligand atoms or an atom range for cone angle.", "Ligand atoms / atom range are required.", "required", "missing_parameter"))
+            if target == "sterimol" and not (atom_selection.get("atom1") and atom_selection.get("atom2") and atom_selection.get("substituent_atoms")):
+                required.append(_q("sterimol.axis_and_substituent_atoms", "Please provide axis atoms and substituent atoms for Sterimol.", "Sterimol requires atom1/atom2 axis atoms and substituent atoms.", "required", "missing_parameter"))
+
     if b.bound_parameters.periodic.periodic.value is True and b.bound_parameters.periodic.cell_required is not False:
         recommended.append(_q("periodic.cell", "Please provide cell/PBC details for periodic calculation.", "Periodic setup needs cell information.", "recommended", "clarification_recommended", False))
 

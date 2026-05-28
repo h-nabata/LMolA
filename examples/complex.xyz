@@ -1,0 +1,10 @@
+8
+Small harmless Ni ammine/chloride-like complex for dry-run Morfeus pilot examples
+Ni 0.000 0.000 0.000
+N  2.000 0.000 0.000
+N -2.000 0.000 0.000
+N  0.000 2.000 0.000
+N  0.000 -2.000 0.000
+Cl 0.000 0.000 2.200
+Cl 0.000 0.000 -2.200
+H  2.600 0.700 0.000

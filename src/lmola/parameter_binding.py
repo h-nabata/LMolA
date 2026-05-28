@@ -59,6 +59,14 @@ class AtomSelectionBinding(BaseModel):
     atom_indices: list[int] = Field(default_factory=list)
     atom_ranges: list[dict[str, Any]] = Field(default_factory=list)
     center_atom: str | int | None = None
+    center_atom_index: int | None = None
+    metal_center: str | int | None = None
+    ligand_atoms: list[dict[str, Any]] = Field(default_factory=list)
+    excluded_atoms: list[dict[str, Any]] = Field(default_factory=list)
+    include_hydrogens: bool | None = None
+    atom1: int | None = None
+    atom2: int | None = None
+    substituent_atoms: list[dict[str, Any]] = Field(default_factory=list)
     selection_basis: str | None = None
     notes: list[str] = Field(default_factory=list)
 
@@ -177,6 +185,41 @@ def _extract_force_threshold(txt: str, prompt: str) -> float | None:
     return None
 
 
+def _atom_range(start: int, end: int, *, role: str) -> dict[str, Any]:
+    return {"start": start, "end": end, "basis": "file_order", "role": role}
+
+
+def _extract_atom_range(prompt: str, label_patterns: list[str], *, role: str) -> list[dict[str, Any]]:
+    for label in label_patterns:
+        m = re.search(label + r"\s*(?:atoms?)?\s*(\d+)\s*[-–]\s*(\d+)", prompt, flags=re.IGNORECASE)
+        if m:
+            return [_atom_range(int(m.group(1)), int(m.group(2)), role=role)]
+    return []
+
+
+def _extract_float_value(prompt: str, label: str) -> float | None:
+    m = re.search(label + r"\s*[:=]?\s*([0-9]*\.?[0-9]+)", prompt, flags=re.IGNORECASE)
+    return float(m.group(1)) if m else None
+
+
+def _extract_center_atom(prompt: str) -> str | None:
+    m = re.search(r"around\s+([A-Z][a-z]?)(?:\s+(?:center|atom))?", prompt, flags=re.IGNORECASE)
+    if not m:
+        m = re.search(r"([A-Z][a-z]?)\s*周り", prompt)
+    if not m:
+        m = re.search(r"around\s+([A-Z][a-z]?)\b", prompt, flags=re.IGNORECASE)
+    return m.group(1).capitalize() if m else None
+
+
+def _extract_center_index(prompt: str) -> int | None:
+    patterns = [r"(?:center|metal)?\s*atom\s+(\d+)", r"metal\s+atom\s+(\d+)"]
+    for pat in patterns:
+        m = re.search(pat, prompt, flags=re.IGNORECASE)
+        if m:
+            return int(m.group(1))
+    return None
+
+
 def bind_human_prompt_parameters(*, prompt: str, language: str = "auto", compact: bool = False) -> dict[str, Any]:
     n = normalize_human_prompt(prompt=prompt, language=language, compact=False)
     ni = n["normalized_intent"]
@@ -237,6 +280,29 @@ def bind_human_prompt_parameters(*, prompt: str, language: str = "auto", compact
         atom = AtomSelectionBinding(selection_type="element", element=em.group(1))
     if "1-12" in txt and "13-28" in txt:
         atom = AtomSelectionBinding(selection_type="file_order_ranges", atom_ranges=[{"start": 1, "end": 12, "basis": "file_order"}, {"start": 13, "end": 28, "basis": "file_order"}], selection_basis="file_order")
+    if backend == "morfeus" or any(term in txt for term in ["buried volume", "cone angle", "sterimol"]):
+        target_property = (ni.get("target_properties") or [None])[0]
+        center_atom = _extract_center_atom(prompt)
+        center_idx = _extract_center_index(prompt)
+        ligand_atoms = _extract_atom_range(prompt, [r"ligand"], role="ligand_atoms")
+        excluded_atoms = _extract_atom_range(prompt, [r"excluding", r"exclude", r"excluded"], role="excluded_atoms")
+        substituent_atoms = _extract_atom_range(prompt, [r"substituent"], role="substituent_atoms")
+        axis = re.search(r"(?:bond\s+atoms?|atoms?)\s+(\d+)\s*(?:and|と)\s*(\d+)", prompt, flags=re.IGNORECASE)
+        atom = AtomSelectionBinding(
+            selection_type="steric_descriptor",
+            center_atom=center_atom,
+            center_atom_index=center_idx,
+            metal_center=center_idx if re.search(r"metal\s+atom\s+\d+", prompt, flags=re.IGNORECASE) else center_atom,
+            ligand_atoms=ligand_atoms,
+            excluded_atoms=excluded_atoms,
+            include_hydrogens=True if re.search(r"including\s+hydrogens|include\s+hydrogens|水素", prompt, flags=re.IGNORECASE) else None,
+            atom1=int(axis.group(1)) if axis else None,
+            atom2=int(axis.group(2)) if axis else None,
+            substituent_atoms=substituent_atoms,
+            atom_ranges=[*ligand_atoms, *excluded_atoms, *substituent_atoms],
+            selection_basis="file_order",
+            notes=[f"target_property={target_property}"] if target_property else [],
+        )
 
     gopt = GeometryOptimizationControls(
         force_threshold=ParameterValue(value=force_threshold_val, source="user_explicit" if force_threshold_val is not None else "workflow_default", confidence="high" if force_threshold_val is not None else "low", default_policy="workflow_default", status="bound" if force_threshold_val is not None else "assumed_default"),
@@ -251,6 +317,36 @@ def bind_human_prompt_parameters(*, prompt: str, language: str = "auto", compact
 
     periodic_val = "periodic" in txt or "surface" in txt or "bulk" in txt or "crystal" in txt
     backend_specific = {"xtb": {}, "tblite": {}, "g_xtb": {}, "orca": {}, "gaussian": {}, "vasp": {}, "morfeus": {}}
+    morfeus_missing_required = False
+    if backend == "morfeus":
+        target_property = (ni.get("target_properties") or [None])[0]
+        backend_specific["morfeus"] = {
+            "requested_backend": "morfeus",
+            "target_property": target_property,
+            "radius": _extract_float_value(prompt, "radius"),
+            "radii_type": None,
+        }
+        input_files = _file_bindings(prompt)
+        has_primary_xyz = any(f.role == "primary_structure" and f.path and f.format == "xyz" for f in input_files)
+        if not has_primary_xyz:
+            missing.append("input_files.primary_structure")
+            morfeus_missing_required = True
+        if target_property not in {"buried_volume", "cone_angle", "sterimol"}:
+            missing.append("target_property")
+            morfeus_missing_required = True
+        elif target_property == "buried_volume" and not (atom.center_atom or atom.center_atom_index or atom.metal_center):
+            missing.append("atom_selection.center_atom")
+            morfeus_missing_required = True
+        elif target_property == "cone_angle":
+            if not (atom.center_atom or atom.center_atom_index or atom.metal_center):
+                missing.append("atom_selection.center_atom")
+                morfeus_missing_required = True
+            if not atom.ligand_atoms:
+                missing.append("atom_selection.ligand_atoms")
+                morfeus_missing_required = True
+        elif target_property == "sterimol" and not (atom.atom1 and atom.atom2 and atom.substituent_atoms):
+            missing.append("sterimol.axis_and_substituent_atoms")
+            morfeus_missing_required = True
     if (backend or "") == "orca":
         f = re.search(r"\borca\s+([a-z0-9-]+)\s+([a-z0-9-]+)", txt)
         if f:
@@ -283,7 +379,9 @@ def bind_human_prompt_parameters(*, prompt: str, language: str = "auto", compact
         status = "ok"
     if unsupported:
         status = "ambiguous" if (backend == "orca") else "needs_clarification"
-    if missing and status == "ok":
+    if morfeus_missing_required:
+        status = "needs_clarification"
+    elif missing and status == "ok":
         status = "ambiguous"
 
     result = ParameterBindingResult(status=status, language=n.get("language", "unknown"), prompt=prompt, normalized_intent=ni, bound_parameters=bound, missing_parameters=missing, assumed_defaults=assumed, clarification_recommended=clar, unsupported_parameters=unsupported, candidate_workflows=n.get("candidate_workflows", []), warnings=n.get("warnings", []))
