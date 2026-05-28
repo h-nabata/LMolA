@@ -317,6 +317,7 @@ def bind_human_prompt_parameters(*, prompt: str, language: str = "auto", compact
 
     periodic_val = "periodic" in txt or "surface" in txt or "bulk" in txt or "crystal" in txt
     backend_specific = {"xtb": {}, "tblite": {}, "g_xtb": {}, "orca": {}, "gaussian": {}, "vasp": {}, "morfeus": {}}
+    morfeus_missing_required = False
     if backend == "morfeus":
         target_property = (ni.get("target_properties") or [None])[0]
         backend_specific["morfeus"] = {
@@ -325,6 +326,27 @@ def bind_human_prompt_parameters(*, prompt: str, language: str = "auto", compact
             "radius": _extract_float_value(prompt, "radius"),
             "radii_type": None,
         }
+        input_files = _file_bindings(prompt)
+        has_primary_xyz = any(f.role == "primary_structure" and f.path and f.format == "xyz" for f in input_files)
+        if not has_primary_xyz:
+            missing.append("input_files.primary_structure")
+            morfeus_missing_required = True
+        if target_property not in {"buried_volume", "cone_angle", "sterimol"}:
+            missing.append("target_property")
+            morfeus_missing_required = True
+        elif target_property == "buried_volume" and not (atom.center_atom or atom.center_atom_index or atom.metal_center):
+            missing.append("atom_selection.center_atom")
+            morfeus_missing_required = True
+        elif target_property == "cone_angle":
+            if not (atom.center_atom or atom.center_atom_index or atom.metal_center):
+                missing.append("atom_selection.center_atom")
+                morfeus_missing_required = True
+            if not atom.ligand_atoms:
+                missing.append("atom_selection.ligand_atoms")
+                morfeus_missing_required = True
+        elif target_property == "sterimol" and not (atom.atom1 and atom.atom2 and atom.substituent_atoms):
+            missing.append("sterimol.axis_and_substituent_atoms")
+            morfeus_missing_required = True
     if (backend or "") == "orca":
         f = re.search(r"\borca\s+([a-z0-9-]+)\s+([a-z0-9-]+)", txt)
         if f:
@@ -357,7 +379,9 @@ def bind_human_prompt_parameters(*, prompt: str, language: str = "auto", compact
         status = "ok"
     if unsupported:
         status = "ambiguous" if (backend == "orca") else "needs_clarification"
-    if missing and status == "ok":
+    if morfeus_missing_required:
+        status = "needs_clarification"
+    elif missing and status == "ok":
         status = "ambiguous"
 
     result = ParameterBindingResult(status=status, language=n.get("language", "unknown"), prompt=prompt, normalized_intent=ni, bound_parameters=bound, missing_parameters=missing, assumed_defaults=assumed, clarification_recommended=clar, unsupported_parameters=unsupported, candidate_workflows=n.get("candidate_workflows", []), warnings=n.get("warnings", []))

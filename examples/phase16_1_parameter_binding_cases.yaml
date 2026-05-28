@@ -928,12 +928,19 @@ cases:
 - case_id: optional_morfeus_steric_analysis_prompt
   language: en
   prompt: Run morfeus steric buried volume on complex.xyz
-  expected_status: ambiguous
+  expected_status: needs_clarification
   expected_input_file_roles:
   - primary_structure
-  expected_operation: null
+  expected_operation: steric_descriptor_calculation
   expected_input_kind: xyz
+  expected_requested_backend: morfeus
   expected_backend: morfeus
+  expected_target_properties_contains:
+  - buried_volume
+  expected_parameter_bindings_contains:
+  - requested_backend=morfeus
+  - target_property
+  - center_atom
   expected_charge: null
   expected_multiplicity: null
   expected_spin: null
@@ -947,7 +954,8 @@ cases:
   expected_requested_outputs_contains: []
   expected_constraints_contains: []
   expected_assumed_defaults_contains: []
-  expected_missing_parameters_contains: []
+  expected_missing_parameters_contains:
+  - atom_selection.center_atom
   expected_clarification_recommended_contains: []
   expected_unsupported_parameters_contains: []
   forbidden_candidate_workflows: []
