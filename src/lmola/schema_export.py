@@ -191,7 +191,7 @@ def export_planner_schema_bundle() -> dict:
                     "Dry-run plan includes selected_workflow, expected_artifacts, and artifact_manifest_preview.",
                     "Phase 16.4 existing tool expansion supports validate_xyz, xyz_to_geometry_analysis, smiles_to_rdkit_descriptors, smiles_to_conformers_rdkit, and openbabel_convert_structure; low-level tools remain hidden.",
                     "Phase 16.5 morfeus pilot integration supports high-level workflow IDs xyz_to_morfeus_buried_volume, xyz_to_morfeus_cone_angle, and xyz_to_morfeus_sterimol for buried_volume, cone_angle, and sterimol steric_descriptor_calculation planning.",
-                    "Morfeus reports are not geometries and must not be treated as primary_structure inputs.",
+                    "morfeus reports are not geometries and must not be treated as primary_structure inputs.",
                     "Morfeus dry-run planning should use high-level workflow IDs only; low-level morfeus tools remain hidden.",
                     "needs_clarification/unsupported do not select executable workflows.",
                     "execution_allowed remains false in dry-run plans.",
