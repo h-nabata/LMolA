@@ -1,0 +1,365 @@
+schema_version: lmola.morfeus_pilot_cases.v1
+suite_id: morfeus_pilot_core_v1
+description: Morfeus pilot integration cases for Phase 16.5.
+tags: [phase16_5, morfeus, steric_descriptors, core]
+cases:
+  - case_id: en_morfeus_buried_volume_center_element
+    language: en
+    prompt: Calculate buried volume around Ni in examples/complex.xyz using morfeus.
+    tags: [morfeus, buried_volume]
+    expected_status_any: [ok]
+    expected_selected_workflow_id: xyz_to_morfeus_buried_volume
+    expected_operation: steric_descriptor_calculation
+    expected_target_properties_contains: [buried_volume]
+    expected_input_roles: [primary_structure]
+    expected_parameter_bindings_contains: [center_atom, Ni, target_property, requested_backend]
+    expected_expected_artifacts_contains: [morfeus_buried_volume_report]
+    expected_geometry_modified: false
+    expected_can_create_dry_run_plan: true
+    expected_can_execute: false
+    expected_blocking_reasons_contains: []
+    expected_unsupported_reasons_contains: []
+    forbidden_workflow_ids: [xyz_to_morfeus_cone_angle, xyz_to_morfeus_sterimol]
+    forbidden_artifact_as_geometry: [morfeus_buried_volume_report]
+    expected_safety: &safe {execution_allowed: false, dry_run_recommended: true, requires_confirmation: true, requires_allow_execution: true}
+    notes: Complete buried-volume prompt using element center.
+  - case_id: en_morfeus_buried_volume_center_index_radius
+    language: en
+    prompt: Calculate buried volume around atom 1 in examples/complex.xyz using morfeus with radius 3.5.
+    tags: [morfeus, buried_volume]
+    expected_status_any: [ok]
+    expected_selected_workflow_id: xyz_to_morfeus_buried_volume
+    expected_operation: steric_descriptor_calculation
+    expected_target_properties_contains: [buried_volume]
+    expected_input_roles: [primary_structure]
+    expected_parameter_bindings_contains: [center_atom_index, 1, radius, 3.5]
+    expected_expected_artifacts_contains: [morfeus_buried_volume_report]
+    expected_geometry_modified: false
+    expected_can_create_dry_run_plan: true
+    expected_can_execute: false
+    expected_blocking_reasons_contains: []
+    expected_unsupported_reasons_contains: []
+    forbidden_workflow_ids: []
+    forbidden_artifact_as_geometry: [morfeus_buried_volume_report]
+    expected_safety: *safe
+    notes: Complete buried-volume prompt using atom index and radius.
+  - case_id: ja_morfeus_buried_volume_center_element
+    language: ja
+    prompt: examples/complex.xyz の Ni 周りの buried volume を morfeus で計算して。
+    tags: [morfeus, buried_volume, japanese]
+    expected_status_any: [ok]
+    expected_selected_workflow_id: xyz_to_morfeus_buried_volume
+    expected_operation: steric_descriptor_calculation
+    expected_target_properties_contains: [buried_volume]
+    expected_input_roles: [primary_structure]
+    expected_parameter_bindings_contains: [center_atom, Ni]
+    expected_expected_artifacts_contains: [morfeus_buried_volume_report]
+    expected_geometry_modified: false
+    expected_can_create_dry_run_plan: true
+    expected_can_execute: false
+    expected_blocking_reasons_contains: []
+    expected_unsupported_reasons_contains: []
+    forbidden_workflow_ids: []
+    forbidden_artifact_as_geometry: [morfeus_buried_volume_report]
+    expected_safety: *safe
+    notes: Japanese buried-volume prompt.
+  - case_id: en_morfeus_cone_angle_ligand_range
+    language: en
+    prompt: Calculate the Morfeus cone angle for examples/complex.xyz using metal atom 1 and ligand atoms 2-7.
+    tags: [morfeus, cone_angle]
+    expected_status_any: [ok]
+    expected_selected_workflow_id: xyz_to_morfeus_cone_angle
+    expected_operation: steric_descriptor_calculation
+    expected_target_properties_contains: [cone_angle]
+    expected_input_roles: [primary_structure]
+    expected_parameter_bindings_contains: [center_atom_index, ligand_atoms, 2, 7]
+    expected_expected_artifacts_contains: [morfeus_cone_angle_report]
+    expected_geometry_modified: false
+    expected_can_create_dry_run_plan: true
+    expected_can_execute: false
+    expected_blocking_reasons_contains: []
+    expected_unsupported_reasons_contains: []
+    forbidden_workflow_ids: [xyz_to_morfeus_buried_volume]
+    forbidden_artifact_as_geometry: [morfeus_cone_angle_report]
+    expected_safety: *safe
+    notes: Complete cone-angle prompt.
+  - case_id: ja_morfeus_cone_angle_ligand_range
+    language: ja
+    prompt: examples/complex.xyz で metal atom 1 と ligand atoms 2-7 の cone angle を計算して。
+    tags: [morfeus, cone_angle, japanese]
+    expected_status_any: [ok]
+    expected_selected_workflow_id: xyz_to_morfeus_cone_angle
+    expected_operation: steric_descriptor_calculation
+    expected_target_properties_contains: [cone_angle]
+    expected_input_roles: [primary_structure]
+    expected_parameter_bindings_contains: [center_atom_index, ligand_atoms, 2, 7]
+    expected_expected_artifacts_contains: [morfeus_cone_angle_report]
+    expected_geometry_modified: false
+    expected_can_create_dry_run_plan: true
+    expected_can_execute: false
+    expected_blocking_reasons_contains: []
+    expected_unsupported_reasons_contains: []
+    forbidden_workflow_ids: []
+    forbidden_artifact_as_geometry: [morfeus_cone_angle_report]
+    expected_safety: *safe
+    notes: Japanese cone-angle prompt.
+  - case_id: en_morfeus_sterimol_axis_substituent
+    language: en
+    prompt: Calculate Morfeus Sterimol parameters for examples/complex.xyz along bond atoms 1 and 4 using substituent atoms 4-12.
+    tags: [morfeus, sterimol]
+    expected_status_any: [ok]
+    expected_selected_workflow_id: xyz_to_morfeus_sterimol
+    expected_operation: steric_descriptor_calculation
+    expected_target_properties_contains: [sterimol]
+    expected_input_roles: [primary_structure]
+    expected_parameter_bindings_contains: [sterimol.atom1, sterimol.atom2, sterimol.substituent_atoms, 4, 12]
+    expected_expected_artifacts_contains: [morfeus_sterimol_report]
+    expected_geometry_modified: false
+    expected_can_create_dry_run_plan: true
+    expected_can_execute: false
+    expected_blocking_reasons_contains: []
+    expected_unsupported_reasons_contains: []
+    forbidden_workflow_ids: []
+    forbidden_artifact_as_geometry: [morfeus_sterimol_report]
+    expected_safety: *safe
+    notes: Complete Sterimol prompt.
+  - case_id: ja_morfeus_sterimol_axis_substituent
+    language: ja
+    prompt: examples/complex.xyz の bond atoms 1 and 4 に沿った Sterimol を substituent atoms 4-12 で計算して。
+    tags: [morfeus, sterimol, japanese]
+    expected_status_any: [ok]
+    expected_selected_workflow_id: xyz_to_morfeus_sterimol
+    expected_operation: steric_descriptor_calculation
+    expected_target_properties_contains: [sterimol]
+    expected_input_roles: [primary_structure]
+    expected_parameter_bindings_contains: [sterimol.atom1, sterimol.atom2, sterimol.substituent_atoms]
+    expected_expected_artifacts_contains: [morfeus_sterimol_report]
+    expected_geometry_modified: false
+    expected_can_create_dry_run_plan: true
+    expected_can_execute: false
+    expected_blocking_reasons_contains: []
+    expected_unsupported_reasons_contains: []
+    forbidden_workflow_ids: []
+    forbidden_artifact_as_geometry: [morfeus_sterimol_report]
+    expected_safety: *safe
+    notes: Japanese Sterimol prompt.
+  - case_id: en_morfeus_missing_input
+    language: en
+    prompt: Calculate buried volume around Ni center using morfeus.
+    tags: [morfeus, clarification]
+    expected_status_any: [needs_clarification]
+    expected_selected_workflow_id: null
+    expected_operation: steric_descriptor_calculation
+    expected_target_properties_contains: [buried_volume]
+    expected_input_roles: []
+    expected_parameter_bindings_contains: [center_atom, Ni]
+    expected_expected_artifacts_contains: []
+    expected_geometry_modified: null
+    expected_can_create_dry_run_plan: false
+    expected_can_execute: false
+    expected_blocking_reasons_contains: [input structure, XYZ]
+    expected_unsupported_reasons_contains: []
+    forbidden_workflow_ids: [xyz_to_morfeus_buried_volume]
+    forbidden_artifact_as_geometry: []
+    expected_safety: *safe
+    notes: Missing XYZ input blocks planning.
+  - case_id: en_morfeus_missing_center
+    language: en
+    prompt: Calculate buried volume for examples/complex.xyz using morfeus.
+    tags: [morfeus, clarification]
+    expected_status_any: [needs_clarification]
+    expected_selected_workflow_id: null
+    expected_operation: steric_descriptor_calculation
+    expected_target_properties_contains: [buried_volume]
+    expected_input_roles: [primary_structure]
+    expected_parameter_bindings_contains: [target_property]
+    expected_expected_artifacts_contains: []
+    expected_geometry_modified: null
+    expected_can_create_dry_run_plan: false
+    expected_can_execute: false
+    expected_blocking_reasons_contains: [center atom, metal center]
+    expected_unsupported_reasons_contains: []
+    forbidden_workflow_ids: [xyz_to_morfeus_buried_volume]
+    forbidden_artifact_as_geometry: []
+    expected_safety: *safe
+    notes: Missing center atom blocks planning.
+  - case_id: en_morfeus_cone_missing_ligand_atoms
+    language: en
+    prompt: Calculate cone angle around Ni in examples/complex.xyz using morfeus.
+    tags: [morfeus, clarification]
+    expected_status_any: [needs_clarification]
+    expected_selected_workflow_id: null
+    expected_operation: steric_descriptor_calculation
+    expected_target_properties_contains: [cone_angle]
+    expected_input_roles: [primary_structure]
+    expected_parameter_bindings_contains: [center_atom]
+    expected_expected_artifacts_contains: []
+    expected_geometry_modified: null
+    expected_can_create_dry_run_plan: false
+    expected_can_execute: false
+    expected_blocking_reasons_contains: [ligand atoms, atom range]
+    expected_unsupported_reasons_contains: []
+    forbidden_workflow_ids: [xyz_to_morfeus_cone_angle]
+    forbidden_artifact_as_geometry: []
+    expected_safety: *safe
+    notes: Missing ligand atoms blocks planning.
+  - case_id: en_morfeus_sterimol_missing_axis
+    language: en
+    prompt: Calculate Sterimol parameters for examples/complex.xyz using morfeus.
+    tags: [morfeus, clarification]
+    expected_status_any: [needs_clarification]
+    expected_selected_workflow_id: null
+    expected_operation: steric_descriptor_calculation
+    expected_target_properties_contains: [sterimol]
+    expected_input_roles: [primary_structure]
+    expected_parameter_bindings_contains: [target_property]
+    expected_expected_artifacts_contains: []
+    expected_geometry_modified: null
+    expected_can_create_dry_run_plan: false
+    expected_can_execute: false
+    expected_blocking_reasons_contains: [axis atoms, substituent atoms]
+    expected_unsupported_reasons_contains: []
+    forbidden_workflow_ids: [xyz_to_morfeus_sterimol]
+    forbidden_artifact_as_geometry: []
+    expected_safety: *safe
+    notes: Missing Sterimol axis/substituent blocks planning.
+  - case_id: en_morfeus_report_not_geometry
+    language: en
+    prompt: Use this morfeus_buried_volume_report as a geometry input.
+    tags: [morfeus, artifact_safety]
+    expected_status_any: [unsupported, needs_clarification]
+    expected_selected_workflow_id: null
+    expected_operation: unsupported
+    expected_target_properties_contains: []
+    expected_input_roles: []
+    expected_parameter_bindings_contains: []
+    expected_expected_artifacts_contains: []
+    expected_geometry_modified: null
+    expected_can_create_dry_run_plan: false
+    expected_can_execute: false
+    expected_blocking_reasons_contains: []
+    expected_unsupported_reasons_contains: [not geometry]
+    forbidden_workflow_ids: [xyz_to_xtb_relax, validate_xyz]
+    forbidden_artifact_as_geometry: [morfeus_buried_volume_report]
+    expected_safety: *safe
+    notes: Morfeus reports are result/report artifacts, not geometries.
+  - case_id: en_morfeus_result_next_action
+    language: en
+    prompt: What can I do next with a morfeus_buried_volume_report?
+    tags: [morfeus, artifact_safety]
+    expected_status_any: [unsupported, needs_clarification]
+    expected_selected_workflow_id: null
+    expected_operation: unsupported
+    expected_target_properties_contains: []
+    expected_input_roles: []
+    expected_parameter_bindings_contains: []
+    expected_expected_artifacts_contains: []
+    expected_geometry_modified: null
+    expected_can_create_dry_run_plan: false
+    expected_can_execute: false
+    expected_blocking_reasons_contains: []
+    expected_unsupported_reasons_contains: [unsupported]
+    forbidden_workflow_ids: [xyz_to_xtb_relax, validate_xyz]
+    forbidden_artifact_as_geometry: [morfeus_buried_volume_report]
+    expected_safety: *safe
+    notes: Must not treat Morfeus report as primary_structure.
+  - case_id: en_morfeus_unknown_descriptor
+    language: en
+    prompt: Calculate the Morfeus foobar descriptor for examples/complex.xyz around Ni.
+    tags: [morfeus, unsupported]
+    expected_status_any: [unsupported, needs_clarification]
+    expected_selected_workflow_id: null
+    expected_operation: unsupported
+    expected_target_properties_contains: []
+    expected_input_roles: [primary_structure]
+    expected_parameter_bindings_contains: []
+    expected_expected_artifacts_contains: []
+    expected_geometry_modified: null
+    expected_can_create_dry_run_plan: false
+    expected_can_execute: false
+    expected_blocking_reasons_contains: []
+    expected_unsupported_reasons_contains: [unsupported, descriptor]
+    forbidden_workflow_ids: [xyz_to_morfeus_buried_volume, xyz_to_morfeus_cone_angle, xyz_to_morfeus_sterimol]
+    forbidden_artifact_as_geometry: []
+    expected_safety: *safe
+    notes: Unknown Morfeus descriptor remains unsupported.
+  - case_id: en_morfeus_buried_volume_with_excluded_atoms
+    language: en
+    prompt: Calculate buried volume around Ni in examples/complex.xyz using morfeus excluding atoms 2-5.
+    tags: [morfeus, buried_volume]
+    expected_status_any: [ok]
+    expected_selected_workflow_id: xyz_to_morfeus_buried_volume
+    expected_operation: steric_descriptor_calculation
+    expected_target_properties_contains: [buried_volume]
+    expected_input_roles: [primary_structure]
+    expected_parameter_bindings_contains: [center_atom, excluded_atoms, 2, 5]
+    expected_expected_artifacts_contains: [morfeus_buried_volume_report]
+    expected_geometry_modified: false
+    expected_can_create_dry_run_plan: true
+    expected_can_execute: false
+    expected_blocking_reasons_contains: []
+    expected_unsupported_reasons_contains: []
+    forbidden_workflow_ids: []
+    forbidden_artifact_as_geometry: [morfeus_buried_volume_report]
+    expected_safety: *safe
+    notes: Excluded atom range binding.
+  - case_id: en_morfeus_buried_volume_include_hydrogens
+    language: en
+    prompt: Calculate buried volume around Ni in examples/complex.xyz using morfeus including hydrogens.
+    tags: [morfeus, buried_volume]
+    expected_status_any: [ok]
+    expected_selected_workflow_id: xyz_to_morfeus_buried_volume
+    expected_operation: steric_descriptor_calculation
+    expected_target_properties_contains: [buried_volume]
+    expected_input_roles: [primary_structure]
+    expected_parameter_bindings_contains: [center_atom, include_hydrogens, true]
+    expected_expected_artifacts_contains: [morfeus_buried_volume_report]
+    expected_geometry_modified: false
+    expected_can_create_dry_run_plan: true
+    expected_can_execute: false
+    expected_blocking_reasons_contains: []
+    expected_unsupported_reasons_contains: []
+    forbidden_workflow_ids: []
+    forbidden_artifact_as_geometry: [morfeus_buried_volume_report]
+    expected_safety: *safe
+    notes: include_hydrogens binding.
+  - case_id: en_existing_tool_regression_openbabel
+    language: en
+    prompt: Use OpenBabel to convert SMILES CCO to 3D XYZ.
+    tags: [regression, openbabel]
+    expected_status_any: [ok]
+    expected_selected_workflow_id: openbabel_convert_structure
+    expected_operation: format_conversion
+    expected_target_properties_contains: []
+    expected_input_roles: [smiles_input]
+    expected_parameter_bindings_contains: [openbabel, output_format, xyz]
+    expected_expected_artifacts_contains: [converted_structure]
+    expected_geometry_modified: true
+    expected_can_create_dry_run_plan: true
+    expected_can_execute: false
+    expected_blocking_reasons_contains: []
+    expected_unsupported_reasons_contains: []
+    forbidden_workflow_ids: [xyz_to_morfeus_buried_volume, xyz_to_morfeus_cone_angle, xyz_to_morfeus_sterimol]
+    forbidden_artifact_as_geometry: []
+    expected_safety: *safe
+    notes: Existing OpenBabel workflow remains selected.
+  - case_id: en_existing_tool_regression_xtb
+    language: en
+    prompt: Run an xTB single point for examples/water.xyz with charge 0 and multiplicity 1. Do not optimize geometry.
+    tags: [regression, xtb]
+    expected_status_any: [ok]
+    expected_selected_workflow_id: xyz_to_xtb_singlepoint
+    expected_operation: singlepoint_energy
+    expected_target_properties_contains: []
+    expected_input_roles: [primary_structure]
+    expected_parameter_bindings_contains: [charge, multiplicity]
+    expected_expected_artifacts_contains: [xtb_singlepoint_result]
+    expected_geometry_modified: false
+    expected_can_create_dry_run_plan: true
+    expected_can_execute: false
+    expected_blocking_reasons_contains: []
+    expected_unsupported_reasons_contains: []
+    forbidden_workflow_ids: [xyz_to_morfeus_buried_volume, xyz_to_morfeus_cone_angle, xyz_to_morfeus_sterimol]
+    forbidden_artifact_as_geometry: []
+    expected_safety: *safe
+    notes: Existing xTB singlepoint workflow remains selected.

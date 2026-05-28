@@ -1,0 +1,22 @@
+schema_version: lmola.workflow_request.v1
+workflow_id: xyz_to_morfeus_sterimol
+contract_example: true
+notes:
+  - Phase 16.5 dry-run contract example; real Morfeus execution is optional and not required by default tests.
+input:
+  type: xyz
+  role: primary_structure
+  path: examples/complex.xyz
+parameters:
+  requested_backend: morfeus
+  target_property: sterimol
+  sterimol:
+    atom1: 1
+    atom2: 4
+    substituent_atoms:
+      - start: 4
+        end: 8
+        basis: file_order
+outputs:
+  expected_artifact: morfeus_sterimol_report
+  geometry_modified: false
