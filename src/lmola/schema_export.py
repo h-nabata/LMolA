@@ -87,7 +87,7 @@ def export_workflow_catalog_schema(*, compact: bool = False) -> dict:
     workflows = []
     for entry in list_workflows():
         canonical_steps = [{"tool": t} for t in entry.tools]
-        backends = sorted({b for name in entry.tools for b in tool_map.get(name).required_backends})
+        backends = sorted({*entry.required_backends, *[b for name in entry.tools for b in tool_map.get(name).required_backends]})
         readiness = check_workflow_backend_readiness(entry.workflow_id)
         payload = {
             "workflow_id": entry.workflow_id,
@@ -190,6 +190,9 @@ def export_planner_schema_bundle() -> dict:
                     "Dry-run plans do not execute chemistry.",
                     "Dry-run plan includes selected_workflow, expected_artifacts, and artifact_manifest_preview.",
                     "Phase 16.4 existing tool expansion supports validate_xyz, xyz_to_geometry_analysis, smiles_to_rdkit_descriptors, smiles_to_conformers_rdkit, and openbabel_convert_structure; low-level tools remain hidden.",
+                    "Phase 16.5 morfeus pilot integration supports high-level workflow IDs xyz_to_morfeus_buried_volume, xyz_to_morfeus_cone_angle, and xyz_to_morfeus_sterimol for buried_volume, cone_angle, and sterimol steric_descriptor_calculation planning.",
+                    "Morfeus reports are not geometries and must not be treated as primary_structure inputs.",
+                    "Morfeus dry-run planning should use high-level workflow IDs only; low-level morfeus tools remain hidden.",
                     "needs_clarification/unsupported do not select executable workflows.",
                     "execution_allowed remains false in dry-run plans.",
                     "missing_parameters become required_questions.",
@@ -267,6 +270,7 @@ def export_all_schemas() -> dict:
             "dry_run_execution_plan_schema": DryRunExecutionPlan.model_json_schema(),
             "dry_run_plan_eval_schema": {"schema_version": "lmola.dry_run_plan_eval.v1", "required_fields": ["selected_workflow", "input_bindings", "parameter_bindings", "expected_artifacts", "artifact_manifest_preview", "blocking_reasons", "unsupported_reasons", "can_create_dry_run_plan", "can_execute", "execution_allowed", "dry_run_recommended"]},
             "existing_tool_expansion_eval_schema": {"schema_version": "lmola.existing_tool_expansion_eval.v1", "default_suite_id": "existing_tool_expansion_core_v1", "required_fields": ["status", "suite_id", "schema_version", "backend", "model", "total_cases", "passed_cases", "failed_cases", "pass_rate", "workflow_selection_pass_rate", "input_binding_pass_rate", "parameter_binding_pass_rate", "expected_artifact_pass_rate", "clarification_behavior_pass_rate", "safety_pass_rate", "unsafe_execution_attempt_rate", "forced_selection_on_incomplete_prompt_rate", "low_level_tool_exposure_rate", "failed_case_ids", "cases"]},
+            "morfeus_pilot_eval_schema": {"schema_version": "lmola.morfeus_pilot_eval.v1", "default_suite_id": "morfeus_pilot_core_v1", "required_fields": ["status", "suite_id", "schema_version", "backend", "model", "total_cases", "passed_cases", "failed_cases", "pass_rate", "workflow_selection_pass_rate", "input_binding_pass_rate", "parameter_binding_pass_rate", "expected_artifact_pass_rate", "clarification_behavior_pass_rate", "artifact_safety_pass_rate", "safety_pass_rate", "unsafe_execution_attempt_rate", "forced_selection_on_incomplete_prompt_rate", "result_artifact_as_geometry_error_rate", "low_level_tool_exposure_rate", "failed_case_ids", "cases"]},
             "backend_capabilities": {k: v.model_dump() for k, v in list_backend_capabilities().items()},
         }
     )
