@@ -15,7 +15,7 @@ runner = CliRunner()
 def test_registry_contains_expected_artifact_types() -> None:
     contracts = export_artifact_registry(compact=False)["artifact_contracts"]
     for name in {
-        "xyz_geometry", "validated_xyz", "generated_xyz", "relaxed_xyz", "xtb_singlepoint_result", "xtb_relax_result", "geometry_analysis_report", "rmsd_report", "geometry_comparison_report", "element_count_report", "molecule_split_report", "rdkit_descriptor_table", "descriptor_filter_report", "conformer_ensemble", "validation_report", "workflow_summary", "triage_report", "mcp_audit",
+        "xyz_geometry", "validated_xyz", "generated_xyz", "relaxed_xyz", "optimized_geometry", "converted_structure", "xtb_singlepoint_result", "xtb_relax_result", "geometry_analysis_report", "rmsd_report", "geometry_comparison_report", "element_count_report", "molecule_split_report", "rdkit_descriptor_table", "descriptor_filter_report", "conformer_ensemble", "validation_report", "workflow_summary", "triage_report", "mcp_audit",
     }:
         assert name in contracts
 
