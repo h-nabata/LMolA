@@ -1,0 +1,31 @@
+schema_version: lmola.workflow_request.v1
+workflow_id: molsimplify_build_metal_complex
+mode: dry_run_contract_example
+operation: metal_complex_generation
+requested_backend: molsimplify
+input_kind: metal_complex_build_request
+request:
+  metal: Fe
+  oxidation_state: 2
+  coordination_geometry: octahedral
+  coordination_number: 6
+  ligands:
+    - name: ammonia
+      count: 6
+      denticity: 1
+      source: user_explicit
+  output_format: xyz
+  generate_3d: true
+expected_artifacts:
+  - molsimplify_complex_structure
+  - molsimplify_build_report
+  - molsimplify_input_deck
+safety:
+  dry_run_recommended: true
+  execution_allowed: false
+  requires_confirmation: true
+  requires_allow_execution: true
+notes:
+  - Contract example only; default tests do not require molSimplify execution.
+  - molsimplify_build_report and molsimplify_input_deck are not geometry artifacts.
+  - molsimplify_complex_structure is geometry only after real execution produces it; dry-run previews are not existing structures.

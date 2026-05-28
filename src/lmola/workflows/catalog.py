@@ -16,6 +16,7 @@ TASK_TAXONOMY: list[str] = [
     "geometry_analysis",
     "property_calculation",
     "steric_descriptor_calculation",
+    "metal_complex_generation",
 ]
 
 FUTURE_TASK_TYPES: list[str] = [
@@ -217,6 +218,15 @@ WORKFLOW_CATALOG: dict[str, WorkflowCatalogEntry] = {
         required_backends=["ase"],
         description="Analyze XYZ geometry and interatomic distance statistics using ASE.",
     ),
+
+    "molsimplify_build_metal_complex": WorkflowCatalogEntry(
+        workflow_id="molsimplify_build_metal_complex",
+        task_type="metal_complex_generation",
+        input_types=["metal_complex_build_request"],
+        tools=[],
+        required_backends=["molsimplify"],
+        description="Pilot high-level workflow contract for molSimplify metal-complex generation from structured build requests.",
+    ),
     "xyz_to_morfeus_buried_volume": WorkflowCatalogEntry(
         workflow_id="xyz_to_morfeus_buried_volume",
         task_type="steric_descriptor_calculation",
@@ -259,6 +269,7 @@ _WORKFLOW_CONTRACT_DEFS: dict[str, dict] = {
     "filter_molecules_by_descriptors": {"operation": "descriptor_filtering", "method": "rdkit", "geometry_modified": False, "artifact_type": "descriptor_filter_report"},
     "xyz_to_geometry_analysis": {"operation": "geometry_analysis", "method": None, "geometry_modified": False, "artifact_type": "geometry_analysis_report"},
     "openbabel_convert_structure": {"operation": "format_conversion", "method": "openbabel", "geometry_modified": False, "artifact_type": "converted_structure"},
+    "molsimplify_build_metal_complex": {"operation": "metal_complex_generation", "method": "molsimplify", "geometry_modified": True, "artifact_type": "molsimplify_complex_structure"},
     "xyz_to_morfeus_buried_volume": {"operation": "steric_descriptor_calculation", "method": "morfeus", "geometry_modified": False, "artifact_type": "morfeus_buried_volume_report"},
     "xyz_to_morfeus_cone_angle": {"operation": "steric_descriptor_calculation", "method": "morfeus", "geometry_modified": False, "artifact_type": "morfeus_cone_angle_report"},
     "xyz_to_morfeus_sterimol": {"operation": "steric_descriptor_calculation", "method": "morfeus", "geometry_modified": False, "artifact_type": "morfeus_sterimol_report"},
@@ -280,8 +291,8 @@ for _wf_id, _entry in WORKFLOW_CATALOG.items():
         cost_class="medium" if "xtb" in _entry.workflow_id else "low",
         artifact_outputs=[WorkflowArtifactOutputDescriptor(name="primary_output", artifact_type=_meta["artifact_type"], produced_on="success", description="Primary produced artifact.", geometry_modified=_meta["geometry_modified"])],
         llm_use_when=[f"Use for {_meta['operation'].replace('_', ' ')} tasks."],
-        llm_do_not_use_when=["Do not use when user requests a different operation."] + (["Do not use for geometry optimization or relaxation requests."] if _wf_id == "xyz_to_xtb_singlepoint" else []) + (["Do not use when user explicitly says do not modify geometry."] if _wf_id in {"xyz_to_xtb_relax", "smiles_to_xtb_relax"} else []) + (["Do not treat Morfeus report outputs as geometry inputs."] if _wf_id.startswith("xyz_to_morfeus_") else []),
-        notes=["Phase 16.5 Morfeus pilot high-level contract." if _wf_id.startswith("xyz_to_morfeus_") else "Phase 15.0 typed workflow contract foundation."],
+        llm_do_not_use_when=["Do not use when user requests a different operation."] + (["Do not expose low-level molSimplify tools; use only this high-level workflow ID.", "Do not treat dry-run molSimplify previews as existing geometry inputs."] if _wf_id == "molsimplify_build_metal_complex" else []) + (["Do not use for geometry optimization or relaxation requests."] if _wf_id == "xyz_to_xtb_singlepoint" else []) + (["Do not use when user explicitly says do not modify geometry."] if _wf_id in {"xyz_to_xtb_relax", "smiles_to_xtb_relax"} else []) + (["Do not treat Morfeus report outputs as geometry inputs."] if _wf_id.startswith("xyz_to_morfeus_") else []),
+        notes=["Phase 16.6 molSimplify pilot high-level contract; build reports are not geometries and dry-run previews are not existing generated structures." if _wf_id == "molsimplify_build_metal_complex" else ("Phase 16.5 Morfeus pilot high-level contract." if _wf_id.startswith("xyz_to_morfeus_") else "Phase 15.0 typed workflow contract foundation.")],
     ).model_dump()
 
 

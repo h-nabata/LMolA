@@ -1,0 +1,592 @@
+schema_version: lmola.molsimplify_pilot_cases.v1
+suite_id: molsimplify_pilot_core_v1
+description: molSimplify pilot integration cases for Phase 16.6.
+tags:
+- phase16_6
+- molsimplify
+- metal_complex_generation
+- core
+cases:
+- case_id: en_molsimplify_fe_ammonia_octahedral
+  language: en
+  prompt: Build an octahedral Fe(II) complex with six ammonia ligands using molSimplify.
+  tags:
+  - phase16_6
+  - molsimplify
+  expected_status_any:
+  - ok
+  expected_selected_workflow_id: molsimplify_build_metal_complex
+  expected_operation: metal_complex_generation
+  expected_requested_backend: molsimplify
+  expected_input_kind: metal_complex_build_request
+  expected_parameter_bindings_contains:
+  - metal
+  - Fe
+  - oxidation_state
+  - '2'
+  - coordination_geometry
+  - octahedral
+  - ligands
+  - ammonia
+  - count
+  - '6'
+  expected_expected_artifacts_contains:
+  - molsimplify_complex_structure
+  - molsimplify_build_report
+  expected_geometry_modified: true
+  expected_can_create_dry_run_plan: true
+  expected_can_execute: false
+  expected_blocking_reasons_contains: []
+  expected_unsupported_reasons_contains: []
+  forbidden_workflow_ids: []
+  forbidden_artifact_as_geometry:
+  - molsimplify_build_report
+  expected_safety: &id001
+    execution_allowed: false
+    dry_run_recommended: true
+    requires_confirmation: true
+    requires_allow_execution: true
+  notes: ''
+- case_id: ja_molsimplify_fe_ammonia_octahedral
+  language: ja
+  prompt: molSimplifyでFe(II)の八面体錯体を作成して。配位子はアンモニア6個。
+  tags:
+  - phase16_6
+  - molsimplify
+  expected_status_any:
+  - ok
+  expected_selected_workflow_id: molsimplify_build_metal_complex
+  expected_operation: metal_complex_generation
+  expected_requested_backend: molsimplify
+  expected_input_kind: metal_complex_build_request
+  expected_parameter_bindings_contains:
+  - metal
+  - Fe
+  - oxidation_state
+  - '2'
+  - coordination_geometry
+  - octahedral
+  - ligands
+  - ammonia
+  - count
+  - '6'
+  expected_expected_artifacts_contains:
+  - molsimplify_complex_structure
+  - molsimplify_build_report
+  expected_geometry_modified: true
+  expected_can_create_dry_run_plan: true
+  expected_can_execute: false
+  expected_blocking_reasons_contains: []
+  expected_unsupported_reasons_contains: []
+  forbidden_workflow_ids: []
+  forbidden_artifact_as_geometry:
+  - molsimplify_build_report
+  expected_safety: *id001
+  notes: ''
+- case_id: en_molsimplify_co_nh3_octahedral
+  language: en
+  prompt: Use molSimplify to create an octahedral Co(III) complex with six NH3 ligands.
+  tags:
+  - phase16_6
+  - molsimplify
+  expected_status_any:
+  - ok
+  expected_selected_workflow_id: molsimplify_build_metal_complex
+  expected_operation: metal_complex_generation
+  expected_requested_backend: molsimplify
+  expected_input_kind: metal_complex_build_request
+  expected_parameter_bindings_contains:
+  - metal
+  - Co
+  - oxidation_state
+  - '3'
+  - coordination_geometry
+  - octahedral
+  - NH3
+  - count
+  - '6'
+  expected_expected_artifacts_contains:
+  - molsimplify_complex_structure
+  - molsimplify_build_report
+  expected_geometry_modified: true
+  expected_can_create_dry_run_plan: true
+  expected_can_execute: false
+  expected_blocking_reasons_contains: []
+  expected_unsupported_reasons_contains: []
+  forbidden_workflow_ids: []
+  forbidden_artifact_as_geometry: []
+  expected_safety: *id001
+  notes: ''
+- case_id: en_molsimplify_pt_mixed_ligands_square_planar
+  language: en
+  prompt: Generate a square planar Pt(II) complex with two chloride ligands and one
+    ethylenediamine ligand using molSimplify.
+  tags:
+  - phase16_6
+  - molsimplify
+  expected_status_any:
+  - ok
+  expected_selected_workflow_id: molsimplify_build_metal_complex
+  expected_operation: metal_complex_generation
+  expected_requested_backend: molsimplify
+  expected_input_kind: metal_complex_build_request
+  expected_parameter_bindings_contains:
+  - metal
+  - Pt
+  - oxidation_state
+  - '2'
+  - coordination_geometry
+  - square_planar
+  - chloride
+  - '2'
+  - ethylenediamine
+  - '1'
+  expected_expected_artifacts_contains:
+  - molsimplify_complex_structure
+  - molsimplify_build_report
+  expected_geometry_modified: true
+  expected_can_create_dry_run_plan: true
+  expected_can_execute: false
+  expected_blocking_reasons_contains: []
+  expected_unsupported_reasons_contains: []
+  forbidden_workflow_ids: []
+  forbidden_artifact_as_geometry: []
+  expected_safety: *id001
+  notes: ''
+- case_id: ja_molsimplify_pt_mixed_ligands_square_planar
+  language: ja
+  prompt: molSimplifyでPt(II)の平面四角形錯体を作成して。配位子はchloride 2個とethylenediamine 1個。
+  tags:
+  - phase16_6
+  - molsimplify
+  expected_status_any:
+  - ok
+  expected_selected_workflow_id: molsimplify_build_metal_complex
+  expected_operation: metal_complex_generation
+  expected_requested_backend: molsimplify
+  expected_input_kind: metal_complex_build_request
+  expected_parameter_bindings_contains:
+  - metal
+  - Pt
+  - oxidation_state
+  - '2'
+  - coordination_geometry
+  - square_planar
+  - chloride
+  - '2'
+  - ethylenediamine
+  - '1'
+  expected_expected_artifacts_contains:
+  - molsimplify_complex_structure
+  - molsimplify_build_report
+  expected_geometry_modified: true
+  expected_can_create_dry_run_plan: true
+  expected_can_execute: false
+  expected_blocking_reasons_contains: []
+  expected_unsupported_reasons_contains: []
+  forbidden_workflow_ids: []
+  forbidden_artifact_as_geometry: []
+  expected_safety: *id001
+  notes: ''
+- case_id: en_molsimplify_zn_chloride_tetrahedral
+  language: en
+  prompt: Generate a tetrahedral Zn complex with four chloride ligands using molSimplify.
+  tags:
+  - phase16_6
+  - molsimplify
+  expected_status_any:
+  - ok
+  expected_selected_workflow_id: molsimplify_build_metal_complex
+  expected_operation: metal_complex_generation
+  expected_requested_backend: molsimplify
+  expected_input_kind: metal_complex_build_request
+  expected_parameter_bindings_contains:
+  - metal
+  - Zn
+  - coordination_geometry
+  - tetrahedral
+  - chloride
+  - '4'
+  expected_expected_artifacts_contains:
+  - molsimplify_complex_structure
+  - molsimplify_build_report
+  expected_geometry_modified: true
+  expected_can_create_dry_run_plan: true
+  expected_can_execute: false
+  expected_blocking_reasons_contains: []
+  expected_unsupported_reasons_contains: []
+  forbidden_workflow_ids: []
+  forbidden_artifact_as_geometry: []
+  expected_safety: *id001
+  notes: ''
+- case_id: en_molsimplify_with_output_xyz
+  language: en
+  prompt: Build an octahedral Fe(II) complex with six ammonia ligands using molSimplify
+    and output XYZ.
+  tags:
+  - phase16_6
+  - molsimplify
+  expected_status_any:
+  - ok
+  expected_selected_workflow_id: molsimplify_build_metal_complex
+  expected_operation: metal_complex_generation
+  expected_requested_backend: molsimplify
+  expected_input_kind: metal_complex_build_request
+  expected_parameter_bindings_contains:
+  - output_format
+  - xyz
+  - metal
+  - Fe
+  - ammonia
+  - '6'
+  expected_expected_artifacts_contains:
+  - molsimplify_complex_structure
+  - molsimplify_build_report
+  expected_geometry_modified: true
+  expected_can_create_dry_run_plan: true
+  expected_can_execute: false
+  expected_blocking_reasons_contains: []
+  expected_unsupported_reasons_contains: []
+  forbidden_workflow_ids: []
+  forbidden_artifact_as_geometry: []
+  expected_safety: *id001
+  notes: ''
+- case_id: en_molsimplify_with_charge_spin
+  language: en
+  prompt: Build an octahedral Fe(II) complex with six ammonia ligands, charge 2, and
+    spin quintet using molSimplify.
+  tags:
+  - phase16_6
+  - molsimplify
+  expected_status_any:
+  - ok
+  expected_selected_workflow_id: molsimplify_build_metal_complex
+  expected_operation: metal_complex_generation
+  expected_requested_backend: molsimplify
+  expected_input_kind: metal_complex_build_request
+  expected_parameter_bindings_contains:
+  - charge
+  - '2'
+  - spin_state
+  - quintet
+  - multiplicity
+  - '5'
+  expected_expected_artifacts_contains:
+  - molsimplify_complex_structure
+  - molsimplify_build_report
+  expected_geometry_modified: true
+  expected_can_create_dry_run_plan: true
+  expected_can_execute: false
+  expected_blocking_reasons_contains: []
+  expected_unsupported_reasons_contains: []
+  forbidden_workflow_ids: []
+  forbidden_artifact_as_geometry: []
+  expected_safety: *id001
+  notes: ''
+- case_id: en_molsimplify_ligand_smiles
+  language: en
+  prompt: Build a square planar Pd(II) complex with two chloride ligands and ligand
+    SMILES NCCN using molSimplify.
+  tags:
+  - phase16_6
+  - molsimplify
+  expected_status_any:
+  - ok
+  expected_selected_workflow_id: molsimplify_build_metal_complex
+  expected_operation: metal_complex_generation
+  expected_requested_backend: molsimplify
+  expected_input_kind: metal_complex_build_request
+  expected_parameter_bindings_contains:
+  - metal
+  - Pd
+  - oxidation_state
+  - '2'
+  - square_planar
+  - chloride
+  - '2'
+  - NCCN
+  - smiles
+  expected_expected_artifacts_contains:
+  - molsimplify_complex_structure
+  - molsimplify_build_report
+  expected_geometry_modified: true
+  expected_can_create_dry_run_plan: true
+  expected_can_execute: false
+  expected_blocking_reasons_contains: []
+  expected_unsupported_reasons_contains: []
+  forbidden_workflow_ids: []
+  forbidden_artifact_as_geometry: []
+  expected_safety: *id001
+  notes: ''
+- case_id: en_molsimplify_missing_metal
+  language: en
+  prompt: Build an octahedral complex with six ammonia ligands using molSimplify.
+  tags:
+  - phase16_6
+  - molsimplify
+  expected_status_any:
+  - needs_clarification
+  expected_selected_workflow_id: null
+  expected_operation: metal_complex_generation
+  expected_requested_backend: molsimplify
+  expected_input_kind: metal_complex_build_request
+  expected_parameter_bindings_contains: []
+  expected_expected_artifacts_contains: []
+  expected_geometry_modified: null
+  expected_can_create_dry_run_plan: false
+  expected_can_execute: false
+  expected_blocking_reasons_contains:
+  - metal
+  expected_unsupported_reasons_contains: []
+  forbidden_workflow_ids:
+  - molsimplify_build_metal_complex
+  forbidden_artifact_as_geometry: []
+  expected_safety: *id001
+  notes: ''
+- case_id: en_molsimplify_missing_ligands
+  language: en
+  prompt: Build an octahedral Fe(II) complex using molSimplify.
+  tags:
+  - phase16_6
+  - molsimplify
+  expected_status_any:
+  - needs_clarification
+  expected_selected_workflow_id: null
+  expected_operation: metal_complex_generation
+  expected_requested_backend: molsimplify
+  expected_input_kind: metal_complex_build_request
+  expected_parameter_bindings_contains: []
+  expected_expected_artifacts_contains: []
+  expected_geometry_modified: null
+  expected_can_create_dry_run_plan: false
+  expected_can_execute: false
+  expected_blocking_reasons_contains:
+  - ligands
+  expected_unsupported_reasons_contains: []
+  forbidden_workflow_ids:
+  - molsimplify_build_metal_complex
+  forbidden_artifact_as_geometry: []
+  expected_safety: *id001
+  notes: ''
+- case_id: en_molsimplify_missing_geometry
+  language: en
+  prompt: Build an Fe(II) complex with ammonia ligands using molSimplify.
+  tags:
+  - phase16_6
+  - molsimplify
+  expected_status_any:
+  - needs_clarification
+  expected_selected_workflow_id: null
+  expected_operation: metal_complex_generation
+  expected_requested_backend: molsimplify
+  expected_input_kind: metal_complex_build_request
+  expected_parameter_bindings_contains: []
+  expected_expected_artifacts_contains: []
+  expected_geometry_modified: null
+  expected_can_create_dry_run_plan: false
+  expected_can_execute: false
+  expected_blocking_reasons_contains:
+  - coordination geometry
+  expected_unsupported_reasons_contains: []
+  forbidden_workflow_ids:
+  - molsimplify_build_metal_complex
+  forbidden_artifact_as_geometry: []
+  expected_safety: *id001
+  notes: ''
+- case_id: en_molsimplify_generic_prompt
+  language: en
+  prompt: Use molSimplify to build a metal complex.
+  tags:
+  - phase16_6
+  - molsimplify
+  expected_status_any:
+  - needs_clarification
+  expected_selected_workflow_id: null
+  expected_operation: metal_complex_generation
+  expected_requested_backend: molsimplify
+  expected_input_kind: metal_complex_build_request
+  expected_parameter_bindings_contains: []
+  expected_expected_artifacts_contains: []
+  expected_geometry_modified: null
+  expected_can_create_dry_run_plan: false
+  expected_can_execute: false
+  expected_blocking_reasons_contains:
+  - metal
+  - ligands
+  - coordination geometry
+  expected_unsupported_reasons_contains: []
+  forbidden_workflow_ids:
+  - molsimplify_build_metal_complex
+  forbidden_artifact_as_geometry: []
+  expected_safety: *id001
+  notes: ''
+- case_id: en_molsimplify_report_not_geometry
+  language: en
+  prompt: Use this molsimplify_build_report as a geometry input.
+  tags:
+  - phase16_6
+  - molsimplify
+  expected_status_any:
+  - unsupported
+  - needs_clarification
+  expected_selected_workflow_id: null
+  expected_operation: unsupported
+  expected_requested_backend: molsimplify
+  expected_input_kind: metal_complex_build_request
+  expected_parameter_bindings_contains: []
+  expected_expected_artifacts_contains: []
+  expected_geometry_modified: null
+  expected_can_create_dry_run_plan: false
+  expected_can_execute: false
+  expected_blocking_reasons_contains: []
+  expected_unsupported_reasons_contains:
+  - build_report
+  - not geometry
+  forbidden_workflow_ids:
+  - molsimplify_build_metal_complex
+  forbidden_artifact_as_geometry:
+  - molsimplify_build_report
+  expected_safety: *id001
+  notes: ''
+- case_id: en_molsimplify_dry_run_preview_not_geometry
+  language: en
+  prompt: Use the dry-run molsimplify_complex_structure preview as a primary structure
+    for xTB.
+  tags:
+  - phase16_6
+  - molsimplify
+  expected_status_any:
+  - unsupported
+  - needs_clarification
+  expected_selected_workflow_id: null
+  expected_operation: unsupported
+  expected_requested_backend: molsimplify
+  expected_input_kind: metal_complex_build_request
+  expected_parameter_bindings_contains: []
+  expected_expected_artifacts_contains: []
+  expected_geometry_modified: null
+  expected_can_create_dry_run_plan: false
+  expected_can_execute: false
+  expected_blocking_reasons_contains: []
+  expected_unsupported_reasons_contains:
+  - dry-run
+  - not an existing
+  forbidden_workflow_ids:
+  - molsimplify_build_metal_complex
+  forbidden_artifact_as_geometry:
+  - molsimplify_complex_structure
+  expected_safety: *id001
+  notes: ''
+- case_id: en_molsimplify_unknown_geometry
+  language: en
+  prompt: Build a banana-shaped Fe(II) complex with six ammonia ligands using molSimplify.
+  tags:
+  - phase16_6
+  - molsimplify
+  expected_status_any:
+  - unsupported
+  - needs_clarification
+  expected_selected_workflow_id: null
+  expected_operation: unsupported
+  expected_requested_backend: molsimplify
+  expected_input_kind: metal_complex_build_request
+  expected_parameter_bindings_contains: []
+  expected_expected_artifacts_contains: []
+  expected_geometry_modified: null
+  expected_can_create_dry_run_plan: false
+  expected_can_execute: false
+  expected_blocking_reasons_contains: []
+  expected_unsupported_reasons_contains:
+  - unsupported
+  - unknown
+  - geometry
+  forbidden_workflow_ids:
+  - molsimplify_build_metal_complex
+  forbidden_artifact_as_geometry: []
+  expected_safety: *id001
+  notes: ''
+- case_id: en_existing_morfeus_regression
+  language: en
+  prompt: Calculate buried volume around Ni in examples/complex.xyz using morfeus.
+  tags:
+  - phase16_6
+  - regression
+  expected_status_any:
+  - ok
+  expected_selected_workflow_id: xyz_to_morfeus_buried_volume
+  expected_operation: steric_descriptor_calculation
+  expected_requested_backend: morfeus
+  expected_input_kind: xyz
+  expected_parameter_bindings_contains:
+  - morfeus
+  - buried_volume
+  - center_atom
+  expected_expected_artifacts_contains:
+  - morfeus_buried_volume_report
+  expected_geometry_modified: false
+  expected_can_create_dry_run_plan: true
+  expected_can_execute: false
+  expected_blocking_reasons_contains: []
+  expected_unsupported_reasons_contains: []
+  forbidden_workflow_ids:
+  - molsimplify_build_metal_complex
+  forbidden_artifact_as_geometry:
+  - morfeus_buried_volume_report
+  expected_safety: *id001
+  notes: ''
+- case_id: en_existing_openbabel_regression
+  language: en
+  prompt: Use OpenBabel to convert SMILES CCO to 3D XYZ.
+  tags:
+  - phase16_6
+  - regression
+  expected_status_any:
+  - ok
+  expected_selected_workflow_id: openbabel_convert_structure
+  expected_operation: format_conversion
+  expected_requested_backend: null
+  expected_input_kind: smiles
+  expected_parameter_bindings_contains:
+  - openbabel
+  - output_format
+  - xyz
+  expected_expected_artifacts_contains:
+  - converted_structure
+  expected_geometry_modified: true
+  expected_can_create_dry_run_plan: true
+  expected_can_execute: false
+  expected_blocking_reasons_contains: []
+  expected_unsupported_reasons_contains: []
+  forbidden_workflow_ids:
+  - molsimplify_build_metal_complex
+  forbidden_artifact_as_geometry: []
+  expected_safety: *id001
+  notes: ''
+- case_id: en_existing_xtb_regression
+  language: en
+  prompt: Run an xTB single point for examples/water.xyz with charge 0 and multiplicity
+    1. Do not optimize geometry.
+  tags:
+  - phase16_6
+  - regression
+  expected_status_any:
+  - ok
+  expected_selected_workflow_id: xyz_to_xtb_singlepoint
+  expected_operation: singlepoint_energy
+  expected_requested_backend: xtb
+  expected_input_kind: xyz
+  expected_parameter_bindings_contains:
+  - charge
+  - multiplicity
+  expected_expected_artifacts_contains:
+  - xtb_singlepoint_result
+  expected_geometry_modified: false
+  expected_can_create_dry_run_plan: true
+  expected_can_execute: false
+  expected_blocking_reasons_contains: []
+  expected_unsupported_reasons_contains: []
+  forbidden_workflow_ids:
+  - molsimplify_build_metal_complex
+  forbidden_artifact_as_geometry: []
+  expected_safety: *id001
+  notes: ''
