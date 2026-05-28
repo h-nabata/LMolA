@@ -1,0 +1,17 @@
+schema_version: lmola.workflow_request.v1
+workflow_id: xyz_to_morfeus_buried_volume
+contract_example: true
+notes:
+  - Phase 16.5 dry-run contract example; real Morfeus execution is optional and not required by default tests.
+input:
+  type: xyz
+  role: primary_structure
+  path: examples/complex.xyz
+parameters:
+  requested_backend: morfeus
+  target_property: buried_volume
+  center_atom: Ni
+  radius: 3.5
+outputs:
+  expected_artifact: morfeus_buried_volume_report
+  geometry_modified: false
