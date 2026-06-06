@@ -152,6 +152,12 @@ def normalize_human_prompt(*, prompt: str, language: str = "auto", compact: bool
         op = "element_counting"
     if any(k in text for k in ["split atoms", "分割", "file order", "ファイル順"]):
         op = "molecule_splitting"
+    if ("descriptor" in text or "descriptors" in text) and any(
+        token in text for token in ["filter", "threshold", "thresholds", "hbd", "hba"]
+    ):
+        op = "descriptor_filtering"
+    if ("openbabel" in text or "open babel" in text) and "smiles" in text and "3d" in text:
+        op = "format_conversion"
     if "transition state" in text or "reaction path" in text:
         op = "unsupported"
     if "manifest" in text:
@@ -185,10 +191,22 @@ def normalize_human_prompt(*, prompt: str, language: str = "auto", compact: bool
         input_kind = "xyz_pair"
     if op in {"element_counting", "molecule_splitting"} and input_kind == "unknown":
         input_kind = "xyz"
+    if op in {"descriptor_filtering", "descriptor_calculation"} and ".csv" in text:
+        input_kind = "smiles_csv"
+    if ("openbabel" in text or "open babel" in text) and "smiles" in text:
+        input_kind = "smiles"
     if morfeus_requested and ".xyz" in text:
         input_kind = "xyz"
     if mols.get("requested"):
         input_kind = "metal_complex_build_request"
+
+    requested_backend = intent.get("requested_backend")
+    if "rdkit" in text:
+        requested_backend = "rdkit"
+    if "openbabel" in text or "open babel" in text:
+        requested_backend = "openbabel"
+    if "xtb" in text:
+        requested_backend = "xtb"
 
     constraints = list(intent.get("constraints", []))
     if "do_not_optimize_geometry" in constraints:
@@ -220,7 +238,7 @@ def normalize_human_prompt(*, prompt: str, language: str = "auto", compact: bool
 
     wf_hints = base.get("workflow_hints", [])
     if not wf_hints:
-        wf_hints = {"rmsd_calculation": ["xyz_to_rmsd"], "structure_comparison": ["compare_two_geometries"], "element_counting": ["count_element_atoms"], "molecule_splitting": ["split_molecule_by_file_order"], "descriptor_filtering": ["filter_molecules_by_descriptors"], "singlepoint_energy": ["xyz_to_xtb_singlepoint"], "geometry_optimization": ["xyz_to_xtb_relax"], "steric_descriptor_calculation": [{"buried_volume": "xyz_to_morfeus_buried_volume", "cone_angle": "xyz_to_morfeus_cone_angle", "sterimol": "xyz_to_morfeus_sterimol"}.get(morfeus_target, "")], "metal_complex_generation": ["molsimplify_build_metal_complex"]}.get(op, [])
+        wf_hints = {"rmsd_calculation": ["xyz_to_rmsd"], "structure_comparison": ["compare_two_geometries"], "element_counting": ["count_element_atoms"], "molecule_splitting": ["split_molecule_by_file_order"], "descriptor_filtering": ["filter_molecules_by_descriptors"], "singlepoint_energy": ["xyz_to_xtb_singlepoint"], "geometry_optimization": ["xyz_to_xtb_relax"], "format_conversion": ["openbabel_convert_structure"] if requested_backend == "openbabel" else [], "steric_descriptor_calculation": [{"buried_volume": "xyz_to_morfeus_buried_volume", "cone_angle": "xyz_to_morfeus_cone_angle", "sterimol": "xyz_to_morfeus_sterimol"}.get(morfeus_target, "")], "metal_complex_generation": ["molsimplify_build_metal_complex"]}.get(op, [])
     wf_hints = [w for w in wf_hints if w]
     if status in {"ambiguous", "unsupported", "needs_clarification"}:
         wf_hints = []
@@ -269,7 +287,7 @@ def normalize_human_prompt(*, prompt: str, language: str = "auto", compact: bool
         normalized_intent=HumanPromptNormalizedIntent(
             operation=op,
             method_family=_method_family("molsimplify" if mols.get("requested") else ("morfeus" if morfeus_requested else intent.get("method")), op),
-            requested_backend="molsimplify" if mols.get("requested") else ("morfeus" if morfeus_requested else intent.get("method")),
+            requested_backend="molsimplify" if mols.get("requested") else ("morfeus" if morfeus_requested else requested_backend),
             input_kind=input_kind,
             target_artifact_type="molsimplify_complex_structure" if mols.get("requested") and not mols.get("artifact_issue") else None,
             input_artifact_type="xtb_singlepoint_result" if ("singlepoint_result" in text or "xtb_singlepoint_result" in text or "singlepoint result" in text) else None,

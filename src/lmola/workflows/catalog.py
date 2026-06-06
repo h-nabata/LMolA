@@ -275,6 +275,41 @@ _WORKFLOW_CONTRACT_DEFS: dict[str, dict] = {
     "xyz_to_morfeus_sterimol": {"operation": "steric_descriptor_calculation", "method": "morfeus", "geometry_modified": False, "artifact_type": "morfeus_sterimol_report"},
 }
 
+_ADDITIONAL_ARTIFACT_OUTPUTS: dict[str, list[dict[str, object]]] = {
+    "smiles_to_xtb_relax": [
+        {
+            "name": "relaxed_structure",
+            "artifact_type": "relaxed_xyz",
+            "description": "Relaxed geometry produced by xTB after successful execution.",
+            "geometry_modified": True,
+        }
+    ],
+    "xyz_to_xtb_relax": [
+        {
+            "name": "relaxation_report",
+            "artifact_type": "xtb_relax_result",
+            "description": "xTB relaxation metadata/report distinct from optimized geometry.",
+            "geometry_modified": False,
+        }
+    ],
+    "openbabel_convert_structure": [
+        {
+            "name": "conversion_report",
+            "artifact_type": "openbabel_conversion_report",
+            "description": "Open Babel conversion diagnostics distinct from converted structure.",
+            "geometry_modified": False,
+        }
+    ],
+    "smiles_to_3d_openbabel": [
+        {
+            "name": "conversion_report",
+            "artifact_type": "openbabel_conversion_report",
+            "description": "Open Babel generation/conversion diagnostics.",
+            "geometry_modified": False,
+        }
+    ],
+}
+
 for _wf_id, _entry in WORKFLOW_CATALOG.items():
     _meta = _WORKFLOW_CONTRACT_DEFS[_wf_id]
     _entry.contract = WorkflowContract(
@@ -289,7 +324,25 @@ for _wf_id, _entry in WORKFLOW_CATALOG.items():
         geometry_modified=_meta["geometry_modified"],
         side_effects=["writes_batch_artifacts"],
         cost_class="medium" if "xtb" in _entry.workflow_id else "low",
-        artifact_outputs=[WorkflowArtifactOutputDescriptor(name="primary_output", artifact_type=_meta["artifact_type"], produced_on="success", description="Primary produced artifact.", geometry_modified=_meta["geometry_modified"])],
+        artifact_outputs=[
+            WorkflowArtifactOutputDescriptor(
+                name="primary_output",
+                artifact_type=_meta["artifact_type"],
+                produced_on="success",
+                description="Primary produced artifact.",
+                geometry_modified=_meta["geometry_modified"],
+            ),
+            *[
+                WorkflowArtifactOutputDescriptor(
+                    name=str(extra["name"]),
+                    artifact_type=str(extra["artifact_type"]),
+                    produced_on="success",
+                    description=str(extra["description"]),
+                    geometry_modified=extra.get("geometry_modified") if isinstance(extra.get("geometry_modified"), bool) else None,
+                )
+                for extra in _ADDITIONAL_ARTIFACT_OUTPUTS.get(_wf_id, [])
+            ],
+        ],
         llm_use_when=[f"Use for {_meta['operation'].replace('_', ' ')} tasks."],
         llm_do_not_use_when=["Do not use when user requests a different operation."] + (["Do not expose low-level molSimplify tools; use only this high-level workflow ID.", "Do not treat dry-run molSimplify previews as existing geometry inputs."] if _wf_id == "molsimplify_build_metal_complex" else []) + (["Do not use for geometry optimization or relaxation requests."] if _wf_id == "xyz_to_xtb_singlepoint" else []) + (["Do not use when user explicitly says do not modify geometry."] if _wf_id in {"xyz_to_xtb_relax", "smiles_to_xtb_relax"} else []) + (["Do not treat Morfeus report outputs as geometry inputs."] if _wf_id.startswith("xyz_to_morfeus_") else []),
         notes=["Phase 16.6 molSimplify pilot high-level contract; build reports are not geometries and dry-run previews are not existing generated structures." if _wf_id == "molsimplify_build_metal_complex" else ("Phase 16.5 Morfeus pilot high-level contract." if _wf_id.startswith("xyz_to_morfeus_") else "Phase 15.0 typed workflow contract foundation.")],

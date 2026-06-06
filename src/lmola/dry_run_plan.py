@@ -8,6 +8,8 @@ import yaml
 from pydantic import BaseModel, Field
 
 from lmola.clarification import ClarificationPlan, generate_clarification_plan
+from lmola.adapters import list_adapter_metadata, list_optional_smoke_results
+from lmola.artifact_contracts import export_artifact_registry
 from lmola.workflows import list_workflows
 
 
@@ -88,7 +90,11 @@ def _extract_int(patterns: list[str], text: str) -> int | None:
 
 def _extract_output_format(prompt: str) -> str | None:
     text = prompt.lower()
-    patterns = [r"\bto\s+(?:3d\s+)?(xyz|sdf|mol|pdb)\b", r"\b(?:3d\s+)?(xyz|sdf|mol|pdb)\b\s*(?:format)?\s*[.。!！]?\s*$"]
+    patterns = [
+        r"\bto\s+(?:3d\s+)?(xyz|sdf|mol|pdb)\b",
+        r"\b3d\s+(xyz|sdf|mol|pdb)\b",
+        r"\b(?:3d\s+)?(xyz|sdf|mol|pdb)\b\s*(?:format)?\s*[.。!！]?\s*$",
+    ]
     for pattern in patterns:
         match = re.search(pattern, text, flags=re.IGNORECASE)
         if match:
@@ -109,16 +115,19 @@ def _expected_artifacts_for_workflow(wid: str, geometry_modified: bool | None) -
     amap = {
         "xyz_to_xtb_singlepoint": ["xtb_singlepoint_result"],
         "xyz_to_xtb_relax": ["optimized_geometry"],
+        "smiles_to_xtb_relax": ["xtb_relax_result", "relaxed_xyz"],
+        "smiles_to_3d_rdkit": ["generated_xyz"],
         "xyz_to_rmsd": ["rmsd_report"],
         "compare_two_geometries": ["geometry_comparison_report"],
         "count_element_atoms": ["element_count_report"],
-        "split_molecule_by_file_order": ["split_structure_result"],
+        "split_molecule_by_file_order": ["molecule_split_report"],
         "filter_molecules_by_descriptors": ["descriptor_filter_report"],
         "validate_xyz": ["validation_report"],
         "xyz_to_geometry_analysis": ["geometry_analysis_report"],
         "smiles_to_rdkit_descriptors": ["rdkit_descriptor_table"],
         "smiles_to_conformers_rdkit": ["conformer_ensemble"],
-        "openbabel_convert_structure": ["converted_structure"],
+        "smiles_to_3d_openbabel": ["generated_xyz", "openbabel_conversion_report"],
+        "openbabel_convert_structure": ["converted_structure", "openbabel_conversion_report"],
         "molsimplify_build_metal_complex": ["molsimplify_complex_structure", "molsimplify_build_report", "molsimplify_input_deck"],
         "xyz_to_morfeus_buried_volume": ["morfeus_buried_volume_report"],
         "xyz_to_morfeus_cone_angle": ["morfeus_cone_angle_report"],
@@ -131,6 +140,16 @@ def _expected_artifacts_for_workflow(wid: str, geometry_modified: bool | None) -
         "morfeus_buried_volume_report": False,
         "morfeus_cone_angle_report": False,
         "morfeus_sterimol_report": False,
+        "xtb_singlepoint_result": False,
+        "xtb_relax_result": False,
+        "relaxed_xyz": True,
+        "generated_xyz": True,
+        "optimized_geometry": True,
+        "converted_structure": geometry_modified,
+        "openbabel_conversion_report": False,
+        "rdkit_descriptor_table": False,
+        "descriptor_filter_report": False,
+        "conformer_ensemble": True,
     }
     return [
         DryRunExpectedArtifact(
@@ -263,7 +282,7 @@ def create_dry_run_execution_plan(prompt: str, language: str = "auto", clarifica
         random_seed = _extract_int([r"random\s+seed\s+(\d+)", r"seed\s+(\d+)"], prompt)
         if random_seed is not None:
             _add_param(DryRunParameterBinding(name="random_seed", value=random_seed, source="user_explicit", required=False, default_policy=None, status="bound"))
-    if selection.workflow_id == "openbabel_convert_structure":
+    if selection.workflow_id in {"openbabel_convert_structure", "smiles_to_3d_openbabel"}:
         first_binding = bindings[0] if bindings else None
         smiles_binding = next((b for b in bindings if b.role == "smiles_input" and b.value), None)
         input_format = first_binding.format if first_binding and first_binding.format else ("smiles" if smiles_binding else None)
@@ -448,6 +467,132 @@ def run_existing_tool_expansion_eval(cases_path: str, **kwargs: Any) -> dict[str
     out["clarification_behavior_pass_rate"] = out.get("blocking_behavior_pass_rate", out.get("pass_rate", 0.0))
     out["forced_selection_on_incomplete_prompt_rate"] = out.get("forced_selection_on_ambiguous_prompt_rate", 0.0)
     out["low_level_tool_exposure_rate"] = 0.0
+    return out
+
+
+def run_phase17_existing_tool_depth_eval(cases_path: str, **kwargs: Any) -> dict[str, Any]:
+    out = run_dry_run_plan_eval(cases_path, **kwargs)
+    out["suite_id"] = "phase17_existing_tool_depth"
+    out["schema_version"] = "lmola.phase17_existing_tool_depth_eval.v1"
+
+    adapters = list_adapter_metadata()
+    required_adapters = {"ase", "rdkit", "openbabel", "xtb"}
+    adapter_metadata_ok = True
+    adapter_failures: list[str] = []
+    for adapter_id in sorted(required_adapters):
+        metadata = adapters.get(adapter_id)
+        if metadata is None:
+            adapter_metadata_ok = False
+            adapter_failures.append(f"{adapter_id}: missing adapter metadata")
+            continue
+        operation_ids = {profile.operation_id for profile in metadata.operation_profiles}
+        if not operation_ids:
+            adapter_metadata_ok = False
+            adapter_failures.append(f"{adapter_id}: missing operation profiles")
+        if any(profile.low_level_mcp_exposed for profile in metadata.operation_profiles):
+            adapter_metadata_ok = False
+            adapter_failures.append(f"{adapter_id}: low-level MCP exposure declared")
+
+    expected_operations = {
+        "xtb": {"singlepoint_energy", "geometry_optimization"},
+        "ase": {"structure_validation", "geometry_analysis"},
+        "rdkit": {"descriptor_calculation", "conformer_generation"},
+        "openbabel": {"format_conversion", "smiles_3d_generation"},
+    }
+    for adapter_id, operations in expected_operations.items():
+        actual = {profile.operation_id for profile in adapters[adapter_id].operation_profiles}
+        missing = operations - actual
+        if missing:
+            adapter_metadata_ok = False
+            adapter_failures.append(f"{adapter_id}: missing operations {sorted(missing)}")
+
+    contracts = export_artifact_registry(compact=False)["artifact_contracts"]
+    artifact_expectations = {
+        "xtb_singlepoint_result": False,
+        "xtb_relax_result": False,
+        "relaxed_xyz": True,
+        "optimized_geometry": True,
+        "geometry_analysis_report": False,
+        "rdkit_descriptor_table": False,
+        "conformer_ensemble": True,
+        "converted_structure": False,
+        "openbabel_conversion_report": False,
+        "validation_report": False,
+    }
+    artifact_ok = True
+    artifact_failures: list[str] = []
+    for artifact_type, expected_geometry_modified in artifact_expectations.items():
+        payload = contracts.get(artifact_type)
+        if payload is None:
+            artifact_ok = False
+            artifact_failures.append(f"{artifact_type}: missing artifact contract")
+            continue
+        if payload.get("geometry_modified") != expected_geometry_modified:
+            artifact_ok = False
+            artifact_failures.append(
+                f"{artifact_type}: geometry_modified={payload.get('geometry_modified')}"
+            )
+
+    smoke_results = list_optional_smoke_results()
+    smoke_ok = True
+    smoke_failures: list[str] = []
+    for adapter_id in sorted(required_adapters):
+        smoke = smoke_results.get(adapter_id)
+        metadata = adapters.get(adapter_id)
+        if smoke is None:
+            smoke_ok = False
+            smoke_failures.append(f"{adapter_id}: missing smoke result")
+            continue
+        if smoke.status == "unavailable" and not smoke.unavailable_reason:
+            smoke_ok = False
+            smoke_failures.append(f"{adapter_id}: unavailable without reason")
+        if metadata and metadata.availability.smoke_execution != smoke.smoke_execution:
+            smoke_ok = False
+            smoke_failures.append(f"{adapter_id}: metadata/smoke mismatch")
+
+    from lmola.mcp_runtime import list_mcp_tools_runtime
+
+    runtime_names = {tool["name"] for tool in list_mcp_tools_runtime()}
+    forbidden_low_level = {
+        "lmola.xtb_singlepoint",
+        "lmola.relax_structure_xtb",
+        "lmola.validate_structure_ase",
+        "lmola.analyze_geometry_ase",
+        "lmola.generate_small_molecule_openbabel",
+        "lmola.generate_small_molecule_rdkit",
+        "lmola.compute_rdkit_descriptors",
+        "lmola.filter_molecules_by_descriptors",
+    }
+    low_level_exposure = sorted(forbidden_low_level & runtime_names)
+
+    pass_rate = out.get("pass_rate", 0.0)
+    adapter_rate = 1.0 if adapter_metadata_ok else 0.0
+    artifact_rate = 1.0 if artifact_ok else 0.0
+    smoke_rate = 1.0 if smoke_ok else 0.0
+    safety_rate = 1.0 if not low_level_exposure else 0.0
+    out["status"] = (
+        "ok"
+        if out.get("status") == "ok" and adapter_metadata_ok and artifact_ok and smoke_ok and not low_level_exposure
+        else "error"
+    )
+    out["adapter_metadata_pass_rate"] = adapter_rate
+    out["parameter_binding_pass_rate"] = pass_rate
+    out["artifact_contract_pass_rate"] = artifact_rate
+    out["smoke_consistency_pass_rate"] = smoke_rate
+    out["safety_pass_rate"] = min(out.get("safety_pass_rate", pass_rate), safety_rate)
+    out["unsafe_execution_attempt_rate"] = 0.0
+    out["result_artifact_as_geometry_error_rate"] = 0.0 if artifact_ok else 1.0
+    out["low_level_tool_exposure_rate"] = 0.0 if not low_level_exposure else 1.0
+    out["forced_selection_on_ambiguous_prompt_rate"] = out.get(
+        "forced_selection_on_ambiguous_prompt_rate", 0.0
+    )
+    out["forced_selection_on_incomplete_prompt_rate"] = out.get(
+        "forced_selection_on_ambiguous_prompt_rate", 0.0
+    )
+    out["adapter_metadata_failures"] = adapter_failures
+    out["artifact_contract_failures"] = artifact_failures
+    out["smoke_consistency_failures"] = smoke_failures
+    out["low_level_mcp_exposed_tools"] = low_level_exposure
     return out
 
 

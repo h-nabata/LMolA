@@ -59,15 +59,38 @@ class AdapterArtifactContract(BaseModel):
     media_types: list[str] = Field(default_factory=list)
 
 
+class AdapterOperationProfile(BaseModel):
+    operation_id: str
+    display_name: str
+    workflow_ids: list[str] = Field(default_factory=list)
+    task_type: str
+    execution_mode: str
+    operation_risk: str
+    input_artifact_types: list[str] = Field(default_factory=list)
+    output_artifact_types: list[str] = Field(default_factory=list)
+    geometry_modified: bool | None = None
+    parameter_binding_keys: list[str] = Field(default_factory=list)
+    smoke_strategy: str
+    known_limitations: list[str] = Field(default_factory=list)
+    low_level_mcp_exposed: bool = False
+
+
 class AdapterMetadata(BaseModel):
     schema_version: str = ADAPTER_CONTRACT_SCHEMA_VERSION
     adapter_id: str
     display_name: str
     backend_name: str
+    backend_family: str | None = None
+    backend_type: str | None = None
     backend_version: str | None = None
+    optional_dependency: bool = False
     capabilities: list[str] = Field(default_factory=list)
     availability: AdapterAvailability
     risk_class: AdapterRiskClass
+    execution_modes: list[str] = Field(default_factory=list)
+    known_limitations: list[str] = Field(default_factory=list)
+    conformance_status: str = "unchecked"
+    operation_profiles: list[AdapterOperationProfile] = Field(default_factory=list)
     artifact_contracts: list[AdapterArtifactContract] = Field(default_factory=list)
 
 
@@ -119,6 +142,17 @@ def validate_adapter_metadata(adapter: AdapterMetadata | Mapping[str, Any] | Ada
         errors.append(f"{metadata.adapter_id}: availability.registered must be true")
     if metadata.availability.backend_available is False and not metadata.availability.unavailable_reason:
         errors.append(f"{metadata.adapter_id}: unavailable backend must include unavailable_reason")
+    operation_ids: set[str] = set()
+    for operation in metadata.operation_profiles:
+        if not operation.operation_id.strip():
+            errors.append(f"{metadata.adapter_id}: operation_id must be non-empty")
+        if operation.operation_id in operation_ids:
+            errors.append(f"{metadata.adapter_id}: duplicate operation_id {operation.operation_id}")
+        operation_ids.add(operation.operation_id)
+        if not operation.workflow_ids:
+            errors.append(f"{metadata.adapter_id}: {operation.operation_id} must declare workflow_ids")
+        if operation.low_level_mcp_exposed:
+            errors.append(f"{metadata.adapter_id}: {operation.operation_id} exposes low-level MCP tooling")
     for artifact in metadata.artifact_contracts:
         if not artifact.name.strip():
             errors.append(f"{metadata.adapter_id}: artifact contract name must be non-empty")
