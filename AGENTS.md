@@ -13,6 +13,86 @@ LMolA is a local-first, offline-capable computational chemistry workflow agent.
 Default development and tests must not require cloud APIs, GPU access, Ollama,
 xTB, molSimplify, RDKit, Open Babel, or network access.
 
+## Project Identity
+
+LMolA is not a collection of arbitrary computational chemistry wrappers.
+LMolA is a fail-safe runtime layer for LLM-assisted computational chemistry.
+
+The core responsibilities are:
+
+1. Intent normalization
+   Convert human or LLM instructions into computationally checkable intermediate representations.
+
+2. Contract validation
+   Validate workflow, backend, parameter, and artifact compatibility before execution.
+
+3. Safety gating
+   Keep execution permission deterministic and outside the LLM.
+   LLM outputs may suggest workflows or next actions, but must not authorize execution.
+
+4. Provenance / manifest
+   Record what was planned, what was executed, what artifacts were produced, and what can be safely done next.
+
+5. Benchmark / regression
+   Measure workflow selection, ambiguity handling, artifact routing, unsafe execution attempts, and result-as-geometry errors across models.
+
+Do not prioritize backend feature chasing over these responsibilities.
+
+## Backend / Adapter Policy
+
+Backend integration should be adapter-driven.
+
+For each backend, prefer explicit metadata and contract coverage:
+
+- adapter_id
+- backend_name
+- backend_family
+- backend_type
+- optional_dependency
+- availability / smoke result
+- supported_operations
+- input_artifact_types
+- output_artifact_types
+- geometry_modified
+- risk_class
+- known_limitations
+- conformance_status
+
+Do not wrap every backend feature merely because the backend supports it.
+
+Optional backends must remain optional.
+Unavailable optional backends must fail clearly or skip cleanly in marked external-tool tests.
+Default tests must not require optional external chemistry programs.
+
+Heavy engines such as ORCA, Gaussian, GAMESS, SIESTA, Quantum ESPRESSO, and VASP must not be added unless the phase explicitly requests heavy-engine adapter specification.
+
+## Artifact Safety
+
+Result, report, table, and diagnostic artifacts must not be treated as geometry artifacts.
+
+For example, structured result artifacts such as `xtb_singlepoint_result` must not be routed as XYZ geometry inputs.
+
+Geometry-modifying workflows must clearly declare `geometry_modified=true`.
+Read-only or result-only workflows must not imply geometry availability unless they explicitly produce a geometry artifact.
+
+## Risk Classes
+
+When adding or refining backend metadata, prefer conservative risk classification.
+
+Suggested classes:
+
+- `read_only`
+- `local_validation`
+- `local_conversion`
+- `light_generation`
+- `light_execution`
+- `geometry_modifying`
+- `external_execution`
+- `heavy_external`
+- `destructive_or_unbounded`
+
+Risk class should inform dry-run planning, confirmation requirements, artifact compatibility, and future execution policies.
+
 ## Safety Constraints
 
 - Do not add cloud-required behavior by default.
@@ -44,6 +124,29 @@ lmola validate examples/example.xyz
 
 If a check cannot be run because dependencies are unavailable, record that clearly
 in the PR instead of broadening default requirements.
+
+## Development Workflow for Phase Tasks
+
+For phase-level tasks, development agents should normally follow this workflow:
+
+1. Confirm the repository path and current branch.
+2. Start from `main` unless the user explicitly says otherwise.
+3. Confirm the working tree is clean.
+   If only untracked `pr_body.md` exists, it may be deleted.
+   If tracked source, tests, docs, config, or project files are dirty, stop and report.
+4. Run `git pull --ff-only`.
+5. Run baseline checks before implementation when available.
+6. Create a task branch with a descriptive name.
+7. Keep the implementation minimal and scoped to the phase.
+8. Add or update tests and concise documentation.
+9. Run verification checks.
+10. Commit only after local checks pass.
+11. Create a PR against `main`.
+12. Do not force-merge pending or failing checks.
+13. If checks are pending, prefer auto-merge.
+14. If checks fail, report the failing checks and likely causes.
+
+Development agents may automate branch creation, commits, push, PR creation, and check inspection, but must not overwrite user changes or bypass safety gates.
 
 ## Change Discipline
 
