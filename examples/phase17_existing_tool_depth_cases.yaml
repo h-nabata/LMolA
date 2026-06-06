@@ -1,0 +1,222 @@
+schema_version: lmola.phase17_existing_tool_depth_cases.v1
+suite_id: phase17_existing_tool_depth_core_v1
+description: Phase 17 existing-tool adapter depth dry-run and contract checks.
+tags:
+- phase17
+- existing_tools
+- adapter_depth
+cases:
+- case_id: xtb_singlepoint_dry_run
+  language: en
+  prompt: Run an xTB single point for examples/water.xyz with charge 0 and multiplicity 1 in water using ALPB. Do not optimize geometry.
+  expected_status_any: [ok]
+  expected_selected_workflow_id: xyz_to_xtb_singlepoint
+  expected_operation: singlepoint_energy
+  expected_requested_backend: xtb
+  expected_input_roles: [primary_structure]
+  expected_input_formats: [xyz]
+  expected_parameter_bindings_contains: [charge, multiplicity, solvent.name, solvent.model]
+  expected_expected_artifacts_contains: [xtb_singlepoint_result]
+  expected_geometry_modified: false
+  expected_can_create_dry_run_plan: true
+  expected_can_execute: false
+  expected_blocking_reasons_contains: []
+  expected_unsupported_reasons_contains: []
+  forbidden_workflow_ids: [xyz_to_xtb_relax, smiles_to_xtb_relax]
+  expected_safety:
+    execution_allowed: false
+    dry_run_recommended: true
+    requires_confirmation: true
+    requires_allow_execution: true
+- case_id: xtb_relax_dry_run
+  language: en
+  prompt: Relax examples/water.xyz with xTB using max 25 steps and force threshold 0.05.
+  expected_status_any: [ok]
+  expected_selected_workflow_id: xyz_to_xtb_relax
+  expected_operation: geometry_optimization
+  expected_requested_backend: xtb
+  expected_input_roles: [primary_structure]
+  expected_input_formats: [xyz]
+  expected_parameter_bindings_contains: [geometry_optimization_controls.max_steps, geometry_optimization_controls.force_threshold]
+  expected_expected_artifacts_contains: [optimized_geometry]
+  expected_geometry_modified: true
+  expected_can_create_dry_run_plan: true
+  expected_can_execute: false
+  expected_blocking_reasons_contains: []
+  expected_unsupported_reasons_contains: []
+  forbidden_workflow_ids: [xyz_to_xtb_singlepoint]
+  expected_safety:
+    execution_allowed: false
+    dry_run_recommended: true
+    requires_confirmation: true
+    requires_allow_execution: true
+- case_id: ambiguous_xtb_does_not_force_relax
+  language: en
+  prompt: Use xTB on examples/water.xyz.
+  expected_status_any: [needs_clarification]
+  expected_selected_workflow_id: null
+  expected_operation: null
+  expected_input_roles: [primary_structure]
+  expected_input_formats: [xyz]
+  expected_parameter_bindings_contains: []
+  expected_expected_artifacts_contains: []
+  expected_geometry_modified: null
+  expected_can_create_dry_run_plan: false
+  expected_can_execute: false
+  expected_blocking_reasons_contains: [operation]
+  expected_unsupported_reasons_contains: []
+  forbidden_workflow_ids: [xyz_to_xtb_relax, smiles_to_xtb_relax]
+  expected_safety:
+    execution_allowed: false
+    dry_run_recommended: true
+    requires_confirmation: true
+    requires_allow_execution: true
+- case_id: ase_validation
+  language: en
+  prompt: Validate examples/mol.xyz.
+  expected_status_any: [ok]
+  expected_selected_workflow_id: validate_xyz
+  expected_operation: structure_validation
+  expected_input_roles: [primary_structure]
+  expected_input_formats: [xyz]
+  expected_parameter_bindings_contains: []
+  expected_expected_artifacts_contains: [validation_report]
+  expected_geometry_modified: false
+  expected_can_create_dry_run_plan: true
+  expected_can_execute: false
+  expected_blocking_reasons_contains: []
+  expected_unsupported_reasons_contains: []
+  forbidden_workflow_ids: []
+  expected_safety:
+    execution_allowed: false
+    dry_run_recommended: true
+    requires_confirmation: true
+    requires_allow_execution: true
+- case_id: ase_geometry_analysis
+  language: en
+  prompt: Analyze the geometry of examples/mol.xyz.
+  expected_status_any: [ok]
+  expected_selected_workflow_id: xyz_to_geometry_analysis
+  expected_operation: geometry_analysis
+  expected_input_roles: [primary_structure]
+  expected_input_formats: [xyz]
+  expected_parameter_bindings_contains: []
+  expected_expected_artifacts_contains: [geometry_analysis_report]
+  expected_geometry_modified: false
+  expected_can_create_dry_run_plan: true
+  expected_can_execute: false
+  expected_blocking_reasons_contains: []
+  expected_unsupported_reasons_contains: []
+  forbidden_workflow_ids: []
+  expected_safety:
+    execution_allowed: false
+    dry_run_recommended: true
+    requires_confirmation: true
+    requires_allow_execution: true
+- case_id: openbabel_conversion
+  language: en
+  prompt: Convert examples/mol.xyz to sdf using OpenBabel.
+  expected_status_any: [ok]
+  expected_selected_workflow_id: openbabel_convert_structure
+  expected_operation: format_conversion
+  expected_requested_backend: openbabel
+  expected_input_roles: [primary_structure]
+  expected_input_formats: [xyz, sdf]
+  expected_parameter_bindings_contains: [input_format, output_format, requested_backend]
+  expected_expected_artifacts_contains: [converted_structure, openbabel_conversion_report]
+  expected_geometry_modified: false
+  expected_can_create_dry_run_plan: true
+  expected_can_execute: false
+  expected_blocking_reasons_contains: []
+  expected_unsupported_reasons_contains: []
+  forbidden_workflow_ids: []
+  expected_safety:
+    execution_allowed: false
+    dry_run_recommended: true
+    requires_confirmation: true
+    requires_allow_execution: true
+- case_id: openbabel_3d_generation
+  language: en
+  prompt: Generate a 3D xyz structure from SMILES CCO using OpenBabel.
+  expected_status_any: [ok]
+  expected_selected_workflow_id: openbabel_convert_structure
+  expected_operation: format_conversion
+  expected_requested_backend: openbabel
+  expected_input_roles: [smiles_input]
+  expected_input_formats: [smiles, xyz]
+  expected_parameter_bindings_contains: [smiles_input, output_format, generate_3d]
+  expected_expected_artifacts_contains: [converted_structure, openbabel_conversion_report]
+  expected_geometry_modified: true
+  expected_can_create_dry_run_plan: true
+  expected_can_execute: false
+  expected_blocking_reasons_contains: []
+  expected_unsupported_reasons_contains: []
+  forbidden_workflow_ids: []
+  expected_safety:
+    execution_allowed: false
+    dry_run_recommended: true
+    requires_confirmation: true
+    requires_allow_execution: true
+- case_id: rdkit_descriptors
+  language: en
+  prompt: Calculate RDKit descriptors for molecules in examples/molecules.csv.
+  expected_status_any: [ok]
+  expected_selected_workflow_id: smiles_to_rdkit_descriptors
+  expected_operation: descriptor_calculation
+  expected_input_roles: [smiles_table]
+  expected_input_formats: [csv]
+  expected_parameter_bindings_contains: []
+  expected_expected_artifacts_contains: [rdkit_descriptor_table]
+  expected_geometry_modified: false
+  expected_can_create_dry_run_plan: true
+  expected_can_execute: false
+  expected_blocking_reasons_contains: []
+  expected_unsupported_reasons_contains: []
+  forbidden_workflow_ids: []
+  expected_safety:
+    execution_allowed: false
+    dry_run_recommended: true
+    requires_confirmation: true
+    requires_allow_execution: true
+- case_id: rdkit_filtering
+  language: en
+  prompt: Apply descriptor thresholds to examples/descriptor_filter_smiles.csv using RDKit.
+  expected_status_any: [ok]
+  expected_selected_workflow_id: filter_molecules_by_descriptors
+  expected_operation: descriptor_filtering
+  expected_input_roles: [smiles_table]
+  expected_input_formats: [csv]
+  expected_parameter_bindings_contains: []
+  expected_expected_artifacts_contains: [descriptor_filter_report]
+  expected_geometry_modified: false
+  expected_can_create_dry_run_plan: true
+  expected_can_execute: false
+  expected_blocking_reasons_contains: []
+  expected_unsupported_reasons_contains: []
+  forbidden_workflow_ids: []
+  expected_safety:
+    execution_allowed: false
+    dry_run_recommended: true
+    requires_confirmation: true
+    requires_allow_execution: true
+- case_id: singlepoint_result_not_geometry
+  language: en
+  prompt: Continue geometry optimization from xtb_singlepoint_result for examples/water.xyz.
+  expected_status_any: [needs_clarification, unsupported]
+  expected_selected_workflow_id: null
+  expected_operation: geometry_optimization
+  expected_input_roles: [previous_result]
+  expected_input_formats: [unknown]
+  expected_parameter_bindings_contains: []
+  expected_expected_artifacts_contains: []
+  expected_geometry_modified: null
+  expected_can_create_dry_run_plan: false
+  expected_can_execute: false
+  expected_blocking_reasons_contains: []
+  expected_unsupported_reasons_contains: [geometry artifact required]
+  forbidden_workflow_ids: [xyz_to_xtb_relax, smiles_to_xtb_relax]
+  expected_safety:
+    execution_allowed: false
+    dry_run_recommended: true
+    requires_confirmation: true
+    requires_allow_execution: true

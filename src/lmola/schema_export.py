@@ -9,6 +9,7 @@ from lmola.agent.planner_eval import PlannerEvalCase, PlannerEvalSuite
 from lmola.schemas import BuildOptions, MoleculeBuildRequest, ToolCallRecord, ToolResult
 from lmola.tools.registry import RelaxXtbRequest, ValidateStructureRequest, list_tools
 from lmola.backends.capabilities import backend_capability_schema, list_backend_capabilities
+from lmola.adapters import AdapterMetadata, AdapterOperationProfile, list_adapter_metadata
 from lmola.artifact_contracts import ArtifactContract, ArtifactRegistry, export_artifact_registry
 from lmola.artifact_manifest import ArtifactManifest, ArtifactManifestEntry, ArtifactCompatibilityHint
 from lmola.llm_contract_catalog import NextActionItem, NextActionRecommendation, export_llm_contract_catalog
@@ -128,6 +129,7 @@ def export_workflow_catalog_schema(*, compact: bool = False) -> dict:
 def export_planner_schema_bundle() -> dict:
     full = export_workflow_catalog_schema(compact=False)
     backend_capabilities = {k: v.model_dump() for k, v in list_backend_capabilities().items()}
+    adapter_metadata = {k: v.model_dump() for k, v in list_adapter_metadata().items()}
     unavailable = [k for k, v in backend_capabilities.items() if v.get("status") != "available"]
     return _canonicalize(
         {
@@ -159,6 +161,7 @@ def export_planner_schema_bundle() -> dict:
                 for wf in full["workflows"]
             ],
             "backend_capabilities": backend_capabilities,
+            "adapter_metadata": adapter_metadata,
             "unavailable_backend_notes": [
                 f"Backend {backend_id} is currently unavailable and workflows requiring it must not be selected."
                 for backend_id in unavailable
@@ -234,6 +237,9 @@ def export_all_schemas() -> dict:
             "workflow_catalog_compact": export_workflow_catalog_schema(compact=True),
             "planner_context_compact": export_planner_schema_bundle(),
             "backend_capability_schema": backend_capability_schema(),
+            "adapter_metadata_schema": AdapterMetadata.model_json_schema(),
+            "adapter_operation_profile_schema": AdapterOperationProfile.model_json_schema(),
+            "adapter_metadata": {k: v.model_dump() for k, v in list_adapter_metadata().items()},
             "workflow_contract_schema": WorkflowContract.model_json_schema(),
             "workflow_port_contract_schema": WorkflowPortContract.model_json_schema(),
             "workflow_execution_policy_schema": WorkflowExecutionPolicy.model_json_schema(),

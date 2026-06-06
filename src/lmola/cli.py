@@ -33,7 +33,8 @@ from lmola.mcp_llm_orchestration_smoke import run_llm_orchestration_smoke
 from lmola.human_prompt_eval import run_human_prompt_eval
 from lmola.parameter_binding import bind_human_prompt_parameters, run_parameter_binding_eval
 from lmola.clarification import generate_clarification_plan, run_clarification_eval
-from lmola.dry_run_plan import create_dry_run_execution_plan, run_dry_run_plan_eval, run_existing_tool_expansion_eval, run_morfeus_pilot_eval, run_molsimplify_pilot_eval
+from lmola.dry_run_plan import create_dry_run_execution_plan, run_dry_run_plan_eval, run_existing_tool_expansion_eval, run_morfeus_pilot_eval, run_molsimplify_pilot_eval, run_phase17_existing_tool_depth_eval
+from lmola.adapters import list_adapter_metadata, run_optional_smoke_check
 from lmola.mcp_human_prompt_normalization_smoke import run_mcp_human_prompt_normalization_smoke
 from lmola.llm.request_normalization import normalize_request
 from lmola.mcp_runtime import RUNTIME_PHASE, call_mcp_tool, handle_jsonrpc_message, list_mcp_tools_runtime, run_mcp_stdio_server
@@ -285,7 +286,7 @@ def mcp_llm_contract_catalog_smoke(backend: str = typer.Option("mock", "--backen
         raise typer.Exit(code=1)
 
 
-@mcp_app.command("llm-execution-smoke")
+@mcp_app.command("llm-execution-smoke", help="Run LLM execution smoke checks; --execute-safe enables safe mock execution cases.")
 def mcp_llm_execution_smoke(
     backend: str = typer.Option("mock", "--backend"),
     model: str = typer.Option("", "--model"),
@@ -302,7 +303,7 @@ def mcp_llm_execution_smoke(
         raise typer.Exit(code=1)
 
 
-@mcp_app.command("llm-orchestration-smoke")
+@mcp_app.command("llm-orchestration-smoke", help="Run LLM orchestration smoke checks; --execute-safe enables safe mock execution cases.")
 def mcp_llm_orchestration_smoke(
     backend: str = typer.Option("mock", "--backend"),
     model: str = typer.Option("", "--model"),
@@ -374,6 +375,22 @@ def backends_inspect(backend_id: str, fmt: str = typer.Option("json", "--format"
         typer.echo(json.dumps({"status": "error", "error_type": "unknown_backend", "backend_id": backend_id, "known_backend_ids": sorted(list_backend_capabilities().keys())}, indent=2, sort_keys=True))
         raise typer.Exit(code=1)
     _emit_schema(cap.model_dump(), fmt)
+
+
+@backends_app.command("list-adapters")
+def backends_list_adapters(fmt: str = typer.Option("json", "--format")) -> None:
+    payload = {k: v.model_dump() for k, v in list_adapter_metadata().items()}
+    _emit_schema(payload, fmt)
+
+
+@backends_app.command("smoke")
+def backends_smoke(backend: str = typer.Option(..., "--backend"), fmt: str = typer.Option("json", "--format")) -> None:
+    try:
+        payload = run_optional_smoke_check(backend).model_dump()
+    except KeyError:
+        typer.echo(json.dumps({"status": "error", "error_type": "unknown_smoke_backend", "backend": backend}, indent=2, sort_keys=True))
+        raise typer.Exit(code=1)
+    _emit_schema(payload, fmt)
 
 
 @workflow_app.command("list")
@@ -515,7 +532,10 @@ def workflow_dry_run_plan(prompt: str = typer.Option("", "--prompt"), language: 
 
 @workflow_app.command("eval-existing-tools")
 def workflow_eval_existing_tools(cases: str = typer.Argument(...), backend: str = typer.Option("mock", "--backend"), model: str = typer.Option("", "--model"), base_url: str = typer.Option("http://127.0.0.1:11434", "--base-url"), temperature: float = typer.Option(0.0, "--temperature"), timeout_seconds: int = typer.Option(20, "--timeout-seconds"), max_tokens: int = typer.Option(800, "--max-tokens"), fmt: str = typer.Option("json", "--format")) -> None:
-    result = run_existing_tool_expansion_eval(cases, backend=backend, model=model, base_url=base_url, temperature=temperature, timeout_seconds=timeout_seconds, max_tokens=max_tokens)
+    if "phase17" in Path(cases).name:
+        result = run_phase17_existing_tool_depth_eval(cases, backend=backend, model=model, base_url=base_url, temperature=temperature, timeout_seconds=timeout_seconds, max_tokens=max_tokens)
+    else:
+        result = run_existing_tool_expansion_eval(cases, backend=backend, model=model, base_url=base_url, temperature=temperature, timeout_seconds=timeout_seconds, max_tokens=max_tokens)
     typer.echo(json.dumps(result, indent=2, sort_keys=True) if fmt == "json" else result)
     if result.get("status") != "ok":
         raise typer.Exit(code=1)
