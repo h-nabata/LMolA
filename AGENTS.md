@@ -7,16 +7,25 @@ Runtime chemistry agent instructions live in `docs/agents/runtime_chemistry_agen
 
 This repository is maintained with a conservative, Codex-friendly workflow.
 
+## Documentation for Development Agents
+
+See the [documentation map](docs/README.md), the reusable
+[Codex phase workflow](docs/development/codex_phase_workflow.md), and the
+[phase task template](docs/development/phase_task_template.md). This
+`AGENTS.md` is authoritative whenever repository-agent instructions overlap.
+Future phase specifications normally belong under `docs/development/phases/`.
+
 ## Scope
 
-LMolA is a local-first, offline-capable computational chemistry workflow agent.
+LMolA is a local-first, model-independent, contract-driven safety runtime for
+agent-assisted computational chemistry.
 Default development and tests must not require cloud APIs, GPU access, Ollama,
 xTB, molSimplify, RDKit, Open Babel, or network access.
 
 ## Project Identity
 
 LMolA is not a collection of arbitrary computational chemistry wrappers.
-LMolA is a fail-safe runtime layer for LLM-assisted computational chemistry.
+LMolA is a safety runtime layer for agent-assisted computational chemistry.
 
 The core responsibilities are:
 
@@ -109,6 +118,16 @@ Risk class should inform dry-run planning, confirmation requirements, artifact c
 - Do not log secrets, API keys, credentials, or raw environment dumps.
 - Do not use `shell=True`.
 - Do not expose low-level chemistry tools as direct runtime/MCP tools.
+
+## Public Repository Privacy
+
+This is a public repository. Do not place local usernames, home-directory or
+absolute checkout paths, hostnames, machine layouts, credentials, tokens, raw
+environment dumps, task prompts, or terminal transcripts in tracked files,
+commits, PR text, comments, examples, snapshots, or logs. Use
+repository-relative paths and generic placeholders such as `<repo-root>`.
+Review changed and staged content for private or machine-specific information
+before committing.
 
 ## Default Checks
 
