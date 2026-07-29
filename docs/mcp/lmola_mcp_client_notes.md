@@ -1,50 +1,39 @@
-# LMolA external MCP client notes
+# LMolA MCP stdio Client Notes
 
-LMolA can run as a local stdio MCP server:
+LMolA provides a local stdio MCP runtime:
 
-- `lmola mcp serve-stdio`
+```bash
+lmola mcp serve-stdio
+```
 
-Phase 12.5 also adds an internal smoke client:
+It uses Content-Length-framed JSON-RPC over stdin/stdout and opens no network port. Configure an external client with the `lmola` executable, arguments `["mcp", "serve-stdio"]`, and a repository or project working directory. Use portable client-specific paths; LMolA and its dependencies must be installed in the selected environment.
 
-- `lmola mcp client-smoke --format json`
+## Runtime surface
 
-This smoke client launches `lmola mcp serve-stdio` and sends Content-Length framed JSON-RPC requests for:
+Start with `initialize` and `tools/list`. The high-level runtime operations support:
 
-- `initialize`
-- `tools/list`
-- `tools/call lmola.list_workflows`
-- `tools/call lmola.validate_workflow`
-- `tools/call lmola.run_workflow` (dry-run)
-- `tools/call lmola.run_workflow` (missing confirmation safety path)
-- unknown tool handling
+- workflow/catalog, schema, backend-capability, adapter-contract, and planner-context discovery;
+- natural-language normalization, clarification, parameter binding, planning, validation, and canonicalization;
+- dry-run execution-plan creation and allowlisted workflow execution;
+- artifact contract and manifest inspection, compatibility, summary, failure triage, and safe next-action recommendation.
 
-## External client configuration
+Use `lmola mcp runtime-tools --format json` to inspect the callable surface. Static preview commands describe interfaces and are not proof that a capability is executable. Low-level chemistry/backend tools and arbitrary commands are not directly exposed.
 
-Use local placeholders and adjust paths to your own environment:
+## Safe interaction sequence
 
-- command: `/path/to/conda/env/bin/lmola`
-- args: `["mcp", "serve-stdio"]`
-- cwd: `/path/to/LMolA`
+1. List or inspect workflows and contracts.
+2. Normalize or plan the request; resolve clarification before proceeding.
+3. Validate the structured workflow.
+4. Call `lmola.run_workflow` in its default dry-run mode and review expected steps, backends, artifacts, and warnings.
+5. Only a human-controlled caller may request real execution after review.
+6. Inspect the resulting manifest and audit record; summarize or triage artifacts before recommending a compatible next action.
 
-The selected conda environment must contain LMolA and its dependencies.
+Plans supplied by an MCP client or external agent must pass the same LMolA checks. Expected outputs in a dry-run are previews, not generated artifacts.
 
-No network port is opened for this integration path (stdio only).
+## Execution gates and records
 
-## Safe first tests
+Real `lmola.run_workflow` execution requires all of `dry_run=false`, `allow_execution=true`, `confirm=true`, a valid request, an allowlisted workflow, compatible artifacts, and available required backends. A model must not provide authorization.
 
-- `initialize`
-- `tools/list`
-- `lmola.list_workflows`
-- `lmola.validate_workflow`
-- `lmola.run_workflow` with dry-run (default)
+MCP audit records are written below `outputs/mcp_audit/`; confirmed workflow output is written below `outputs/mcp_runs/`. Partial and error records must not be presented as complete success. Backend completion does not establish scientific correctness; researcher review remains required.
 
-## Safety notes
-
-- `lmola.run_workflow` can execute only when all are true: `dry_run=false`, `allow_execution=true`, and `confirm=true`.
-- Workflow execution remains allowlisted.
-- Low-level chemistry tools are not exposed as direct MCP runtime tools.
-- Confirmed execution may run RDKit/Open Babel/xTB depending on workflow.
-- MCP audit logs are written under `outputs/mcp_audit/`.
-- Confirmed MCP workflow outputs are written under `outputs/mcp_runs/`.
-- `lmola mcp runtime-tools --format json` is the callable runtime `tools/list` equivalent.
-- `lmola mcp preview-tools --format json` is static descriptor preview and may include descriptor-only/future entries.
+For a protocol smoke test, run `lmola mcp client-smoke --format json`. Confirmed/external-tool checks are optional and must not be enabled merely to test connectivity.

@@ -81,7 +81,7 @@ pip install -e ".[chem-inorganic]"  # currently molSimplify-focused
 |---|---|---|---|---|
 | ASE | structure parsing/validation | base dependency | pip base install | Yes |
 | RDKit | SMILES->3D + minimal conformer ensembles | `rdkit`, `chem-light` | conda/mamba preferred; pip extra available | No |
-| Open Babel | future conversion/gen3d | `openbabel` | conda/mamba preferred; pip may be sensitive | No |
+| Open Babel | conversion and light 3D generation | `openbabel` | conda/mamba preferred; pip may be sensitive | No |
 | molSimplify | inorganic generation (optional) | `molsimplify`, `chem-inorganic` | pip extra, conda/mamba, or source | No |
 | xTB | relaxation | none | conda-forge/mamba executable | No (`external_tools`) |
 | local LLM | NL parsing | none | local endpoint config | No |
