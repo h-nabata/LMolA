@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from datetime import datetime
 from pathlib import Path, PurePosixPath
-from typing import Literal
+from typing import Any, Literal
 
 from pydantic import BaseModel, Field, field_validator
 
@@ -30,7 +30,7 @@ class CaseResult(BaseModel):
     repeat_index: int = Field(ge=1)
     status: Literal["pass", "fail", "skipped"]
     latency_seconds: float = Field(ge=0)
-    evidence: dict[str, bool | int | float | str | None] = Field(default_factory=dict)
+    evidence: dict[str, Any] = Field(default_factory=dict)
     artifacts: list[ArtifactReference] = Field(default_factory=list)
 
 
@@ -83,6 +83,17 @@ class EvaluationProvenance(BaseModel):
     interface_status: Literal["provisional"] = "provisional"
 
 
+class ModelRunMetadata(BaseModel):
+    backend: str
+    model: str
+    endpoint_scope: Literal["loopback", "private_network"]
+    temperature: float
+    timeout_seconds: int
+    max_tokens: int | None
+    usage_available: bool
+    interface_status: Literal["provisional"] = "provisional"
+
+
 class EvaluationRunResult(BaseModel):
     schema_version: Literal["lmola.evaluation_result.v1"] = EVALUATION_RESULT_SCHEMA_VERSION
     run_id: str
@@ -104,3 +115,4 @@ class EvaluationRunResult(BaseModel):
     utility_metrics: list[UtilityMetric]
     provenance: EvaluationProvenance
     artifacts: list[ArtifactReference]
+    model_run: ModelRunMetadata | None = None

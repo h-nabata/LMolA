@@ -18,6 +18,10 @@ class LLMResult(BaseModel):
     parsed_json: dict | None = None
     error_message: str | None = None
     elapsed_seconds: float | None = None
+    prompt_tokens: int | None = None
+    completion_tokens: int | None = None
+    total_tokens: int | None = None
+    provider_request_id: str | None = None
 
 
 class BaseLLMClient(Protocol):
@@ -73,7 +77,8 @@ class OllamaClient:
                 r.raise_for_status()
                 body = r.json()
                 content = body.get("message", {}).get("content", "")
-                return _result_from_raw("ollama", self.cfg.model, content, t0)
+                return _result_from_raw("ollama", self.cfg.model, content, t0,
+                    prompt_tokens=body.get("prompt_eval_count"), completion_tokens=body.get("eval_count"))
         except Exception as exc:
             return LLMResult(status="error", backend="ollama", model=self.cfg.model, error_message=str(exc))
 
@@ -100,16 +105,28 @@ class OpenAICompatibleLocalClient:
                     },
                 )
                 r.raise_for_status()
-                content = r.json()["choices"][0]["message"]["content"]
-                return _result_from_raw("openai_compatible_local", self.cfg.model, content, t0)
+                body = r.json()
+                content = body["choices"][0]["message"]["content"]
+                usage = body.get("usage") or {}
+                return _result_from_raw("openai_compatible_local", self.cfg.model, content, t0,
+                    prompt_tokens=usage.get("prompt_tokens"), completion_tokens=usage.get("completion_tokens"),
+                    total_tokens=usage.get("total_tokens"), provider_request_id=body.get("id"))
         except Exception as exc:
             return LLMResult(status="error", backend="openai_compatible_local", model=self.cfg.model, error_message=str(exc))
 
 
-def _result_from_raw(backend: str, model: str | None, content: str, t0: float) -> LLMResult:
+def _result_from_raw(backend: str, model: str | None, content: str, t0: float, **usage: object) -> LLMResult:
     try:
         parsed = json.loads(content)
-        return LLMResult(status="ok", backend=backend, model=model, raw_response=content, parsed_json=parsed, elapsed_seconds=time.time()-t0)
+        prompt = usage.get("prompt_tokens")
+        completion = usage.get("completion_tokens")
+        total = usage.get("total_tokens")
+        if total is None and prompt is not None and completion is not None:
+            total = int(prompt) + int(completion)
+        return LLMResult(status="ok", backend=backend, model=model, raw_response=content,
+            parsed_json=parsed, elapsed_seconds=time.time()-t0, prompt_tokens=prompt,
+            completion_tokens=completion, total_tokens=total,
+            provider_request_id=usage.get("provider_request_id"))
     except Exception as exc:
         return LLMResult(status="error", backend=backend, model=model, raw_response=content, error_message=f"Invalid JSON from LLM: {exc}")
 

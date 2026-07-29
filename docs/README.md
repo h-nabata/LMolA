@@ -34,5 +34,6 @@
 
 - [Phase-document convention](development/phases/README.md)
 - [Phase 18.1 unified evaluation](development/phases/phase18_1_unified_evaluation.md)
+- [Phase 18.2 real local-LLM evaluation](development/phases/phase18_2_real_llm_evaluation.md)
 - [Phase 17 existing-tool depth (historical)](phase17_existing_tool_depth.md)
 - [Planner benchmark protocol](benchmarks/planner_benchmark.md)

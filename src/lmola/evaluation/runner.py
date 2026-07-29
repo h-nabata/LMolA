@@ -3,7 +3,9 @@
 from __future__ import annotations
 
 import json
+import inspect
 import platform
+import re
 import subprocess
 from datetime import UTC, datetime
 from pathlib import Path
@@ -24,8 +26,12 @@ from .models import (
     ProfileResult,
     SuiteResult,
     UtilityMetric,
+    ModelRunMetadata,
 )
-from .registry import REGISTRY_VERSION, SuiteDefinition, get_profile, list_suites
+from .registry import EvaluationInvocationContext, REGISTRY_VERSION, SuiteDefinition, get_profile, list_suites
+from lmola.config import LLMConfig
+from lmola.tools.llm_client import BaseLLMClient, make_llm_client
+from .preflight import endpoint_scope, preflight_local_llm
 
 GATE_IDS = (
     "unsafe_execution_attempt_rate",
@@ -44,6 +50,10 @@ METRIC_IDS = (
     "multi_step_completion_rate",
     "cross_run_consistency",
     "mean_case_latency_seconds",
+    "native_parse_rate", "native_schema_valid_rate", "native_workflow_selection_rate",
+    "final_validated_selection_rate", "repair_attempt_rate", "repair_success_rate",
+    "fallback_rate", "hallucinated_workflow_rate", "endpoint_error_rate",
+    "model_case_latency_seconds", "prompt_tokens_total", "completion_tokens_total", "total_tokens",
 )
 RATE_KEYS = {
     "schema_parse_rate": ("catalog_parse_pass_rate", "normalization_pass_rate", "pass_rate"),
@@ -54,6 +64,12 @@ RATE_KEYS = {
     "backend_unavailable_handling_rate": ("backend_unavailable_handling_pass_rate", "smoke_consistency_pass_rate"),
     "multi_step_completion_rate": ("second_step_decision_pass_rate", "pass_rate"),
 }
+
+
+def _sanitize_model_response(value: str) -> str:
+    value = re.sub(r"https?://[^\s\"']+", "<redacted-local-endpoint>", value)
+    value = re.sub(r"(?i)(authorization|api[_-]?key|token)\s*[:=]\s*[^,}\s]+", r"\1:<redacted>", value)
+    return value
 
 
 def _git_commit() -> str | None:
@@ -115,8 +131,11 @@ def aggregate_gates(raw_runs: list[tuple[str, int, dict]]) -> list[HardGateResul
 
 def _metrics(raw_runs: list[tuple[str, int, dict]], cases: list[CaseResult]) -> list[UtilityMetric]:
     metrics = []
-    suite_defs = {s.suite_id: s for s in list_suites()}
-    for metric_id in METRIC_IDS[:-2]:
+    suite_defs = {s.suite_id: s for s in list_suites(include_real=True)}
+    for metric_id in (
+        "schema_parse_rate", "workflow_selection_rate", "parameter_binding_rate", "clarification_rate",
+        "unsupported_handling_rate", "backend_unavailable_handling_rate", "multi_step_completion_rate",
+    ):
         evidence = []
         values = []
         for suite_id, _, raw in raw_runs:
@@ -145,14 +164,44 @@ def _metrics(raw_runs: list[tuple[str, int, dict]], cases: list[CaseResult]) -> 
     metrics.append(UtilityMetric(metric_id="mean_case_latency_seconds", numerator=latency, denominator=len(cases),
         value=latency / len(cases) if cases else None, applicability="applicable" if cases else "not_applicable",
         evidence_suite_ids=sorted({case.suite_id for case in cases})))
+    real_keys = {
+        "native_parse_rate": "native_parse_success", "native_schema_valid_rate": "native_schema_valid",
+        "native_workflow_selection_rate": "native_selection_correct",
+        "final_validated_selection_rate": "final_selection_correct", "repair_attempt_rate": "repair_attempted",
+        "repair_success_rate": "repair_successful", "fallback_rate": "fallback_used",
+        "hallucinated_workflow_rate": "hallucinated_workflow_id", "endpoint_error_rate": "endpoint_error",
+    }
+    model_cases = [c for c in cases if "native_parse_success" in c.evidence]
+    for metric_id, key in real_keys.items():
+        numerator = sum(bool(c.evidence.get(key)) for c in model_cases)
+        denominator = len(model_cases)
+        metrics.append(UtilityMetric(metric_id=metric_id, numerator=numerator if denominator else None,
+            denominator=denominator or None, value=numerator / denominator if denominator else None,
+            applicability="applicable" if denominator else "not_applicable",
+            evidence_suite_ids=sorted({c.suite_id for c in model_cases})))
+    latencies = [c.evidence.get("model_latency_seconds") for c in model_cases if c.evidence.get("model_latency_seconds") is not None]
+    metrics.append(UtilityMetric(metric_id="model_case_latency_seconds", numerator=sum(latencies) if latencies else None,
+        denominator=len(latencies) or None, value=sum(latencies) / len(latencies) if latencies else None,
+        applicability="applicable" if latencies else "not_applicable", evidence_suite_ids=sorted({c.suite_id for c in model_cases})))
+    for metric_id, key in (("prompt_tokens_total", "prompt_tokens"), ("completion_tokens_total", "completion_tokens"), ("total_tokens", "total_tokens")):
+        values = [c.evidence[key] for c in model_cases if c.evidence.get(key) is not None]
+        metrics.append(UtilityMetric(metric_id=metric_id, numerator=sum(values) if values else None,
+            denominator=len(values) or None, value=sum(values) if values else None,
+            applicability="applicable" if values else "not_applicable", evidence_suite_ids=sorted({c.suite_id for c in model_cases if c.evidence.get(key) is not None})))
     return metrics
 
 
 def run_evaluation(*, profile_id: str = "safety-core", backend: str = "mock", model: str | None = None,
                    repeat: int = 1, output_root: str | Path = "outputs/evaluations",
-                   suites: list[SuiteDefinition] | None = None) -> EvaluationRunResult:
-    if backend != "mock":
-        raise ValueError("Real Ollama and OpenAI-compatible evaluation is deferred to Phase 18.2")
+                   suites: list[SuiteDefinition] | None = None, base_url: str | None = None,
+                   temperature: float = 0.0, timeout_seconds: int = 180, max_tokens: int | None = 2048,
+                   save_raw: bool = False, llm_client: BaseLLMClient | None = None,
+                   skip_preflight: bool = False) -> EvaluationRunResult:
+    real = profile_id == "real-llm-core"
+    if profile_id == "safety-core" and backend != "mock":
+        raise ValueError("Phase 18.2 local-model support uses --profile real-llm-core; safety-core is offline")
+    if real and backend not in {"ollama", "openai_compatible_local"}:
+        raise ValueError("real-llm-core requires ollama or openai_compatible_local")
     if repeat < 1:
         raise ValueError("repeat must be at least 1")
     started = datetime.now(UTC)
@@ -161,7 +210,18 @@ def run_evaluation(*, profile_id: str = "safety-core", backend: str = "mock", mo
     run_root.mkdir(parents=True)
     (run_root / "suite_results").mkdir()
     (run_root / "cases").mkdir()
-    selected = suites or [s for s in list_suites() if s.suite_id in get_profile(profile_id).suite_ids]
+    scope = None
+    if real:
+        cfg = LLMConfig(enabled=True, backend=backend, model=model, base_url=base_url,
+            temperature=temperature, timeout_seconds=timeout_seconds, max_tokens=max_tokens)
+        scope = endpoint_scope(base_url or "")
+        if llm_client is None and not skip_preflight:
+            preflight_local_llm(cfg)
+        llm_client = llm_client or make_llm_client(cfg)
+    context = EvaluationInvocationContext(backend=backend, model=model, endpoint_scope=scope,
+        temperature=temperature, timeout_seconds=timeout_seconds, max_tokens=max_tokens, repeat=repeat,
+        save_raw=save_raw, run_root=run_root, base_url=base_url, llm_client=llm_client)
+    selected = suites or [s for s in list_suites(include_real=True) if s.suite_id in get_profile(profile_id).suite_ids]
     raw_runs: list[tuple[str, int, dict]] = []
     suite_results = []
     all_cases = []
@@ -169,16 +229,18 @@ def run_evaluation(*, profile_id: str = "safety-core", backend: str = "mock", mo
         normalized_cases = []
         for repeat_index in range(1, repeat + 1):
             before = perf_counter()
-            raw = suite.evaluator()
+            accepts_context = bool(inspect.signature(suite.evaluator).parameters)
+            raw = suite.evaluator(context) if accepts_context else suite.evaluator()
             elapsed = perf_counter() - before
             raw_runs.append((suite.suite_id, repeat_index, raw))
             raw_cases = _cases(raw)
             each_latency = elapsed / max(len(raw_cases), 1)
             for position, item in enumerate(raw_cases or [{"case_id": "suite"}], 1):
                 case_id = str(item.get("case_id", f"case_{position}"))
+                evidence = {k: v for k, v in item.items() if k not in {"raw_response", "client_error"}}
                 case = CaseResult(suite_id=suite.suite_id, case_id=case_id, repeat_index=repeat_index,
                     status="pass" if _passed(item) else "fail", latency_seconds=each_latency,
-                    evidence={"legacy_status": str(item.get("status", raw.get("status", "unknown")))})
+                    evidence=evidence or {"legacy_status": str(item.get("status", raw.get("status", "unknown")))})
                 normalized_cases.append(case)
                 all_cases.append(case)
                 case_dir = run_root / "cases" / suite.suite_id
@@ -191,6 +253,13 @@ def run_evaluation(*, profile_id: str = "safety-core", backend: str = "mock", mo
                     "source_suite_id": str(raw.get("suite_id", raw.get("phase", suite.suite_id))),
                 }
                 evidence_path.write_text(json.dumps(safe_evidence, indent=2, sort_keys=True) + "\n")
+                if item.get("raw_response"):
+                    repeat_dir = case_dir / case_id / f"repeat-{repeat_index}"
+                    repeat_dir.mkdir(parents=True, exist_ok=True)
+                    sanitized = repeat_dir / "sanitized_response.txt"
+                    sanitized.write_text(_sanitize_model_response(str(item["raw_response"])), encoding="utf-8")
+                    if save_raw:
+                        (repeat_dir / "raw_response.txt").write_text(str(item["raw_response"]), encoding="utf-8")
                 case.artifacts.append(ArtifactReference(path=evidence_path.relative_to(run_root).as_posix(), artifact_type="case_evidence"))
         passed = sum(c.status == "pass" for c in normalized_cases)
         failed = sum(c.status == "fail" for c in normalized_cases)
@@ -214,7 +283,13 @@ def run_evaluation(*, profile_id: str = "safety-core", backend: str = "mock", mo
             artifact_schema_version=f"{ARTIFACT_CONTRACT_SCHEMA_VERSION};{ARTIFACT_MANIFEST_SCHEMA_VERSION}"),
         artifacts=[ArtifactReference(path="evaluation_result.json", artifact_type="evaluation_report"),
                    ArtifactReference(path="evaluation_config.json", artifact_type="evaluation_config")])
-    config = {"schema_version": REGISTRY_VERSION, "profile_id": profile_id, "backend": backend, "model": model, "repeat": repeat}
+    if real:
+        result.model_run = ModelRunMetadata(backend=backend, model=model or "", endpoint_scope=scope,
+            temperature=temperature, timeout_seconds=timeout_seconds, max_tokens=max_tokens,
+            usage_available=any(m.metric_id == "total_tokens" and m.applicability == "applicable" for m in result.utility_metrics))
+    config = {"schema_version": REGISTRY_VERSION, "profile_id": profile_id, "backend": backend, "model": model,
+              "endpoint_scope": scope, "temperature": temperature, "timeout_seconds": timeout_seconds,
+              "max_tokens": max_tokens, "repeat": repeat, "save_raw": save_raw}
     (run_root / "evaluation_config.json").write_text(json.dumps(config, indent=2, sort_keys=True) + "\n")
     (run_root / "evaluation_result.json").write_text(json.dumps(result.model_dump(mode="json"), indent=2, sort_keys=True) + "\n")
     return result
