@@ -28,11 +28,11 @@ openbabel = ["openbabel"]
 chem-light = ["rdkit"]
 chem-inorganic = ["molSimplify"]
 chem = []
-dev = ["pytest>=8", "ruff>=0.5", "mypy>=1.10"]
+dev = ["pytest>=8", "ruff==0.15.12", "mypy>=1.10"]
 all = [
   "httpx>=0.27",
   "pytest>=8",
-  "ruff>=0.5",
+  "ruff==0.15.12",
   "mypy>=1.10",
 ]
 
@@ -53,3 +53,8 @@ markers = [
 
 [tool.ruff]
 line-length = 100
+
+[tool.ruff.lint]
+# Keep CI on Ruff's historical default baseline instead of inheriting defaults
+# that can change between releases.
+select = ["E4", "E7", "E9", "F"]
