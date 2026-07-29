@@ -13,7 +13,7 @@ from lmola.agent.planner_eval import compare_planner_evals, run_planner_benchmar
 from lmola.agent.prompts import SYSTEM_PROMPT
 from lmola.backends.registry import list_backend_statuses
 from lmola.backends.capabilities import list_backend_capabilities, resolve_backend_capability
-from lmola.config import load_app_config, load_request_yaml, redacted_llm_config
+from lmola.config import LLMConfig, load_app_config, load_request_yaml, redacted_llm_config
 from lmola.io.converters import dump_json
 from lmola.io.files import create_run_dir
 from lmola.io.logging import write_log
@@ -61,6 +61,7 @@ from lmola.schema_export import (
 )
 from lmola.evaluation.registry import list_profiles as list_evaluation_profiles, list_suites as list_evaluation_suites
 from lmola.evaluation.runner import run_evaluation, validate_result as validate_evaluation_result
+from lmola.evaluation.preflight import preflight_local_llm
 
 app = typer.Typer(help="LMolA CLI (pre-alpha)")
 
@@ -89,30 +90,51 @@ app.add_typer(eval_app, name="eval")
 @eval_app.command("list-suites")
 def eval_list_suites(fmt: str = typer.Option("json", "--format")) -> None:
     payload = {"status": "ok", "suites": [{"suite_id": s.suite_id, "description": s.description,
-        "metric_ids": list(s.metric_ids), "gate_ids": list(s.gate_ids)} for s in list_evaluation_suites()]}
+        "metric_ids": list(s.metric_ids), "gate_ids": list(s.gate_ids), "classification": s.classification,
+        "supported_backends": list(s.supported_backends)} for s in list_evaluation_suites(include_real=True)]}
     _emit_schema(payload, fmt)
 
 
 @eval_app.command("list-profiles")
 def eval_list_profiles(fmt: str = typer.Option("json", "--format")) -> None:
     payload = {"status": "ok", "profiles": [{"profile_id": p.profile_id, "description": p.description,
-        "suite_ids": list(p.suite_ids)} for p in list_evaluation_profiles()]}
+        "suite_ids": list(p.suite_ids)} for p in list_evaluation_profiles(include_real=True)]}
     _emit_schema(payload, fmt)
 
 
 @eval_app.command("run")
 def eval_run(profile: str = typer.Option("safety-core", "--profile"), backend: str = typer.Option("mock", "--backend"),
              model: str = typer.Option("", "--model"), repeat: int = typer.Option(1, "--repeat"),
+             base_url: str = typer.Option("", "--base-url"), temperature: float = typer.Option(0.0, "--temperature"),
+             timeout_seconds: int = typer.Option(180, "--timeout-seconds"),
+             max_tokens: int = typer.Option(2048, "--max-tokens"),
+             save_raw: bool = typer.Option(False, "--save-raw/--no-save-raw"),
              output_root: str = typer.Option("outputs/evaluations", "--output-root"),
              fmt: str = typer.Option("json", "--format")) -> None:
     try:
-        result = run_evaluation(profile_id=profile, backend=backend, model=model or None, repeat=repeat, output_root=output_root)
+        result = run_evaluation(profile_id=profile, backend=backend, model=model or None, repeat=repeat,
+            output_root=output_root, base_url=base_url or None, temperature=temperature,
+            timeout_seconds=timeout_seconds, max_tokens=max_tokens, save_raw=save_raw)
     except (KeyError, ValueError) as exc:
         _emit_schema({"status": "error", "message": str(exc)}, fmt)
         raise typer.Exit(code=2) from exc
     _emit_schema(result.model_dump(mode="json"), fmt)
     if result.status != "pass":
         raise typer.Exit(code=1)
+
+
+@eval_app.command("preflight")
+def eval_preflight(backend: str = typer.Option(..., "--backend"), model: str = typer.Option(..., "--model"),
+                   base_url: str = typer.Option(..., "--base-url"),
+                   timeout_seconds: int = typer.Option(10, "--timeout-seconds"),
+                   fmt: str = typer.Option("json", "--format")) -> None:
+    try:
+        payload = preflight_local_llm(LLMConfig(enabled=True, backend=backend, model=model,
+            base_url=base_url, timeout_seconds=timeout_seconds))
+    except ValueError as exc:
+        _emit_schema({"status": "error", "message": str(exc), "backend": backend, "model": model}, fmt)
+        raise typer.Exit(code=1) from exc
+    _emit_schema(payload, fmt)
 
 
 @eval_app.command("validate-result")
