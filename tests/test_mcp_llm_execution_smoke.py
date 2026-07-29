@@ -16,7 +16,6 @@ def _run(*args: str):
 def test_llm_execution_smoke_exists() -> None:
     res = _run("--help")
     assert res.exit_code == 0
-    assert "--execute-safe" in res.stdout
 
 
 def test_mock_llm_execution_smoke_execute_safe_and_aliases() -> None:

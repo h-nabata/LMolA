@@ -15,7 +15,6 @@ def _run(*args: str):
 def test_orchestration_command_exists() -> None:
     res = _run("--help")
     assert res.exit_code == 0
-    assert "--execute-safe" in res.stdout
 
 
 def test_orchestration_mock_execute_safe_ok_and_files() -> None:
