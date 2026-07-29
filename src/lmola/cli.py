@@ -59,6 +59,8 @@ from lmola.schema_export import (
     write_schema_artifacts,
     export_planner_schema_bundle,
 )
+from lmola.evaluation.registry import list_profiles as list_evaluation_profiles, list_suites as list_evaluation_suites
+from lmola.evaluation.runner import run_evaluation, validate_result as validate_evaluation_result
 
 app = typer.Typer(help="LMolA CLI (pre-alpha)")
 
@@ -80,6 +82,47 @@ artifacts_app = typer.Typer(help="Read-only LMolA artifact summarization")
 app.add_typer(artifacts_app, name="artifacts")
 artifact_app = typer.Typer(help="Artifact contract registry")
 app.add_typer(artifact_app, name="artifact")
+eval_app = typer.Typer(help="Versioned offline evaluation framework")
+app.add_typer(eval_app, name="eval")
+
+
+@eval_app.command("list-suites")
+def eval_list_suites(fmt: str = typer.Option("json", "--format")) -> None:
+    payload = {"status": "ok", "suites": [{"suite_id": s.suite_id, "description": s.description,
+        "metric_ids": list(s.metric_ids), "gate_ids": list(s.gate_ids)} for s in list_evaluation_suites()]}
+    _emit_schema(payload, fmt)
+
+
+@eval_app.command("list-profiles")
+def eval_list_profiles(fmt: str = typer.Option("json", "--format")) -> None:
+    payload = {"status": "ok", "profiles": [{"profile_id": p.profile_id, "description": p.description,
+        "suite_ids": list(p.suite_ids)} for p in list_evaluation_profiles()]}
+    _emit_schema(payload, fmt)
+
+
+@eval_app.command("run")
+def eval_run(profile: str = typer.Option("safety-core", "--profile"), backend: str = typer.Option("mock", "--backend"),
+             model: str = typer.Option("", "--model"), repeat: int = typer.Option(1, "--repeat"),
+             output_root: str = typer.Option("outputs/evaluations", "--output-root"),
+             fmt: str = typer.Option("json", "--format")) -> None:
+    try:
+        result = run_evaluation(profile_id=profile, backend=backend, model=model or None, repeat=repeat, output_root=output_root)
+    except (KeyError, ValueError) as exc:
+        _emit_schema({"status": "error", "message": str(exc)}, fmt)
+        raise typer.Exit(code=2) from exc
+    _emit_schema(result.model_dump(mode="json"), fmt)
+    if result.status != "pass":
+        raise typer.Exit(code=1)
+
+
+@eval_app.command("validate-result")
+def eval_validate_result(path: str, fmt: str = typer.Option("json", "--format")) -> None:
+    try:
+        result = validate_evaluation_result(path)
+    except (OSError, ValueError) as exc:
+        _emit_schema({"status": "error", "message": str(exc)}, fmt)
+        raise typer.Exit(code=1) from exc
+    _emit_schema({"status": "ok", "schema_version": result.schema_version, "run_id": result.run_id}, fmt)
 
 
 

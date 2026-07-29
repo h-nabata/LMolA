@@ -20,6 +20,7 @@ from lmola.human_prompt_normalization import CandidateWorkflow, HumanPromptNorma
 from lmola.parameter_binding import ParameterValue, InputFileBinding, ElectronicStateBinding, SolventBinding, PeriodicBinding, AtomSelectionBinding, CalculationControlsBinding, GeometryOptimizationControls, BoundParameterSet, ParameterBindingResult
 from lmola.clarification import ClarificationQuestion, ClarificationPlan
 from lmola.dry_run_plan import DryRunInputBinding, DryRunParameterBinding, DryRunExpectedArtifact, DryRunWorkflowSelection, DryRunExecutionPlan
+from lmola.evaluation.models import ArtifactReference, CaseResult, EvaluationProvenance, EvaluationRunResult, HardGateResult, ProfileResult, SuiteResult, UtilityMetric
 
 MODEL_REGISTRY = {
     "WorkflowRequest": WorkflowRequest,
@@ -47,6 +48,14 @@ MODEL_REGISTRY = {
     "GeometryOptimizationControls": GeometryOptimizationControls,
     "BoundParameterSet": BoundParameterSet,
     "ParameterBindingResult": ParameterBindingResult,
+    "EvaluationRunResult": EvaluationRunResult,
+    "EvaluationProfileResult": ProfileResult,
+    "EvaluationSuiteResult": SuiteResult,
+    "EvaluationCaseResult": CaseResult,
+    "EvaluationUtilityMetric": UtilityMetric,
+    "EvaluationHardGateResult": HardGateResult,
+    "EvaluationProvenance": EvaluationProvenance,
+    "EvaluationArtifactReference": ArtifactReference,
 }
 
 

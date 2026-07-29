@@ -17,6 +17,7 @@
 - [Authoritative repository policy](../AGENTS.md)
 - [Reusable Codex phase workflow](development/codex_phase_workflow.md)
 - [Phase task template](development/phase_task_template.md)
+- [Ruff CI baseline](development/ruff_baseline.md)
 - [Contributing](../CONTRIBUTING.md)
 
 ## Architecture and specification
@@ -32,6 +33,6 @@
 ## Development phases and evaluation
 
 - [Phase-document convention](development/phases/README.md)
+- [Phase 18.1 unified evaluation](development/phases/phase18_1_unified_evaluation.md)
 - [Phase 17 existing-tool depth (historical)](phase17_existing_tool_depth.md)
-- [Planner benchmark protocol](planner_benchmark_protocol.md)
-- [Development notes](development/README.md)
+- [Planner benchmark protocol](benchmarks/planner_benchmark.md)
