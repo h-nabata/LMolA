@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Add the provisional Phase 18.1 unified offline evaluation framework and
+  `safety-core` mock profile.
 - Added contract-driven workflow planning, normalization, clarification, parameter binding, and dry-run plans.
 - Added the MCP stdio runtime with workflow allowlists and deterministic execution gates.
 - Added artifact contracts, versioned manifests, provenance, summaries, triage, compatibility, and safe follow-up recommendations.
